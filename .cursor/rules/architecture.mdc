@@ -1,0 +1,50 @@
+---
+description: Architecture rules for Daily Work Operator (local-first, connectors, LLM router)
+alwaysApply: true
+---
+
+# Architecture Rules
+
+## Local-first
+
+- Primary data (tasks, evidence, state) lives locally by default. Cloud sync,
+  if ever added, is opt-in and secondary — never a requirement for the app to
+  function.
+- Prefer local storage (SQLite, local files, etc.) over remote databases for
+  core app state.
+
+## Connectors are isolated from UI
+
+- Every external integration (Granola, Gmail/Gemini/Meet, Jira, Confluence,
+  GitHub, Figma, Discord, local git) lives in its own connector module behind
+  a shared interface (e.g. `fetchEvidence()`, `listItems()`).
+- UI code must never import a connector's SDK/API client directly. UI talks
+  only to a domain/service layer that aggregates connector output into the
+  task model (evidence, next action, done criteria).
+- Each connector is independently swappable/mockable/testable without
+  touching UI code.
+
+## Read-only by default
+
+- All connectors default to read-only scopes/permissions when authenticating
+  (e.g. Gmail readonly scope, GitHub read-only PAT, Jira/Confluence read
+  access only).
+- Do not request write scopes during initial integration setup unless a
+  specific write feature is being built and explicitly approved.
+
+## Central LLM router
+
+- All LLM calls — regardless of feature or connector — go through one central
+  LLM router module. No feature or connector may call a model provider's API
+  directly.
+- The router owns: provider/model selection, prompt construction conventions,
+  retries, rate limiting, and logging of what was sent/received.
+- New AI-powered features add a call site to the router, not a new client.
+
+## Secrets
+
+- Tokens and API keys are read and used only in backend/server-side or local
+  main-process code. They must never be bundled into, sent to, or embedded in
+  frontend/renderer code.
+- Frontend code accesses connector data only through an authenticated local
+  API/IPC boundary — never by holding credentials itself.

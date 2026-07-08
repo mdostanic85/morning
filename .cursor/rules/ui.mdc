@@ -1,0 +1,47 @@
+---
+description: UI rules for Daily Work Operator — keep it minimal
+alwaysApply: true
+---
+
+# UI Rules
+
+## Minimal by default
+
+- This app answers one question at a time: "what should I do first, why, what's
+  the next action, and how do I know it's done." The UI should read like a
+  short, calm daily briefing — not a dashboard.
+- Default to a single primary view (today's focus). Avoid multi-panel
+  dashboards, sidebars full of navigation, or settings sprawl on the main
+  screen.
+- No feature-flag-driven UI chrome, no vanity metrics/charts, no team/social
+  features (avatars, mentions, activity feeds).
+
+## Every task card shows its three pillars
+
+Any UI element rendering a task must visibly surface:
+
+- **Evidence** (source, collapsible/expandable if long — never hidden
+  entirely)
+- **Next action** (the single concrete step, prominent)
+- **Done criteria** (how completion is verified)
+
+Do not design a task card that omits or fully hides any of these.
+
+## Unclear is visually distinct
+
+- Items in the Unclear bucket must be styled/labelled distinctly from normal
+  tasks (e.g. a clear "Unclear" tag or muted/warning treatment) so the user
+  never mistakes an ambiguous item for a resolved one.
+
+## Confirmations for writes
+
+- Any UI control that triggers a write action to an external system must show
+  an explicit confirmation step (dialog or inline confirm) naming the exact
+  action and target before it executes. Never wire a write action to a single
+  click with no confirmation.
+
+## Prefer text and hierarchy over widgets
+
+- Favor plain typographic hierarchy, whitespace, and short lists over new
+  custom widgets, icons-only controls, or decorative UI. If a plain sentence
+  or list can convey the information, don't build a component for it.

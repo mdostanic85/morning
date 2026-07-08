@@ -1,0 +1,49 @@
+---
+description: Product scope and purpose for Daily Work Operator
+alwaysApply: true
+---
+
+# Daily Work Operator — Product Rules
+
+## What this is
+
+A local-first personal work app for a single product designer/developer. When
+the user starts work, the app tells them:
+
+1. What to do first
+2. Why it matters
+3. What the next concrete action is
+4. How they know it is truly done
+
+## What this is NOT
+
+- Not a full project management app. No sprint planning, no team assignment,
+  no multi-user workflows, no Gantt/roadmap views.
+- Do not add features that belong to Jira/Linear/Asana-style PM tools (backlog
+  grooming, story points, burndown charts, team dashboards).
+- If a proposed feature could be summarized as "manage a team's work," it is
+  out of scope. This app manages one person's next move.
+
+## Data sources (eventual)
+
+Manual transcripts, Granola transcripts, Gmail / Gemini / Google Meet notes,
+Jira, Confluence, GitHub, Figma, Discord, local git repositories. Treat these
+as read-only signal sources that feed task generation, not systems the app
+manages.
+
+## Core task model
+
+Every task the app surfaces (AI-generated or manual) must carry:
+
+- **Evidence** — the source snippet/link/quote that justifies the task
+  existing (transcript line, Jira ticket, PR, email, etc.)
+- **Next action** — a single concrete, immediately doable step
+- **Done criteria** — an explicit, checkable definition of "truly done"
+
+Never create or render a task missing any of these three fields.
+
+## Unclear bucket
+
+If ownership (who owns this) or the requirement itself is ambiguous, do not
+guess or force it into a normal task. Route it to an explicit **Unclear**
+bucket/state where it's flagged for the user to resolve manually.

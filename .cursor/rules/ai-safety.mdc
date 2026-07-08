@@ -1,0 +1,40 @@
+---
+description: AI safety and write-action confirmation rules
+alwaysApply: true
+---
+
+# AI Safety Rules
+
+## No silent write actions
+
+- The app (and any AI/agent code within it) must never perform a write action
+  against an external system (Jira, Confluence, GitHub, Discord, Gmail, git
+  push/commit, Figma edits, etc.) without an explicit, in-the-moment user
+  confirmation for that specific action.
+- "Explicit confirmation" means a real user click/approval tied to the
+  specific action about to be taken — not a one-time global setting, not an
+  assumed consent from earlier conversation.
+- Read operations (fetching, listing, summarizing) do not require
+  confirmation. Only writes/mutations do.
+
+## Evidence over assertion
+
+- AI-generated tasks must never assert a claim without linking to the
+  evidence that produced it. If the LLM router returns a task/insight with no
+  traceable source, discard it or route it to Unclear rather than displaying
+  it as fact.
+- Do not let the LLM fabricate next actions or done criteria that aren't
+  grounded in the underlying evidence.
+
+## Ambiguity handling
+
+- When the LLM is uncertain about task ownership or the requirement itself,
+  it must not force a confident answer. Surface it in the Unclear bucket
+  instead of hallucinating an owner or scope.
+
+## Central router enforcement
+
+- Any code path that reaches an LLM provider must go through the central LLM
+  router (see `architecture.mdc`). This is also a safety boundary: it's where
+  prompt injection mitigation, output validation, and audit logging of AI
+  actions live. Do not bypass it for "quick" or "internal" calls.

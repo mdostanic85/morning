@@ -1,0 +1,95 @@
+import type { z } from "zod";
+
+// The full set of AI-powered jobs the app can run. Every feature that needs
+// a model call adds a case here and a model mapping in router.ts — it never
+// calls a provider SDK/API directly (see architecture.mdc).
+export const JOB_TYPES = [
+  "task_extraction",
+  "project_matching",
+  "priority_planning",
+  "knowledge_extraction",
+  "delivery_verification",
+  "daily_memory",
+] as const;
+export type JobType = (typeof JOB_TYPES)[number];
+
+export const PROVIDERS = ["openai", "anthropic"] as const;
+export type Provider = (typeof PROVIDERS)[number];
+
+export interface ModelConfig {
+  provider: Provider;
+  model: string;
+}
+
+// What a provider adapter needs to make one completion call. Provider
+// modules are pure API clients — they don't know about jobs, settings, or
+// where the API key came from, which keeps them independently swappable.
+export interface CompletionRequest {
+  apiKey: string;
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+export interface CompletionResponse {
+  /** Raw text content from the model — the router is responsible for parsing/validating it. */
+  text: string;
+  /** Unparsed provider response, kept for debugging/audit only. */
+  raw: unknown;
+}
+
+export interface ProviderClient {
+  provider: Provider;
+  complete(request: CompletionRequest): Promise<CompletionResponse>;
+}
+
+export const LLM_ERROR_KINDS = [
+  "missing_api_key",
+  "network_error",
+  "provider_error",
+  "invalid_json",
+  "schema_validation_failed",
+] as const;
+export type LlmErrorKind = (typeof LLM_ERROR_KINDS)[number];
+
+/** Thrown internally by provider adapters and the router; the router always converts these into a result, never lets them escape to callers. */
+export class LlmError extends Error {
+  kind: LlmErrorKind;
+  cause?: unknown;
+
+  constructor(kind: LlmErrorKind, message: string, cause?: unknown) {
+    super(message);
+    this.name = "LlmError";
+    this.kind = kind;
+    this.cause = cause;
+  }
+}
+
+export interface RunJobParams<T> {
+  jobType: JobType;
+  /** Defaults to the job's placeholder prompt in router.ts if omitted. */
+  systemPrompt?: string;
+  userPrompt: string;
+  schema: z.ZodType<T>;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+export type LlmJobResult<T> =
+  | {
+      ok: true;
+      jobType: JobType;
+      provider: Provider;
+      model: string;
+      data: T;
+    }
+  | {
+      ok: false;
+      jobType: JobType;
+      provider: Provider;
+      model: string;
+      kind: LlmErrorKind;
+      error: string;
+    };
