@@ -1,114 +1,92 @@
+import { Suspense } from "react";
 import { getTodayQueue } from "@/services/workTasks";
 import { getProjects } from "@/services/projects";
 import { getSourceItems } from "@/services/sourceItems";
-import { StatusColumn } from "@/components/StatusColumn";
-import { TaskCard } from "@/components/TaskCard";
-import { EmptyState } from "@/components/EmptyState";
-import type { WorkTaskStatus } from "@/domain/workTask";
+import { getConnections } from "@/services/connections";
+import { getUserProfile } from "@/services/userProfile";
+import { TodayWelcome } from "@/components/TodayWelcome";
+import { TodayFilteredView } from "@/components/TodayFilteredView";
+import { getTodayBriefing } from "@/lib/tasks/todayBriefing";
+import { getResumeFromYesterday } from "@/lib/tasks/dailyMemory";
+import { dayGreeting } from "@/lib/dates";
 import { OPEN_QUEUE_STATUSES } from "@/domain/workTask";
+import type { ConnectionProvider } from "@/lib/connectors/providers";
 
-// Reads live from the local SQLite db on every request — this page must
-// never be frozen as static build-time output.
 export const dynamic = "force-dynamic";
 
-const QUEUE_META: Record<
-  Exclude<WorkTaskStatus, "done">,
-  { title: string; description: string; emptyLabel: string }
-> = {
-  now: {
-    title: "Now",
-    description: "Do this first.",
-    emptyLabel: "Nothing urgent right now.",
-  },
-  next: {
-    title: "Next",
-    description: "Up after Now.",
-    emptyLabel: "Nothing queued up next.",
-  },
-  later: {
-    title: "Later",
-    description: "Not urgent, but on the radar.",
-    emptyLabel: "Nothing sitting in Later.",
-  },
-  waiting: {
-    title: "Waiting",
-    description: "Blocked on someone or something else.",
-    emptyLabel: "Nothing is blocked right now.",
-  },
-  tomorrow: {
-    title: "Tomorrow",
-    description: "Scheduled to start tomorrow.",
-    emptyLabel: "Nothing scheduled for tomorrow.",
-  },
-  unclear: {
-    title: "Unclear",
-    description: "Ownership or the requirement itself needs resolving.",
-    emptyLabel: "Nothing unresolved. Good.",
-  },
+const CONNECTED_PROVIDER_LABEL: Record<ConnectionProvider, string> = {
+  gmail: "Gmail & Gemini notes",
+  jira: "Jira",
+  confluence: "Confluence",
+  granola: "Granola",
+  github: "GitHub",
+  discord: "Discord",
+  figma: "Figma",
 };
 
+function todayDateLabel(): string {
+  return new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 export default async function TodayPage() {
-  const [queue, projects, sourceItems] = await Promise.all([
-    getTodayQueue(),
-    getProjects(),
-    getSourceItems(),
-  ]);
+  const [queue, projects, sourceItems, connections, profile, resumeMemory, todayBriefing] =
+    await Promise.all([
+      getTodayQueue(),
+      getProjects(),
+      getSourceItems(),
+      getConnections(),
+      getUserProfile(),
+      getResumeFromYesterday(),
+      getTodayBriefing(),
+    ]);
 
-  const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
-  const sourceTitleById = new Map(sourceItems.map((s) => [s.id, s.title]));
+  const myName = profile?.name?.trim() ?? null;
+  const projectNameById = Object.fromEntries(projects.map((project) => [project.id, project.name]));
+  const projectOptions = projects.map((project) => ({ id: project.id, name: project.name }));
+  const sourceLookup = sourceItems.map((item) => ({
+    id: item.id,
+    title: item.title,
+    body: item.body,
+    sourceType: item.sourceType,
+    sourceDate: item.sourceDate,
+    url: item.url,
+  }));
 
-  const totalOpen = OPEN_QUEUE_STATUSES.reduce((sum, s) => sum + queue[s].length, 0);
+  const totalOpen = OPEN_QUEUE_STATUSES.reduce((sum, status) => sum + queue[status].length, 0);
+  const isFreshStart = totalOpen === 0 && sourceItems.length === 0 && !todayBriefing;
+  const connectedProviderLabels = connections
+    .filter((connection) => connection.status === "connected")
+    .map((connection) => CONNECTED_PROVIDER_LABEL[connection.provider as ConnectionProvider])
+    .filter(Boolean);
 
-  if (totalOpen === 0) {
+  if (isFreshStart) {
     return (
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Today</h1>
-        <EmptyState
-          title="No tasks yet."
-          description="Paste a transcript in Inbox to generate your first queue."
-        />
-      </div>
+      <TodayWelcome
+        dateLabel={todayDateLabel()}
+        greeting={dayGreeting()}
+        connectedProviderLabels={connectedProviderLabels}
+      />
     );
   }
 
   return (
-    <div className="space-y-10">
-      <h1 className="text-xl font-semibold tracking-tight">Today</h1>
-      {OPEN_QUEUE_STATUSES.map((s) => {
-        const meta = QUEUE_META[s];
-        const items = queue[s];
-        return (
-          <StatusColumn
-            key={s}
-            title={meta.title}
-            description={meta.description}
-            count={items.length}
-            emptyLabel={meta.emptyLabel}
-          >
-            {items.map((task) => (
-              <TaskCard
-                key={task.id}
-                title={task.title}
-                reason={task.reason}
-                nextAction={task.nextAction}
-                doneCriteria={task.doneCriteria}
-                status={task.status}
-                confidence={task.confidence}
-                waitingOn={task.waitingOn}
-                owner={task.owner}
-                dueDate={task.dueDate}
-                projectName={task.projectId ? projectNameById.get(task.projectId) : null}
-                evidence={task.evidence.map((e) => ({
-                  id: e.id,
-                  quote: e.quote,
-                  summary: e.summary,
-                  sourceTitle: sourceTitleById.get(e.sourceItemId),
-                }))}
-              />
-            ))}
-          </StatusColumn>
-        );
-      })}
-    </div>
+    <Suspense fallback={null}>
+      <TodayFilteredView
+        dateLabel={todayDateLabel()}
+        greeting={dayGreeting()}
+        queue={queue}
+        todayBriefing={todayBriefing}
+        resumeMemory={resumeMemory}
+        myName={myName}
+        connectedProviderLabels={connectedProviderLabels}
+        projectOptions={projectOptions}
+        projectNameById={projectNameById}
+        sourceLookup={sourceLookup}
+      />
+    </Suspense>
   );
 }

@@ -1,13 +1,19 @@
 import "server-only";
-import { getRawApiKey } from "@/services/settings";
-import { openaiClient } from "./openai";
+import { getActiveProviders, getAvailableApiKey } from "@/services/settings";
+import { openaiClient, openaiEmbed } from "./openai";
 import { anthropicClient } from "./anthropic";
+import { groqClient } from "./groq";
 import { TASK_EXTRACTOR_SYSTEM_PROMPT } from "./prompts/taskExtractor";
 import { PROJECT_MATCHER_SYSTEM_PROMPT } from "./prompts/projectMatcher";
+import { PROJECT_DISCOVERY_SYSTEM_PROMPT } from "./prompts/projectDiscovery";
 import { PRIORITY_PLANNER_SYSTEM_PROMPT } from "./prompts/priorityPlanner";
+import { TODAY_BRIEFING_SYSTEM_PROMPT } from "./prompts/todayBriefing";
 import { KNOWLEDGE_EXTRACTOR_SYSTEM_PROMPT } from "./prompts/knowledgeExtractor";
 import { DELIVERY_VERIFIER_SYSTEM_PROMPT } from "./prompts/deliveryVerifier";
 import { DAILY_MEMORY_SYSTEM_PROMPT } from "./prompts/dailyMemory";
+import { KNOWLEDGE_QA_SYSTEM_PROMPT } from "./prompts/knowledgeQa";
+import { FOCUS_ACTION_PLAN_SYSTEM_PROMPT } from "./prompts/focusActionPlan";
+import { DELIVERY_SYNC_REVIEW_SYSTEM_PROMPT } from "./prompts/deliverySyncReview";
 import {
   LlmError,
   type JobType,
@@ -21,38 +27,153 @@ import {
 
 export * from "./types";
 
-/**
- * The single place provider + model choice is configured for every job.
- * Change a job's model or move it to a different provider by editing this
- * table only — no other file should hardcode a model name.
- */
-export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
-  // Cheap/fast, structured-output-friendly OpenAI model.
-  task_extraction: { provider: "openai", model: "gpt-4.1-mini" },
-  project_matching: { provider: "openai", model: "gpt-4.1-mini" },
-  knowledge_extraction: { provider: "openai", model: "gpt-4.1-mini" },
-  // Stronger OpenAI reasoning model — prioritization needs to weigh the whole queue.
-  priority_planning: { provider: "openai", model: "gpt-4.1" },
-  daily_memory: { provider: "openai", model: "gpt-4.1" },
-  // Claude Sonnet by default for verification; swap to an Opus model id here
-  // for harder cases without touching any calling code.
-  delivery_verification: { provider: "anthropic", model: "claude-3-7-sonnet-latest" },
+const GROQ_70B = "llama-3.3-70b-versatile";
+const GROQ_8B = "llama-3.1-8b-instant";
+const OPENAI_MINI = "gpt-4.1-mini";
+const OPENAI_FULL = "gpt-4.1";
+const ANTHROPIC_SONNET = "claude-3-7-sonnet-latest";
+
+/** Groq 8b when 70b hits rate limits; then paid fallbacks only if configured. */
+const GROQ_8B_FALLBACK: ModelConfig = {
+  provider: "groq",
+  model: GROQ_8B,
+  maxTokens: 4096,
 };
 
+const ANTHROPIC_FALLBACK: ModelConfig = {
+  provider: "anthropic",
+  model: ANTHROPIC_SONNET,
+  maxTokens: 4096,
+};
+
+const OPENAI_MINI_FALLBACK: ModelConfig = {
+  provider: "openai",
+  model: OPENAI_MINI,
+  maxTokens: 4096,
+};
+
+const OPENAI_FULL_FALLBACK: ModelConfig = {
+  provider: "openai",
+  model: OPENAI_FULL,
+  maxTokens: 4096,
+};
+
+const STANDARD_TEXT_FALLBACKS: ModelConfig[] = [
+  GROQ_8B_FALLBACK,
+  ANTHROPIC_FALLBACK,
+  OPENAI_MINI_FALLBACK,
+];
+
+const HEAVY_TEXT_FALLBACKS: ModelConfig[] = [
+  { ...GROQ_8B_FALLBACK, maxTokens: 4096 },
+  { ...ANTHROPIC_FALLBACK, maxTokens: 4096 },
+  OPENAI_FULL_FALLBACK,
+];
+
 /**
- * Default system prompt per job, sourced from `./prompts/*`. A caller can
- * still override `systemPrompt` per call (e.g. to A/B a variant), but this
- * table is what every job uses unless told otherwise. The actual prompt
- * text, job-specific input builders, and output schemas live in the
- * dedicated module per job — this table only wires job -> prompt.
+ * Groq-first for every text job (70b → 8b), then Anthropic/OpenAI only when active.
+ * Inactive providers are never attempted — if only Groq is on, all text jobs stay on Groq.
+ * OpenAI is also used for embeddings only when enabled. Jira projects sync from MCP.
  */
+export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
+  task_extraction: {
+    provider: "groq",
+    model: GROQ_70B,
+    maxTokens: 4096,
+    fallbacks: STANDARD_TEXT_FALLBACKS,
+  },
+  project_matching: {
+    provider: "groq",
+    model: GROQ_70B,
+    maxTokens: 2048,
+    fallbacks: STANDARD_TEXT_FALLBACKS,
+  },
+  project_discovery: {
+    provider: "groq",
+    model: GROQ_70B,
+    maxTokens: 4096,
+    fallbacks: HEAVY_TEXT_FALLBACKS,
+  },
+  knowledge_extraction: {
+    provider: "groq",
+    model: GROQ_70B,
+    maxTokens: 4096,
+    fallbacks: STANDARD_TEXT_FALLBACKS,
+  },
+  knowledge_qa: {
+    provider: "groq",
+    model: GROQ_70B,
+    maxTokens: 2048,
+    fallbacks: STANDARD_TEXT_FALLBACKS,
+  },
+  priority_planning: {
+    provider: "groq",
+    model: GROQ_70B,
+    maxTokens: 4096,
+    fallbacks: HEAVY_TEXT_FALLBACKS,
+  },
+  today_briefing: {
+    provider: "groq",
+    model: GROQ_70B,
+    maxTokens: 4096,
+    fallbacks: HEAVY_TEXT_FALLBACKS,
+  },
+  daily_memory: {
+    provider: "groq",
+    model: GROQ_70B,
+    maxTokens: 2048,
+    fallbacks: [
+      { ...GROQ_8B_FALLBACK, maxTokens: 2048 },
+      { ...ANTHROPIC_FALLBACK, maxTokens: 2048 },
+      { ...OPENAI_FULL_FALLBACK, maxTokens: 2048 },
+    ],
+  },
+  delivery_verification: {
+    provider: "groq",
+    model: GROQ_70B,
+    maxTokens: 2048,
+    fallbacks: [
+      { ...GROQ_8B_FALLBACK, maxTokens: 2048 },
+      { ...ANTHROPIC_FALLBACK, maxTokens: 2048 },
+    ],
+  },
+  focus_action_plan: {
+    provider: "groq",
+    model: GROQ_70B,
+    maxTokens: 4096,
+    fallbacks: HEAVY_TEXT_FALLBACKS,
+  },
+  delivery_sync_review: {
+    provider: "openai",
+    model: OPENAI_FULL,
+    maxTokens: 3072,
+    fallbacks: [
+      OPENAI_MINI_FALLBACK,
+      { provider: "groq", model: GROQ_70B, maxTokens: 3072 },
+      { ...GROQ_8B_FALLBACK, maxTokens: 3072 },
+      { ...ANTHROPIC_FALLBACK, maxTokens: 3072 },
+    ],
+  },
+};
+
+/** Embeddings stay on OpenAI — Groq has no embeddings API. */
+export const EMBEDDING_MODEL_CONFIG: ModelConfig = {
+  provider: "openai",
+  model: "text-embedding-3-small",
+};
+
 export const JOB_SYSTEM_PROMPTS: Record<JobType, string> = {
   task_extraction: TASK_EXTRACTOR_SYSTEM_PROMPT,
   project_matching: PROJECT_MATCHER_SYSTEM_PROMPT,
+  project_discovery: PROJECT_DISCOVERY_SYSTEM_PROMPT,
   priority_planning: PRIORITY_PLANNER_SYSTEM_PROMPT,
+  today_briefing: TODAY_BRIEFING_SYSTEM_PROMPT,
   knowledge_extraction: KNOWLEDGE_EXTRACTOR_SYSTEM_PROMPT,
   delivery_verification: DELIVERY_VERIFIER_SYSTEM_PROMPT,
   daily_memory: DAILY_MEMORY_SYSTEM_PROMPT,
+  knowledge_qa: KNOWLEDGE_QA_SYSTEM_PROMPT,
+  focus_action_plan: FOCUS_ACTION_PLAN_SYSTEM_PROMPT,
+  delivery_sync_review: DELIVERY_SYNC_REVIEW_SYSTEM_PROMPT,
 };
 
 function getProviderClient(provider: Provider): ProviderClient {
@@ -61,13 +182,28 @@ function getProviderClient(provider: Provider): ProviderClient {
       return openaiClient;
     case "anthropic":
       return anthropicClient;
+    case "groq":
+      return groqClient;
   }
 }
 
 const ENV_VAR_HINT: Record<Provider, string> = {
   openai: "OPENAI_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
+  groq: "GROQ_API_KEY",
 };
+
+function flattenModelChain(primary: ModelConfig): ModelConfig[] {
+  return [primary, ...(primary.fallbacks ?? [])];
+}
+
+async function configsForJob(jobType: JobType): Promise<ModelConfig[]> {
+  const active = new Set(await getActiveProviders());
+  if (active.size === 0) return [];
+
+  const chain = flattenModelChain(MODEL_CONFIG[jobType]);
+  return chain.filter((config) => active.has(config.provider));
+}
 
 function tryParseJson(text: string): { ok: true; data: unknown } | { ok: false; error: string } {
   try {
@@ -77,7 +213,6 @@ function tryParseJson(text: string): { ok: true; data: unknown } | { ok: false; 
   }
 }
 
-/** Retries transient failures (network/provider errors) with a short backoff. Never retries validation failures here — that's handled by the caller with a corrective prompt. */
 async function withTransientRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
@@ -94,50 +229,73 @@ async function withTransientRetry<T>(fn: () => Promise<T>, attempts = 2): Promis
 }
 
 function logJobEvent(event: {
-  jobType: JobType;
+  jobType: JobType | "embedding";
   provider: Provider;
   model: string;
   ok: boolean;
   kind?: string;
   durationMs: number;
+  fallback?: boolean;
 }) {
-  // Minimal audit trail. Deliberately logs metadata only — never prompt or
-  // response content — to avoid leaking source material into logs.
   const status = event.ok ? "ok" : `failed (${event.kind})`;
+  const via = event.fallback ? " (fallback)" : "";
   console.info(
-    `[llm] ${event.jobType} via ${event.provider}/${event.model} — ${status} in ${event.durationMs}ms`
+    `[llm] ${event.jobType} via ${event.provider}/${event.model}${via} — ${status} in ${event.durationMs}ms`
   );
 }
 
-/**
- * Runs a single LLM job end-to-end: resolves the API key, calls the
- * configured provider/model, parses the response as JSON, and validates it
- * against the caller's schema. On invalid JSON or a schema mismatch, retries
- * once with the error fed back to the model. Never throws — every failure
- * mode is returned as a structured `LlmJobResult`.
- */
-export async function runLlmJob<T>(params: RunJobParams<T>): Promise<LlmJobResult<T>> {
-  const { jobType, schema } = params;
-  const { provider, model } = MODEL_CONFIG[jobType];
+function shouldTryFallback(kind: LlmErrorKind): boolean {
+  return (
+    kind === "missing_api_key" ||
+    kind === "provider_error" ||
+    kind === "rate_limit_daily" ||
+    kind === "network_error" ||
+    kind === "invalid_json" ||
+    kind === "schema_validation_failed"
+  );
+}
+
+function shouldSkipProvider(failedKind: LlmErrorKind, failedProvider: Provider, nextProvider: Provider): boolean {
+  // Daily org-level rate limit — skip remaining configs on the same provider
+  return failedKind === "rate_limit_daily" && nextProvider === failedProvider;
+}
+
+async function runWithConfig<T>(
+  jobType: JobType,
+  config: ModelConfig,
+  params: RunJobParams<T>,
+  startedAt: number,
+  isFallback: boolean
+): Promise<LlmJobResult<T>> {
+  const { schema } = params;
+  const { provider, model } = config;
   const systemPrompt = params.systemPrompt ?? JOB_SYSTEM_PROMPTS[jobType];
   const client = getProviderClient(provider);
-  const startedAt = Date.now();
+  const maxTokens = params.maxTokens ?? config.maxTokens ?? 4096;
 
   function fail(kind: LlmErrorKind, error: string): LlmJobResult<T> {
-    logJobEvent({ jobType, provider, model, ok: false, kind, durationMs: Date.now() - startedAt });
+    logJobEvent({
+      jobType,
+      provider,
+      model,
+      ok: false,
+      kind,
+      durationMs: Date.now() - startedAt,
+      fallback: isFallback,
+    });
     return { ok: false, jobType, provider, model, kind, error };
   }
 
-  const apiKey = await getRawApiKey(provider);
+  const apiKey = await getAvailableApiKey(provider);
   if (!apiKey) {
     return fail(
       "missing_api_key",
-      `No API key configured for ${provider}. Set ${ENV_VAR_HINT[provider]} or add a key in Settings.`
+      `No API key available for ${provider}. Add a key in Settings, enable the provider, or set ${ENV_VAR_HINT[provider]}.`
     );
   }
 
   let userPrompt = params.userPrompt;
-  const maxAttempts = 2; // 1 initial attempt + 1 corrective retry on invalid output
+  const maxAttempts = 2;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     let completion;
@@ -149,7 +307,7 @@ export async function runLlmJob<T>(params: RunJobParams<T>): Promise<LlmJobResul
           systemPrompt,
           userPrompt,
           temperature: params.temperature,
-          maxTokens: params.maxTokens,
+          maxTokens,
         })
       );
     } catch (err) {
@@ -177,10 +335,151 @@ export async function runLlmJob<T>(params: RunJobParams<T>): Promise<LlmJobResul
       return fail("schema_validation_failed", validated.error.message);
     }
 
-    logJobEvent({ jobType, provider, model, ok: true, durationMs: Date.now() - startedAt });
+    logJobEvent({
+      jobType,
+      provider,
+      model,
+      ok: true,
+      durationMs: Date.now() - startedAt,
+      fallback: isFallback,
+    });
     return { ok: true, jobType, provider, model, data: validated.data };
   }
 
-  // Unreachable — the loop always returns — but keeps TypeScript satisfied.
   return fail("provider_error", "Job did not complete.");
+}
+
+export async function runLlmJob<T>(params: RunJobParams<T>): Promise<LlmJobResult<T>> {
+  const { jobType } = params;
+  const startedAt = Date.now();
+  const configs = await configsForJob(jobType);
+
+  if (configs.length === 0) {
+    return {
+      ok: false,
+      jobType,
+      provider: MODEL_CONFIG[jobType].provider,
+      model: MODEL_CONFIG[jobType].model,
+      kind: "missing_api_key",
+      error: "No active LLM providers. Turn on at least one provider in Settings.",
+    };
+  }
+
+  let primaryFailure: LlmJobResult<T> | null = null;
+  let lastResult: LlmJobResult<T> | null = null;
+
+  for (let index = 0; index < configs.length; index++) {
+    const config = configs[index];
+    const isFallback = index > 0;
+
+    // Skip configs on the same provider when a daily rate limit was hit
+    if (index > 0 && lastResult && shouldSkipProvider(lastResult.kind, lastResult.provider, config.provider)) {
+      continue;
+    }
+
+    const result = await runWithConfig(jobType, config, params, startedAt, isFallback);
+    if (result.ok) return result;
+
+    if (index === 0) primaryFailure = result;
+    lastResult = result;
+    const hasNext = index < configs.length - 1;
+    if (!hasNext || !shouldTryFallback(result.kind)) {
+      return primaryFailure ?? result;
+    }
+  }
+
+  return (
+    primaryFailure ??
+    lastResult ?? {
+      ok: false,
+      jobType,
+      provider: configs[0].provider,
+      model: configs[0].model,
+      kind: "provider_error",
+      error: "Job did not complete.",
+    }
+  );
+}
+
+export type EmbeddingJobResult =
+  | { ok: true; model: string; vectors: number[][] }
+  | { ok: false; model: string; kind: LlmErrorKind; error: string };
+
+let embeddingsUnavailableReason: string | null = null;
+
+export async function runEmbeddingJob(texts: string[]): Promise<EmbeddingJobResult> {
+  const { provider, model } = EMBEDDING_MODEL_CONFIG;
+  const startedAt = Date.now();
+
+  if (texts.length === 0) {
+    return { ok: true, model, vectors: [] };
+  }
+
+  const active = await getActiveProviders();
+  if (!active.includes("openai")) {
+    return {
+      ok: false,
+      model,
+      kind: "missing_api_key",
+      error:
+        active.length === 1 && active[0] === "groq"
+          ? "Knowledge search needs OpenAI embeddings. Groq-only mode covers text jobs; enable OpenAI for search."
+          : "OpenAI is off. Enable it in Settings for knowledge search embeddings.",
+    };
+  }
+
+  if (embeddingsUnavailableReason) {
+    return {
+      ok: false,
+      model,
+      kind: "provider_error",
+      error: embeddingsUnavailableReason,
+    };
+  }
+
+  function fail(kind: LlmErrorKind, error: string): EmbeddingJobResult {
+    logJobEvent({
+      jobType: "embedding",
+      provider,
+      model,
+      ok: false,
+      kind,
+      durationMs: Date.now() - startedAt,
+    });
+    return { ok: false, model, kind, error };
+  }
+
+  const apiKey = await getAvailableApiKey(provider);
+  if (!apiKey) {
+    return fail(
+      "missing_api_key",
+      `No API key available for ${provider}. Add a key in Settings, enable the provider, or set ${ENV_VAR_HINT[provider]}.`
+    );
+  }
+
+  try {
+    const vectors = await withTransientRetry(() => openaiEmbed({ apiKey, model, texts }));
+    logJobEvent({
+      jobType: "embedding",
+      provider,
+      model,
+      ok: true,
+      durationMs: Date.now() - startedAt,
+    });
+    return { ok: true, model, vectors };
+  } catch (err) {
+    if (err instanceof LlmError) {
+      const message =
+        err.kind === "provider_error"
+          ? `OpenAI embeddings unavailable (${err.message}). Knowledge search will not work until OpenAI billing is restored or a new key is added.`
+          : err.message;
+      if (err.kind === "provider_error" || err.kind === "missing_api_key") {
+        embeddingsUnavailableReason = message;
+      }
+      return fail(err.kind, message);
+    }
+    const message = err instanceof Error ? err.message : "Unknown provider error.";
+    embeddingsUnavailableReason = `OpenAI embeddings unavailable (${message}). Knowledge search will not work until OpenAI billing is restored or a new key is added.`;
+    return fail("provider_error", embeddingsUnavailableReason);
+  }
 }

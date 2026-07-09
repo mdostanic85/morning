@@ -47,3 +47,15 @@ Never create or render a task missing any of these three fields.
 If ownership (who owns this) or the requirement itself is ambiguous, do not
 guess or force it into a normal task. Route it to an explicit **Unclear**
 bucket/state where it's flagged for the user to resolve manually.
+
+## Knowledge model
+
+Knowledge captures the **newest relevant things the user learned**, each tied
+to its **source** (quote + link/metadata). It is a personal memory feed, not a
+project wiki.
+
+- Every knowledge item must trace back to a source — no source, no item.
+- Project linkage is **optional**. Do not auto-assign knowledge to a project
+  during extraction. Project views may filter by linked sources, but knowledge
+  lives globally by default.
+- Knowledge is not a task. Action items belong in the task queue, not here.

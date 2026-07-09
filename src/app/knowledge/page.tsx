@@ -1,59 +1,63 @@
-import { searchSourceItems } from "@/services/sourceItems";
-import { SourceBadge } from "@/components/SourceBadge";
+import { getKnowledgeItemsWithContext } from "@/services/knowledgeItems";
+import { getSourceItems } from "@/services/sourceItems";
+import { getUserProfile } from "@/services/userProfile";
 import { EmptyState } from "@/components/EmptyState";
+import { KnowledgeHashScroll } from "@/components/KnowledgeHashScroll";
+import { KnowledgeFilteredView } from "@/components/KnowledgeFilteredView";
+import { filterKnowledgeForMe } from "@/lib/filters/knowledgeFilter";
 
 export const dynamic = "force-dynamic";
 
-function preview(text: string, max = 260): string {
-  const trimmed = text.trim();
-  return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed;
-}
+export default async function KnowledgePage() {
+  const [allKnowledgeItems, sourceItems, profile] = await Promise.all([
+    getKnowledgeItemsWithContext(),
+    getSourceItems(),
+    getUserProfile(),
+  ]);
 
-export default async function KnowledgePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string }>;
-}) {
-  const { q } = await searchParams;
-  const results = await searchSourceItems(q ?? "");
+  const myName = profile?.name?.trim() ?? null;
+  const myEmail = profile?.email ?? null;
+  const sourceBodyByItemId = new Map(
+    sourceItems.map((source) => [source.id, source.body] as const)
+  );
+
+  const knowledgeItems = filterKnowledgeForMe(allKnowledgeItems, {
+    myName,
+    myEmail,
+    sourceBodyByItemId,
+  });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      <KnowledgeHashScroll />
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Knowledge</h1>
-        <p className="text-[13px] text-muted mt-1">
-          Search everything that has been ingested so far.
+        <h1 className="font-display text-4xl font-semibold tracking-tight">Knowledge</h1>
+        <p className="mt-3 text-[15px] leading-relaxed text-muted">
+          Recent learnings relevant to you — each with its evidence.
         </p>
       </div>
 
-      <form action="/knowledge" method="get">
-        <input
-          type="text"
-          name="q"
-          defaultValue={q ?? ""}
-          placeholder="Search sources by keyword…"
-          className="w-full rounded border border-border bg-surface px-2.5 py-1.5 text-[14px] outline-none focus:border-foreground/40"
-        />
-      </form>
-
-      {results.length === 0 ? (
-        <EmptyState
-          title={q ? `No results for "${q}".` : "Nothing ingested yet."}
-          description={q ? undefined : "Sources appear here once you paste a transcript in Inbox."}
-        />
-      ) : (
-        <div className="space-y-3">
-          {results.map((source) => (
-            <article key={source.id} className="rounded-lg border border-border bg-surface p-4">
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-[15px] font-medium">{source.title}</h3>
-                <SourceBadge sourceType={source.sourceType} />
-              </div>
-              <p className="mt-2 text-[13px] text-muted">{preview(source.body)}</p>
-            </article>
-          ))}
+      <section>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="eyebrow text-foreground/70">Your learnings</h2>
         </div>
-      )}
+
+        <div className="mt-3">
+          {allKnowledgeItems.length === 0 ? (
+            <EmptyState
+              title="No knowledge items yet."
+              description="Learnings are extracted after you sync connected sources or paste a transcript in Settings."
+            />
+          ) : !myName ? (
+            <EmptyState
+              title="Your name is not set."
+              description="Add your name in Settings so Morning can show only learnings relevant to you."
+            />
+          ) : (
+            <KnowledgeFilteredView items={knowledgeItems} myName={myName} />
+          )}
+        </div>
+      </section>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { desc, eq, like, or } from "drizzle-orm";
+import { and, desc, eq, like, or } from "drizzle-orm";
 import { db } from "@/db/client";
 import { sourceItems as sourceItemsTable } from "@/db/schema";
 import type { NewSourceItem, SourceItem } from "@/domain/sourceItem";
@@ -52,6 +52,33 @@ export async function getSourceItems(): Promise<SourceItem[]> {
 export async function getSourceItemById(id: number): Promise<SourceItem | null> {
   const row = db.select().from(sourceItemsTable).where(eq(sourceItemsTable.id, id)).get();
   return row ? toSourceItem(row) : null;
+}
+
+export async function getSourceItemByExternalId(input: {
+  sourceType: SourceItem["sourceType"];
+  sourceExternalId: string;
+}): Promise<SourceItem | null> {
+  const row = db
+    .select()
+    .from(sourceItemsTable)
+    .where(
+      and(
+        eq(sourceItemsTable.sourceType, input.sourceType),
+        eq(sourceItemsTable.sourceExternalId, input.sourceExternalId)
+      )
+    )
+    .get();
+  return row ? toSourceItem(row) : null;
+}
+
+export async function getSourceItemsForProject(projectId: number): Promise<SourceItem[]> {
+  const rows = db
+    .select()
+    .from(sourceItemsTable)
+    .where(eq(sourceItemsTable.projectId, projectId))
+    .orderBy(desc(sourceItemsTable.sourceDate))
+    .all();
+  return rows.map(toSourceItem);
 }
 
 /** Simple substring search over title and body. Good enough until FTS5 lands. */

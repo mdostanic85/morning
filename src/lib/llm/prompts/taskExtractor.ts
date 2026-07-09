@@ -41,11 +41,13 @@ function jobInstructions(currentUserName?: string | null): string {
   - If a task's owner is named and is not clearly the user, lower "confidence" — it may not belong on the user's queue at all.
   - If it sounds like someone else is responsible for the actual work, set status to "waiting" (the user is expecting something back from them) or "unclear" (the user's role in it isn't clear) — never "actionable".
 - Vagueness: if you cannot derive a specific, concrete "nextAction" and specific "doneCriteria" from the source, the task is too vague to act on — set status to "unclear" rather than inventing specificity that isn't in the source.
+- "reason" must be 2–4 sentences that together give a complete picture for the user: (1) why this task is on their list and what triggered it, grounded in the source, (2) what specifically they need to deliver or decide, including file/system/person/location names when the source names them, (3) if multiple sources would disagree, state only the latest understanding and note that earlier sources were superseded. Do not pad with vague filler.
 - "nextAction" must be a single, concrete, immediately doable step — not a restatement of the title and not a vague instruction like "follow up". Every task must have one.
 - "doneCriteria" must be an array of specific, independently checkable statements — never a single vague statement like "finish the work". Every task must have at least one.
 - "owner", if the source names one, must be copied exactly as written. If no owner is named, use null — never infer or guess a name.
 - "dueDate" must only be filled if the source states an explicit date or day; resolve relative dates (e.g. "Friday") against the given source date only if unambiguous, in ISO 8601 form, otherwise leave it null.
 - Every task must include at least one verbatim quote from the source as evidence. If you cannot find a supporting quote for a candidate task, do not emit it at all — never invent a task that isn't backed by the source text.
+- When the same topic appears with conflicting instructions across quotes or sources, treat the most recent source date as authoritative for nextAction, doneCriteria, and reason. Do not blend incompatible instructions — reflect the latest stated requirement only.
 - If project context is provided, use its people/keywords/description only to help you judge ownership and domain terminology — never as a source of tasks by itself; every task must still be evidenced in the source content, not in the project context.
 - Alongside tasks, capture supporting knowledge signals from the same source into separate buckets: "decisions" already made, "openQuestions" still unresolved, "risks" that could derail the work, "deadlines" mentioned (with a "date" field filled in when resolvable, otherwise null), and "acceptanceCriteria" stated for any deliverable. Each entry in every bucket must also include at least one verbatim quote as evidence and its own confidence score. Leave a bucket as an empty array if the source has nothing of that kind — never invent entries to fill it.
 - If the source contains no actionable work and no notable knowledge signals, return empty arrays for everything — do not invent content just to produce output.
@@ -92,18 +94,26 @@ export function buildTaskExtractorSystemPrompt(options?: { currentUserName?: str
 }
 
 export function buildTaskExtractorUserPrompt(input: TaskExtractorInput): string {
-  return [
-    input.project
-      ? [
-          "Project context (for judging ownership/terminology only — not a source of tasks by itself):",
-          JSON.stringify(input.project, null, 2),
-          "",
-        ].join("\n")
-      : null,
+  // Titles, authors and project hints originate from external sources or user
+  // input, so they are wrapped as untrusted data alongside the body.
+  const metadata = [
     `Source type: ${input.sourceType}`,
     `Source title: ${input.sourceTitle}`,
     `Source date: ${input.sourceDate}`,
     input.sourceAuthor ? `Source author: ${input.sourceAuthor}` : null,
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
+
+  return [
+    input.project
+      ? [
+          "Project context (for judging ownership/terminology only — not a source of tasks by itself):",
+          wrapUntrustedContent("project context", JSON.stringify(input.project, null, 2)),
+          "",
+        ].join("\n")
+      : null,
+    wrapUntrustedContent("source metadata", metadata),
     "",
     "Extract candidate tasks and supporting knowledge signals from the source content below.",
     "",

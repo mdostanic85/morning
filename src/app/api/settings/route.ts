@@ -3,6 +3,7 @@ import {
   getApiKeyStatuses,
   saveApiKey,
   clearApiKey,
+  setProviderEnabled,
   LLM_PROVIDERS,
   type LlmProvider,
 } from "@/services/settings";
@@ -41,6 +42,22 @@ export async function DELETE(request: Request) {
   }
 
   await clearApiKey(provider);
+  const statuses = await getApiKeyStatuses();
+  return NextResponse.json({ statuses });
+}
+
+export async function PATCH(request: Request) {
+  const body = await request.json();
+  const { provider, enabled } = body ?? {};
+
+  if (!isProvider(provider) || typeof enabled !== "boolean") {
+    return NextResponse.json(
+      { error: "A valid provider and enabled boolean are required." },
+      { status: 400 }
+    );
+  }
+
+  await setProviderEnabled(provider, enabled);
   const statuses = await getApiKeyStatuses();
   return NextResponse.json({ statuses });
 }

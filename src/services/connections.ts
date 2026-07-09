@@ -42,6 +42,31 @@ export async function getConnectionById(id: number): Promise<Connection | null> 
   return row ? toConnection(row) : null;
 }
 
+export async function getConnectionByProvider(provider: string): Promise<Connection | null> {
+  const row = db
+    .select()
+    .from(connectionsTable)
+    .where(eq(connectionsTable.provider, provider))
+    .get();
+  return row ? toConnection(row) : null;
+}
+
+export async function upsertConnection(input: NewConnection): Promise<Connection> {
+  const existing = await getConnectionByProvider(input.provider);
+  if (existing) {
+    return (
+      (await updateConnection(existing.id, {
+        status: input.status ?? existing.status,
+        authType: input.authType,
+        scopes: input.scopes ?? existing.scopes,
+        metadata: input.metadata ?? existing.metadata,
+      })) ?? existing
+    );
+  }
+
+  return createConnection(input);
+}
+
 export async function updateConnection(
   id: number,
   patch: ConnectionPatch

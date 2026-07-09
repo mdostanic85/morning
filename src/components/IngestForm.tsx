@@ -2,64 +2,164 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
+const schema = z.object({
+  title: z.string().optional(),
+  content: z.string().min(1, "Paste some text to extract from."),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+type IngestMessage = {
+  tone: "success" | "warning" | "error";
+  text: string;
+};
+
+type ExtractionSummary =
+  | { status: "completed"; tasks: number; evidence: number }
+  | { status: "skipped"; reason: "duplicate_source" }
+  | { status: "failed"; error: string };
+
+type IngestResponse = {
+  deduped: boolean;
+  projectMatch?: {
+    status: "matched" | "unassigned";
+    projectId: number | null;
+    projectName: string | null;
+    confidence: number | null;
+    matchedSignals: string[];
+    reason: string;
+    error?: string;
+  };
+  extraction?: ExtractionSummary;
+  knowledgeExtraction?:
+    | { status: "completed"; items: { id: number }[] }
+    | { status: "failed"; error: string };
+};
+
+function describeExtraction(response: IngestResponse): IngestMessage {
+  const { extraction, knowledgeExtraction } = response;
+
+  if (extraction?.status === "skipped") {
+    return { tone: "warning", text: "Already saved. Extraction was skipped to avoid duplicates." };
+  }
+  if (extraction?.status === "failed") {
+    return { tone: "warning", text: `Saved, but extraction failed: ${extraction.error}` };
+  }
+  if (extraction?.status === "completed") {
+    const knowledgeCount =
+      knowledgeExtraction?.status === "completed" ? knowledgeExtraction.items.length : 0;
+    if (extraction.tasks === 0 && knowledgeCount === 0) {
+      return {
+        tone: "warning",
+        text: "Saved, but nothing grounded was found — no tasks or knowledge items extracted.",
+      };
+    }
+    const projectMatch =
+      response.projectMatch?.status === "matched" &&
+      response.projectMatch.projectName &&
+      response.projectMatch.matchedSignals.length > 0
+        ? ` Matched to ${response.projectMatch.projectName} via ${response.projectMatch.matchedSignals.join(", ")}.`
+        : "";
+    const knowledgeWarning =
+      knowledgeExtraction?.status === "failed"
+        ? ` Knowledge extraction failed: ${knowledgeExtraction.error}`
+        : "";
+    return {
+      tone: "success",
+      text: `Found ${extraction.tasks} task${extraction.tasks === 1 ? "" : "s"} and ${knowledgeCount} knowledge item${knowledgeCount === 1 ? "" : "s"} — added to Today and Knowledge.${projectMatch}${knowledgeWarning}`,
+    };
+  }
+  return { tone: "success", text: response.deduped ? "Already saved." : "Saved and extracted." };
+}
 
 export function IngestForm() {
   const router = useRouter();
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
+  const [message, setMessage] = useState<IngestMessage | null>(null);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { title: "", content: "" },
+  });
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!content.trim()) return;
-    setStatus("saving");
+  async function onSubmit(values: FormValues) {
+    setMessage(null);
     try {
       const res = await fetch("/api/source-items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, body: content }),
+        body: JSON.stringify({ title: values.title, body: values.content }),
       });
-      if (!res.ok) throw new Error("Failed to save");
-      setTitle("");
-      setContent("");
-      setStatus("idle");
+      const data = (await res.json()) as IngestResponse | { error?: string };
+      if (!res.ok) {
+        throw new Error("error" in data && data.error ? data.error : "Failed to save");
+      }
+      reset();
+      const msg = describeExtraction(data as IngestResponse);
+      setMessage(msg);
+      if (msg.tone === "success") toast.success("Transcript ingested.");
+      else if (msg.tone === "warning") toast.warning("Saved with warnings.");
       router.refresh();
-    } catch {
-      setStatus("error");
+    } catch (err) {
+      const text = err instanceof Error ? err.message : "Something went wrong. Try again.";
+      setMessage({ tone: "error", text });
+      toast.error(text);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-surface p-4">
-      <p className="text-[11px] uppercase tracking-wide text-muted">Paste a transcript</p>
-      <input
+    <form onSubmit={handleSubmit(onSubmit)} className="card p-6 sm:p-7">
+      <p className="eyebrow">Paste a transcript</p>
+      <Input
+        {...register("title")}
         type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
         placeholder="Title (optional)"
-        className="mt-2 w-full rounded border border-border bg-background px-2.5 py-1.5 text-[14px] outline-none focus:border-foreground/40"
+        aria-label="Transcript title"
+        className="mt-3"
       />
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
+      <Textarea
+        {...register("content")}
         placeholder="Paste meeting notes, a transcript, or any raw text…"
         rows={5}
-        className="mt-2 w-full rounded border border-border bg-background px-2.5 py-1.5 text-[14px] outline-none focus:border-foreground/40"
+        aria-label="Transcript text"
+        aria-invalid={!!errors.content}
+        className="mt-2"
       />
-      <div className="mt-2 flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={status === "saving" || !content.trim()}
-          className="rounded bg-foreground px-3 py-1.5 text-[13px] font-medium text-background disabled:opacity-40"
-        >
-          {status === "saving" ? "Saving…" : "Save to Inbox"}
-        </button>
-        <p className="text-[12px] text-muted">
-          Stored as-is. Extraction into tasks isn&apos;t wired up yet.
+      {errors.content && (
+        <p className="mt-1 text-xs text-danger">{errors.content.message}</p>
+      )}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Saving and extracting…" : "Save and extract"}
+        </Button>
+        <p className="text-xs leading-relaxed text-muted">
+          Stored locally and analyzed for grounded tasks — results go straight into Today.
         </p>
       </div>
-      {status === "error" ? (
-        <p className="mt-2 text-[12px] text-[#9c2b2b]">Something went wrong. Try again.</p>
+      {message ? (
+        <p
+          role="status"
+          className={
+            message.tone === "error"
+              ? "mt-3 text-xs leading-relaxed text-danger"
+              : message.tone === "warning"
+                ? "mt-3 text-xs leading-relaxed text-warm"
+                : "mt-3 text-xs leading-relaxed text-muted"
+          }
+        >
+          {message.text}
+        </p>
       ) : null}
     </form>
   );

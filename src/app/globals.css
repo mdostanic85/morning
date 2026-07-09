@@ -1,27 +1,409 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #fafaf9;
-  --surface: #ffffff;
-  --foreground: #1c1c1a;
-  --muted: #6b6b66;
-  --border: #e7e5e1;
-  --now: #b4530a;
-  --waiting: #8a6d00;
-  --unclear: #9c2b2b;
+@keyframes step-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.step-in {
+  animation: step-in 0.28s ease-out both;
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+   "Daybreak briefing" design tokens — dark-first, with a light scheme.
+   All shadcn/ui CSS variable names are mapped onto our own tokens so that
+   the primitives (Button, Card, Dialog, AlertDialog, etc.) automatically
+   pick up the correct look without any override classes.
+─────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* ── App palette – dark defaults ── */
+  --background: #0b0d12;
+  --foreground: #f3f1ec;
+  --surface: #11141b;
+  --surface-raised: #171b24;
+  --surface-soft: #0e1117;
+  --muted: #9aa2b1;
+  --muted-soft: #6b7484;
+  --border: #232a37;
+  --border-strong: #3a4353;
+  --accent: #85c4ee; /* morning-sky blue: primary actions + links */
+  --accent-strong: #c2e4fb;
+  --accent-contrast: #0a1621;
+  --warm: #eab473; /* dawn gold: the second half of the horizon motif */
+  --good: #85d69d;
+  --danger: #f6939e;
+  --now: #eab473;
+  --waiting: #e8c76c;
+  --tomorrow: #b8a3f2;
+  --unclear: #f6939e;
+  --control-height: 2.75rem;
+  --tag-height: 1.5rem;
+  --tag-padding-x: 0.625rem;
+  --tag-font-size: 12px;
+  --radius: 0.875rem;
+  --surface-radius: 1.25rem;
+  --shadow: 0 20px 60px rgba(3, 5, 9, 0.42);
+  --shadow-soft: 0 8px 28px rgba(3, 5, 9, 0.26);
+  --glow-dawn: rgba(234, 180, 115, 0.075);
+  --glow-sky: rgba(133, 196, 238, 0.06);
+
+  /* ── shadcn/ui token aliases → our palette ── */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--foreground);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-contrast);
+  --secondary: var(--surface-soft);
+  --secondary-foreground: var(--foreground);
+  --muted-foreground: var(--muted);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--foreground);
+  --input: var(--border);
+  --ring: var(--accent);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    /* ── App palette – light overrides: soft paper, morning light ── */
+    --background: #f6f5f2;
+    --foreground: #21262e;
+    --surface: #fdfdfb;
+    --surface-raised: #ffffff;
+    --surface-soft: #eeece7;
+    --muted: #5c6470;
+    --muted-soft: #8b919c;
+    --border: #e0ded7;
+    --border-strong: #c5c3bb;
+    --accent: #0e5c96;
+    --accent-strong: #0a4674;
+    --accent-contrast: #ffffff;
+    --warm: #a96412;
+    --good: #24784a;
+    --danger: #bb3547;
+    --now: #a96412;
+    --waiting: #8a6700;
+    --tomorrow: #6a4fc4;
+    --unclear: #bb3547;
+    --shadow: 0 16px 44px rgba(33, 38, 46, 0.09);
+    --shadow-soft: 0 6px 20px rgba(33, 38, 46, 0.06);
+    --glow-dawn: rgba(169, 100, 18, 0.06);
+    --glow-sky: rgba(14, 92, 150, 0.05);
+    /* shadcn aliases re-derived from light values */
+    --card: var(--surface);
+    --card-foreground: var(--foreground);
+    --popover: var(--surface-raised);
+    --popover-foreground: var(--foreground);
+    --primary: var(--accent);
+    --primary-foreground: var(--accent-contrast);
+    --secondary: var(--surface-soft);
+    --secondary-foreground: var(--foreground);
+    --muted-foreground: var(--muted);
+    --accent-foreground: var(--foreground);
+    --destructive: var(--danger);
+    --destructive-foreground: var(--foreground);
+    --input: var(--border);
+    --ring: var(--accent);
+  }
+}
+
+/* ── Tailwind v4 theme mapping ─────────────────────────────────────────── */
 @theme inline {
+  /* App tokens → Tailwind utility classes  */
   --color-background: var(--background);
-  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-soft: var(--surface-soft);
   --color-muted: var(--muted);
+  --color-muted-soft: var(--muted-soft);
   --color-border: var(--border);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-warm: var(--warm);
+  --color-good: var(--good);
+  --color-danger: var(--danger);
+  --color-now: var(--now);
+  --color-waiting: var(--waiting);
+  --color-tomorrow: var(--tomorrow);
+  --color-unclear: var(--unclear);
+
+  /* shadcn tokens → Tailwind utility classes */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Fonts – literal names only; no var() in @theme inline (Tailwind v4 parses at build time) */
+  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --font-display: "Space Grotesk", "Space Grotesk Fallback", ui-sans-serif, system-ui, sans-serif;
+
+  /* Floor all text at 14px — xs = sm intentionally */
+  --font-size-xs: 0.875rem;
+  --font-size-xs--line-height: 1.25rem;
+
+  /* Radius scale */
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: var(--surface-radius);
+  --radius-surface: var(--surface-radius);
+}
+
+/* ── Base layer ─────────────────────────────────────────────────────────── */
+html {
+  color-scheme: light dark;
+  /* Match the body's base color so macOS/iOS rubber-band overscroll never
+     flashes the browser's default white/black behind the page. */
+  background: var(--background);
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  /* Two faint dawn glows on the horizon line — no decorative grid. */
+  background:
+    radial-gradient(56rem 22rem at 14% -10%, var(--glow-dawn), transparent),
+    radial-gradient(48rem 20rem at 86% -8%, var(--glow-sky), transparent),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--foreground);
+}
+
+/* ── Shared component classes ───────────────────────────────────────────
+   Centralized styling for the recurring primitives that aren't shadcn
+   components: pill buttons, form fields, cards, and section labels.
+   Keeps every screen on the same spacing/type rhythm.                    */
+@layer components {
+  /* Signature motif: a thin horizon rule fading dawn-gold into sky-blue. */
+  .horizon {
+    height: 1px;
+    border: 0;
+    background: linear-gradient(
+      90deg,
+      var(--warm) 0%,
+      color-mix(in srgb, var(--warm) 50%, var(--accent)) 28%,
+      var(--accent) 62%,
+      transparent 100%
+    );
+    opacity: 0.65;
+  }
+
+  /* Monogram tile used as the brand mark. */
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent), var(--warm));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, white 20%, transparent);
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent-contrast);
+  }
+
+  .card {
+    border-radius: var(--surface-radius);
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.2;
+    height: var(--control-height);
+    padding: 0 1.25rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      border-color 140ms ease,
+      background-color 140ms ease,
+      color 140ms ease,
+      opacity 140ms ease;
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .btn-sm {
+    font-size: 13px;
+    height: 2.25rem;
+    padding: 0 1rem;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-weight: 600;
+  }
+  .btn-primary:hover {
+    background: color-mix(in srgb, var(--accent) 86%, var(--foreground));
+  }
+
+  .btn-outline {
+    border-color: var(--border);
+    background: color-mix(in srgb, var(--surface-soft) 70%, transparent);
+    color: var(--foreground);
+  }
+  .btn-outline:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-soft);
+  }
+
+  .btn-quiet {
+    color: var(--muted);
+    background: transparent;
+  }
+  .btn-quiet:hover {
+    color: var(--foreground);
+    background: var(--surface-soft);
+  }
+
+  .field {
+    width: 100%;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--background) 72%, transparent);
+    padding: 0.75rem 1rem;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--foreground);
+    transition:
+      border-color 140ms ease,
+      box-shadow 140ms ease;
+  }
+  input.field,
+  select.field {
+    height: var(--control-height);
+    padding-block: 0;
+    line-height: 1.2;
+  }
+  .field::placeholder {
+    color: var(--muted-soft);
+  }
+  .field:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+
+  .form-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .form-inline > input.field,
+  .form-inline > select.field {
+    min-width: 0;
+    flex: 1 1 12rem;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    height: var(--tag-height);
+    min-height: var(--tag-height);
+    padding-inline: var(--tag-padding-x);
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    font-size: var(--tag-font-size);
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  select.tag {
+    padding-block: 0;
+    padding-inline-end: 1.75rem;
+    cursor: pointer;
+  }
+}
+
+/* ── Accessibility / interaction base ──────────────────────────────────── */
+button,
+a,
+textarea,
+input,
+select,
+summary {
+  outline: none;
+}
+
+/* Keep focus rings for non-shadcn elements (plain <a> links in NavBar etc.) */
+a:focus-visible,
+summary:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+/* shadcn handles its own focus rings via ring-ring on its primitives */
+
+button,
+a,
+summary {
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

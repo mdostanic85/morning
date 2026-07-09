@@ -3,6 +3,7 @@ import { LlmError, type CompletionRequest, type CompletionResponse, type Provide
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
+const REQUEST_TIMEOUT_MS = 60_000;
 
 interface AnthropicMessage {
   content?: { type: string; text?: string }[];
@@ -18,6 +19,9 @@ interface AnthropicMessage {
  * this provider must explicitly instruct the model to return JSON only. The
  * router's parse + schema validation step applies the same way regardless.
  */
+const JSON_MODE_SUFFIX =
+  "\n\nRespond with ONLY valid JSON — no markdown fences, no commentary, no text before or after the JSON object.";
+
 async function complete(request: CompletionRequest): Promise<CompletionResponse> {
   let response: Response;
   try {
@@ -30,11 +34,12 @@ async function complete(request: CompletionRequest): Promise<CompletionResponse>
       },
       body: JSON.stringify({
         model: request.model,
-        system: request.systemPrompt,
+        system: request.systemPrompt + JSON_MODE_SUFFIX,
         max_tokens: request.maxTokens ?? 1024,
         temperature: request.temperature ?? 0.2,
         messages: [{ role: "user", content: request.userPrompt }],
       }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (err) {
     throw new LlmError("network_error", "Failed to reach the Anthropic API.", err);

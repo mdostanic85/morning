@@ -8,6 +8,69 @@
       "when": 1783501551208,
       "tag": "0000_odd_nicolaos",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783501551209,
+      "tag": "0001_knowledge_embeddings",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783501551210,
+      "tag": "0002_integrations_daily_memory",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1783501551211,
+      "tag": "0003_review_and_manual_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1783501551212,
+      "tag": "0004_user_profile_mcp",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1783501551213,
+      "tag": "0005_owner_filter",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1783501551214,
+      "tag": "0006_add_name_to_user_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1783501551215,
+      "tag": "0007_project_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1783591000000,
+      "tag": "0008_task_work_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1783591000001,
+      "tag": "0009_sync_review_reports",
+      "breakpoints": true
     }
   ]
 }

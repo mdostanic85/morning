@@ -1,10 +1,11 @@
-# Morning — Daily Work Operator
+# Vantage — Daily Work Operator
 
 A local-first app that tells you what to do first, why it matters, the next
 concrete action, and how you'll know it's done.
 
 This is the MVP scaffold: Next.js + TypeScript + Tailwind on top of a local
-SQLite database, with no external integrations wired up yet.
+SQLite database, with manual transcript ingestion and LLM-backed local task
+extraction. External connectors are not wired up yet.
 
 ## Stack
 
@@ -17,7 +18,6 @@ SQLite database, with no external integrations wired up yet.
 ```bash
 npm install
 npm run db:migrate   # create data/morning.db from the schema
-npm run db:seed      # optional — adds a few example tasks/projects/sources
 npm run dev
 ```
 
@@ -31,12 +31,11 @@ src/
   components/   Reusable UI: TaskCard, ProjectCard, EvidencePanel, ...
   domain/       Core types (Project, SourceItem, WorkTask, Evidence, ...) — no I/O
   services/     CRUD + domain logic the UI talks to — the only thing that touches the db
-  db/           Drizzle schema, connection, seed script, and seed verification script
+  db/           Drizzle schema and connection
 ```
 
-Pages: **Today** (the daily queue), **Projects**, **Inbox** (raw source items —
-paste a transcript here), **Knowledge** (search over ingested source items), and
-**Settings** (OpenAI / Anthropic API keys).
+Pages: **Today** (daily briefing and queue), **Projects**, **Knowledge** (search over
+ingested sources), and **Settings** (connections, API keys, manual transcripts).
 
 ## Data model
 
@@ -50,9 +49,9 @@ Seven tables, defined in `src/db/schema.ts`:
   `now | next | later | waiting | tomorrow | unclear | done`, plus `priorityScore`,
   `confidence`, `reason`, `nextAction`, and `doneCriteria`.
 - **`evidence`** — links a task back to the source item(s) that justify it.
-- **`knowledge_items`** — durable facts extracted from sources (requirements,
+- **`knowledge_items`** — newest learnings extracted from sources (requirements,
   decisions, open questions, risks, deadlines, stakeholder preferences,
-  acceptance criteria) that outlive any single task.
+  acceptance criteria), each tied to its source. Project linkage is optional.
 - **`verification_reports`** — the record of checking a task's done criteria
   against reality; `verdict` is `done | mostly_done | missing_work | cannot_verify`.
 - **`connections`** — status of external integrations once they exist (Gmail,
@@ -65,16 +64,14 @@ Each table has a corresponding CRUD module in `src/services/` (e.g.
 
 - `npm run db:generate` — generate a new migration after editing `src/db/schema.ts`
 - `npm run db:migrate` — apply pending migrations
-- `npm run db:seed` — reset and reseed with example data (1 project, 1 source
-  item, 3 tasks)
-- `npm run db:verify` — sanity-check that seed data loaded (prints row counts
-  + a sample row per table, exits non-zero if empty)
 - `npm run db:studio` — open Drizzle Studio to browse the local database
 
 ## Notes
 
 - API keys are saved to `data/secrets.json` (gitignored, `chmod 600`) and are
   never returned to the browser except as a masked preview.
-- LLM extraction, connectors (Gmail, Jira, Confluence, Granola, GitHub, Figma,
-  Discord, git) are not implemented yet — this scaffold only stores what you
-  paste manually.
+- Manual transcript ingestion can run LLM task extraction after saving a new
+  source item. Configure an OpenAI key in Settings or `OPENAI_API_KEY` before
+  using the real extraction path.
+- External connectors (Gmail, Jira, Confluence, Granola, GitHub, Figma,
+  Discord, git) are not implemented yet.

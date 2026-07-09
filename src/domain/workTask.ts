@@ -1,3 +1,5 @@
+import type { TaskWorkContextSnapshot } from "./taskWorkContext";
+
 export const WORK_TASK_STATUSES = [
   "now",
   "next",
@@ -14,11 +16,18 @@ export const OPEN_QUEUE_STATUSES = WORK_TASK_STATUSES.filter(
   (s) => s !== "done"
 ) as Exclude<WorkTaskStatus, "done">[];
 
+export const REVIEW_STATUSES = ["pending", "approved"] as const;
+export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
+
 export interface WorkTask {
   id: number;
   projectId: number | null;
   title: string;
   status: WorkTaskStatus;
+  /** True once the user explicitly set the status — the planner must not overwrite it. */
+  statusManuallySet: boolean;
+  /** "pending" tasks await user approval in the Inbox and stay out of the Today queue. */
+  reviewStatus: ReviewStatus;
   priorityScore: number | null;
   /** 0..1 */
   confidence: number | null;
@@ -28,6 +37,10 @@ export interface WorkTask {
   dueDate: string | null;
   owner: string | null;
   waitingOn: string | null;
+  figmaFrameUrl: string | null;
+  localRepoPath: string | null;
+  githubRepo: string | null;
+  workContext: TaskWorkContextSnapshot | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,7 +52,18 @@ export type NewWorkTask = Pick<
   Partial<
     Pick<
       WorkTask,
-      "projectId" | "priorityScore" | "confidence" | "dueDate" | "owner" | "waitingOn"
+      | "projectId"
+      | "priorityScore"
+      | "confidence"
+      | "dueDate"
+      | "owner"
+      | "waitingOn"
+      | "figmaFrameUrl"
+      | "localRepoPath"
+      | "githubRepo"
+      | "workContext"
+      | "reviewStatus"
+      | "statusManuallySet"
     >
   >;
 

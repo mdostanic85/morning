@@ -6,19 +6,28 @@ import type { z } from "zod";
 export const JOB_TYPES = [
   "task_extraction",
   "project_matching",
+  "project_discovery",
   "priority_planning",
+  "today_briefing",
   "knowledge_extraction",
   "delivery_verification",
   "daily_memory",
+  "knowledge_qa",
+  "focus_action_plan",
+  "delivery_sync_review",
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
-export const PROVIDERS = ["openai", "anthropic"] as const;
+export const PROVIDERS = ["openai", "anthropic", "groq"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
 export interface ModelConfig {
   provider: Provider;
   model: string;
+  /** Default output token budget for this job (Groq/OpenAI). */
+  maxTokens?: number;
+  /** Tried in order when the primary provider has no key or the call fails. */
+  fallbacks?: ModelConfig[];
 }
 
 // What a provider adapter needs to make one completion call. Provider
@@ -49,6 +58,7 @@ export const LLM_ERROR_KINDS = [
   "missing_api_key",
   "network_error",
   "provider_error",
+  "rate_limit_daily",
   "invalid_json",
   "schema_validation_failed",
 ] as const;

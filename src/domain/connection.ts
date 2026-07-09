@@ -1,8 +1,11 @@
 export const CONNECTION_STATUSES = ["connected", "disconnected", "error"] as const;
 export type ConnectionStatus = (typeof CONNECTION_STATUSES)[number];
 
-export const CONNECTION_AUTH_TYPES = ["oauth", "api_key", "pat", "none"] as const;
+export const CONNECTION_AUTH_TYPES = ["oauth", "api_key", "pat", "mcp", "none"] as const;
 export type ConnectionAuthType = (typeof CONNECTION_AUTH_TYPES)[number];
+
+export const CONNECTION_TRANSPORTS = ["api", "mcp"] as const;
+export type ConnectionTransport = (typeof CONNECTION_TRANSPORTS)[number];
 
 export interface Connection {
   id: number;
