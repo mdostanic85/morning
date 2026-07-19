@@ -19,9 +19,18 @@ export interface TaskExtractorInput {
   sourceBody: string;
   /** Used only to help judge ownership/terminology — never a source of tasks by itself. */
   project?: TaskExtractorProjectContext | null;
+  existingTasks?: {
+    id: number;
+    title: string;
+    reason: string;
+    nextAction: string;
+    doneCriteria: string[];
+    status: string;
+    jiraKey?: string | null;
+  }[];
 }
 
-const ROLE = `You are the task extraction engine for a local-first daily work operator app. Your job is to read one raw source item (a transcript, email, ticket, or note) and extract the concrete candidate tasks a careful assistant would flag from it, plus any supporting knowledge signals (decisions, open questions, risks, deadlines, acceptance criteria) worth remembering from the same source.`;
+const ROLE = `You are the task extraction engine for a local-first daily work operator app. Your job is to read one raw source item (a transcript, email, ticket, or note) and extract the concrete candidate tasks a careful assistant would flag from it.`;
 
 function ownershipRuleText(currentUserName?: string | null): string {
   if (currentUserName && currentUserName.trim()) {
@@ -41,16 +50,28 @@ function jobInstructions(currentUserName?: string | null): string {
   - If a task's owner is named and is not clearly the user, lower "confidence" — it may not belong on the user's queue at all.
   - If it sounds like someone else is responsible for the actual work, set status to "waiting" (the user is expecting something back from them) or "unclear" (the user's role in it isn't clear) — never "actionable".
 - Vagueness: if you cannot derive a specific, concrete "nextAction" and specific "doneCriteria" from the source, the task is too vague to act on — set status to "unclear" rather than inventing specificity that isn't in the source.
-- "reason" must be 2–4 sentences that together give a complete picture for the user: (1) why this task is on their list and what triggered it, grounded in the source, (2) what specifically they need to deliver or decide, including file/system/person/location names when the source names them, (3) if multiple sources would disagree, state only the latest understanding and note that earlier sources were superseded. Do not pad with vague filler.
+- "reason" must be 2–4 sentences that together give a complete picture for the user: (1) why this task is on their list and what triggered it, grounded in the source, (2) what specifically they need to deliver or decide, including file/system/person/location names when the source names them, (3) if multiple sources would disagree, state only the winning understanding and note that earlier sources were superseded. Do not pad with vague filler.
 - "nextAction" must be a single, concrete, immediately doable step — not a restatement of the title and not a vague instruction like "follow up". Every task must have one.
 - "doneCriteria" must be an array of specific, independently checkable statements — never a single vague statement like "finish the work". Every task must have at least one.
 - "owner", if the source names one, must be copied exactly as written. If no owner is named, use null — never infer or guess a name.
 - "dueDate" must only be filled if the source states an explicit date or day; resolve relative dates (e.g. "Friday") against the given source date only if unambiguous, in ISO 8601 form, otherwise leave it null.
 - Every task must include at least one verbatim quote from the source as evidence. If you cannot find a supporting quote for a candidate task, do not emit it at all — never invent a task that isn't backed by the source text.
-- When the same topic appears with conflicting instructions across quotes or sources, treat the most recent source date as authoritative for nextAction, doneCriteria, and reason. Do not blend incompatible instructions — reflect the latest stated requirement only.
+- Source authority hierarchy for conflicts and wording of nextAction/doneCriteria/reason:
+  1. Confluence space docs are baseline product context.
+  2. Explicit PRD/Confluence page requirements are the requirements baseline.
+  3. Jira is authoritative for ticket status, assignee, and mechanical fields.
+  4. Meeting transcripts (Gemini Gmail/Drive notes, Granola, manual transcripts) carry action instructions. The newest dated source wins by default. A transcript still wins when Matt or Lucas explicitly gave the instruction, even against a newer non-stakeholder source.
+  For any single task, ignore information more than 5 days older than the newest evidence for that task — it is stale and must not shape title, nextAction, doneCriteria, or reason. Within those 5 days, the newest information is the most valid.
+- Action items spoken in a transcript ("please fix", "update", "ship", "change X") — especially from Matt or Lucas — are high-priority candidate tasks. Note supersession in reason when they override older PRD/Jira wording.
+- If this source is a meeting transcript and something the user is expected to do was discussed, you MUST extract it as a task even when no Jira ticket or other written record exists for it. A spoken commitment in a meeting is sufficient evidence on its own — do not drop it just because it is not tracked elsewhere.
+- Merge-first for transcripts (Granola / Gemini / meeting notes): prefer updating an existing open task over creating a parallel fragment.
+  - If the source mentions a Jira key that matches an existing open task (title or jiraKey field), you MUST set "existingTaskId" to that task. Put the newest concrete next step for that ticket into nextAction/doneCriteria — do not invent a second "Review UATL-…" / "Finish remaining…" task beside it.
+  - If the source does not name a key but clearly continues the user's only active now/next ticket on the same topic (same feature/area), set "existingTaskId" to that task.
+  - Use null only for genuinely new work (different ticket, different owner, or a waiting item that is not the user's current ticket).
+  - Small follow-ups that refine the same ticket (final screens, ping for review, handoff polish) belong on that existingTaskId, not as separate later tasks.
+- You may receive existing open tasks. If a source changes, clarifies, or adds evidence to one of them, set "existingTaskId" to that task id. Never force a weak match merely because wording is similar when multiple active tasks compete.
 - If project context is provided, use its people/keywords/description only to help you judge ownership and domain terminology — never as a source of tasks by itself; every task must still be evidenced in the source content, not in the project context.
-- Alongside tasks, capture supporting knowledge signals from the same source into separate buckets: "decisions" already made, "openQuestions" still unresolved, "risks" that could derail the work, "deadlines" mentioned (with a "date" field filled in when resolvable, otherwise null), and "acceptanceCriteria" stated for any deliverable. Each entry in every bucket must also include at least one verbatim quote as evidence and its own confidence score. Leave a bucket as an empty array if the source has nothing of that kind — never invent entries to fill it.
-- If the source contains no actionable work and no notable knowledge signals, return empty arrays for everything — do not invent content just to produce output.
+- If the source contains no actionable work, return an empty "tasks" array — do not invent content just to produce output.
 `.trim();
 }
 
@@ -58,6 +79,7 @@ const OUTPUT_SHAPE = `{
   "tasks": [
     {
       "title": string,
+      "existingTaskId": number | null, // matching existing task, or null for new work
       "reason": string,               // why this matters, grounded in the source
       "nextAction": string,
       "doneCriteria": string[],       // at least one
@@ -69,12 +91,7 @@ const OUTPUT_SHAPE = `{
       "confidence": number,           // 0..1
       "evidence": [ { "quote": string } ]  // at least one verbatim quote
     }
-  ],
-  "decisions": [ { "title": string, "content": string, "confidence": number, "evidence": [ { "quote": string } ] } ],
-  "openQuestions": [ { "title": string, "content": string, "confidence": number, "evidence": [ { "quote": string } ] } ],
-  "risks": [ { "title": string, "content": string, "confidence": number, "evidence": [ { "quote": string } ] } ],
-  "deadlines": [ { "title": string, "content": string, "date": string | null, "confidence": number, "evidence": [ { "quote": string } ] } ],
-  "acceptanceCriteria": [ { "title": string, "content": string, "confidence": number, "evidence": [ { "quote": string } ] } ]
+  ]
 }`;
 
 /** The default system prompt, with no known user identity — used as the router's static fallback. */
@@ -113,6 +130,13 @@ export function buildTaskExtractorUserPrompt(input: TaskExtractorInput): string 
           "",
         ].join("\n")
       : null,
+    input.existingTasks && input.existingTasks.length > 0
+      ? [
+          "Existing open tasks (merge transcript updates into these when the Jira key or only-active topic matches):",
+          wrapUntrustedContent("existing tasks", JSON.stringify(input.existingTasks, null, 2)),
+          "",
+        ].join("\n")
+      : null,
     wrapUntrustedContent("source metadata", metadata),
     "",
     "Extract candidate tasks and supporting knowledge signals from the source content below.",
@@ -126,6 +150,7 @@ export function buildTaskExtractorUserPrompt(input: TaskExtractorInput): string 
 export const extractedTaskSchema = z
   .object({
     title: z.string().min(1),
+    existingTaskId: z.number().int().positive().nullable().default(null),
     reason: z.string().min(1),
     nextAction: z.string().min(1),
     doneCriteria: z.array(z.string().min(1)).min(1),
@@ -154,28 +179,9 @@ export const extractedTaskSchema = z
     }
   });
 
-/** A supporting knowledge signal — decision, open question, risk, or acceptance criteria. */
-export const insightSchema = z.object({
-  title: z.string().min(1),
-  content: z.string().min(1),
-  confidence: confidenceSchema,
-  evidence: z.array(evidenceQuoteSchema).min(1),
-});
-
-export const deadlineInsightSchema = insightSchema.extend({
-  date: z.string().min(1).nullable(),
-});
-
 export const taskExtractionOutputSchema = z.object({
   tasks: z.array(extractedTaskSchema),
-  decisions: z.array(insightSchema).default([]),
-  openQuestions: z.array(insightSchema).default([]),
-  risks: z.array(insightSchema).default([]),
-  deadlines: z.array(deadlineInsightSchema).default([]),
-  acceptanceCriteria: z.array(insightSchema).default([]),
 });
 
 export type ExtractedTask = z.infer<typeof extractedTaskSchema>;
-export type Insight = z.infer<typeof insightSchema>;
-export type DeadlineInsight = z.infer<typeof deadlineInsightSchema>;
 export type TaskExtractionOutput = z.infer<typeof taskExtractionOutputSchema>;

@@ -4,15 +4,29 @@ import {
   taskExtractionOutputSchema,
   buildTaskExtractorSystemPrompt,
   buildTaskExtractorUserPrompt,
+  type ExtractedTask,
   type TaskExtractorProjectContext,
 } from "@/lib/llm/prompts/taskExtractor";
-import { createWorkTaskWithEvidence } from "@/services/workTasks";
+import {
+  createWorkTaskWithEvidence,
+  getWorkTasks,
+  updateWorkTask,
+} from "@/services/workTasks";
+import { replaceEvidenceForTaskSource } from "@/services/evidence";
 import { getActiveProjects } from "@/services/projects";
 import { matchAndAssignTaskToProject } from "@/lib/tasks/projectMatcher";
 import type { SourceItem } from "@/domain/sourceItem";
 import type { WorkTask, WorkTaskStatus } from "@/domain/workTask";
 import type { Evidence } from "@/domain/evidence";
-import type { KnowledgeItem } from "@/domain/knowledgeItem";
+import { isIncomingSourceAuthoritative } from "@/lib/tasks/sourceAuthority";
+import { getSourceItemsByIds } from "@/services/sourceItems";
+import {
+  jiraKeyForTask,
+  mergeTaskTitle,
+  pickPrimaryExtractedTask,
+  resolveTranscriptMergeTarget,
+  type MergeCandidateTask,
+} from "@/lib/tasks/transcriptTaskMerge";
 
 export interface ExtractTasksOptions {
   sourceItem: SourceItem;
@@ -27,11 +41,6 @@ export interface TaskExtractionRunResult {
   sourceItemId: number;
   tasks: WorkTask[];
   evidence: Evidence[];
-  decisions: KnowledgeItem[];
-  openQuestions: KnowledgeItem[];
-  risks: KnowledgeItem[];
-  deadlines: KnowledgeItem[];
-  acceptanceCriteria: KnowledgeItem[];
   /** Present only when ok is false — nothing was saved. */
   error?: string;
 }
@@ -51,13 +60,49 @@ function emptyResult(sourceItemId: number, error?: string): TaskExtractionRunRes
     sourceItemId,
     tasks: [],
     evidence: [],
-    decisions: [],
-    openQuestions: [],
-    risks: [],
-    deadlines: [],
-    acceptanceCriteria: [],
     error,
   };
+}
+
+function toMergeCandidates(tasks: WorkTask[]): MergeCandidateTask[] {
+  return tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    reason: task.reason,
+    nextAction: task.nextAction,
+    status: task.status,
+    projectId: task.projectId,
+  }));
+}
+
+function uniqueQuotes(items: { quote: string }[]): { quote: string }[] {
+  const seen = new Set<string>();
+  const out: { quote: string }[] = [];
+  for (const item of items) {
+    const quote = item.quote.trim();
+    if (!quote) continue;
+    const key = quote.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ quote });
+  }
+  return out;
+}
+
+function uniqueCriteria(groups: string[][]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const group of groups) {
+    for (const item of group) {
+      const value = item.trim();
+      if (!value) continue;
+      const key = value.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(value);
+    }
+  }
+  return out;
 }
 
 /**
@@ -65,11 +110,25 @@ function emptyResult(sourceItemId: number, error?: string): TaskExtractionRunRes
  * Evidence rows for tasks. Durable knowledge is handled by
  * `lib/knowledge/extractor.ts`, so this task path does not save KnowledgeItem
  * rows.
+ *
+ * For Granola/Gemini transcripts, a deterministic merge pass attaches updates
+ * to the matching open Jira/active task instead of spawning parallel fragments.
  */
 export async function extractTasksFromSourceItem(
   options: ExtractTasksOptions
 ): Promise<TaskExtractionRunResult> {
   const { sourceItem, project = null, currentUserName = null } = options;
+  const existingTasks = (await getWorkTasks())
+    .filter((task) => task.status !== "done")
+    .filter(
+      (task) =>
+        sourceItem.projectId == null ||
+        task.projectId == null ||
+        task.projectId === sourceItem.projectId
+    )
+    .slice(0, 30);
+
+  const mergeCandidates = toMergeCandidates(existingTasks);
 
   const result = await runLlmJob({
     jobType: "task_extraction",
@@ -81,6 +140,15 @@ export async function extractTasksFromSourceItem(
       sourceAuthor: sourceItem.author,
       sourceBody: sourceItem.body,
       project,
+      existingTasks: existingTasks.map((task) => ({
+        id: task.id,
+        title: task.title,
+        reason: task.reason,
+        nextAction: task.nextAction,
+        doneCriteria: task.doneCriteria,
+        status: task.status,
+        jiraKey: jiraKeyForTask(task),
+      })),
     }),
     schema: taskExtractionOutputSchema,
   });
@@ -90,41 +158,134 @@ export async function extractTasksFromSourceItem(
   }
 
   const output = result.data;
-
   const savedTasks: WorkTask[] = [];
   const savedEvidence: Evidence[] = [];
   const taskMatchProjects = sourceItem.projectId === null ? await getActiveProjects() : null;
 
+  type ResolvedGroup = {
+    targetId: number | null;
+    mode: "full" | "evidence";
+    items: ExtractedTask[];
+  };
+
+  const groups = new Map<string, ResolvedGroup>();
+
   for (const extracted of output.tasks) {
-    // WorkTask has no dedicated "why is this unclear" column, so fold it
-    // into `reason` — waitingOn is reserved for the "waiting" status's
-    // blocked-on-whom/what meaning and shouldn't be overloaded with it.
+    const resolution = resolveTranscriptMergeTarget({
+      source: sourceItem,
+      extracted,
+      existingTasks: mergeCandidates,
+    });
+    // Collapse only when multiple extracts resolve to the same open task.
+    // Genuinely new items stay separate even if titles look similar.
+    const key =
+      resolution.taskId != null
+        ? `merge:${resolution.taskId}:${resolution.mode}`
+        : `new:${groups.size}`;
+    const existingGroup = groups.get(key);
+    if (existingGroup) {
+      existingGroup.items.push(extracted);
+    } else {
+      groups.set(key, {
+        targetId: resolution.taskId,
+        mode: resolution.mode,
+        items: [extracted],
+      });
+    }
+  }
+
+  for (const group of groups.values()) {
+    const primary = pickPrimaryExtractedTask(group.items);
     const reason =
-      extracted.status === "unclear" && extracted.unclearReason
-        ? `${extracted.reason} (Unclear: ${extracted.unclearReason})`
-        : extracted.reason;
+      primary.status === "unclear" && primary.unclearReason
+        ? `${primary.reason} (Unclear: ${primary.unclearReason})`
+        : primary.reason;
+    const evidenceQuotes = uniqueQuotes(group.items.flatMap((item) => item.evidence));
+    const doneCriteria = uniqueCriteria(group.items.map((item) => item.doneCriteria));
+    const evidenceInput = evidenceQuotes.map((item) => ({
+      quote: item.quote,
+      summary: primary.reason,
+      sourceDate: sourceItem.sourceDate,
+      url: sourceItem.url ?? undefined,
+    }));
+
+    if (group.targetId != null) {
+      const existing = existingTasks.find((task) => task.id === group.targetId) ?? null;
+      if (!existing) continue;
+
+      if (group.mode === "evidence") {
+        const replacedEvidence = await replaceEvidenceForTaskSource(
+          existing.id,
+          sourceItem.id,
+          evidenceInput
+        );
+        savedTasks.push(existing);
+        savedEvidence.push(...replacedEvidence);
+        continue;
+      }
+
+      const existingSourceIds = Array.from(
+        new Set(existing.evidence.map((item) => item.sourceItemId))
+      );
+      const existingSources =
+        existingSourceIds.length > 0 ? await getSourceItemsByIds(existingSourceIds) : [];
+      const incomingIsLatest = isIncomingSourceAuthoritative({
+        incoming: sourceItem,
+        existingEvidenceDates: existing.evidence.map((item) => item.sourceDate),
+        existingSources,
+      });
+
+      const updated = incomingIsLatest
+        ? await updateWorkTask(existing.id, {
+            projectId: existing.projectId ?? sourceItem.projectId,
+            title: mergeTaskTitle(existing.title, primary.title),
+            // Merging transcript updates onto an open task must not demote a
+            // now/next item into "later" — only waiting/unclear may change status.
+            status: existing.statusManuallySet
+              ? existing.status
+              : primary.status === "waiting" || primary.status === "unclear"
+                ? EXTRACTED_STATUS_TO_QUEUE_STATUS[primary.status]
+                : existing.status,
+            reason,
+            nextAction: primary.nextAction,
+            doneCriteria: doneCriteria.length > 0 ? doneCriteria : primary.doneCriteria,
+            confidence: primary.confidence,
+            dueDate: primary.dueDate ?? existing.dueDate,
+            owner: primary.owner ?? existing.owner,
+            waitingOn: primary.status === "waiting" ? primary.waitingOn : null,
+          })
+        : existing;
+      const replacedEvidence = await replaceEvidenceForTaskSource(
+        existing.id,
+        sourceItem.id,
+        evidenceInput
+      );
+      savedTasks.push(updated ?? existing);
+      savedEvidence.push(...replacedEvidence);
+      continue;
+    }
 
     // Extracted tasks go straight into the Today queue — no manual approval step.
     const created = await createWorkTaskWithEvidence(
       {
         projectId: sourceItem.projectId,
-        title: extracted.title,
-        status: EXTRACTED_STATUS_TO_QUEUE_STATUS[extracted.status],
+        title: primary.title,
+        status: EXTRACTED_STATUS_TO_QUEUE_STATUS[primary.status],
         reviewStatus: "approved",
         reason,
-        nextAction: extracted.nextAction,
-        doneCriteria: extracted.doneCriteria,
-        confidence: extracted.confidence,
-        dueDate: extracted.dueDate,
-        owner: extracted.owner,
-        waitingOn: extracted.waitingOn,
+        nextAction: primary.nextAction,
+        doneCriteria: doneCriteria.length > 0 ? doneCriteria : primary.doneCriteria,
+        confidence: primary.confidence,
+        dueDate: primary.dueDate,
+        owner: primary.owner,
+        waitingOn: primary.waitingOn,
       },
-      extracted.evidence.map((item) => ({
+      evidenceInput.map((item) => ({
         sourceItemId: sourceItem.id,
         quote: item.quote,
-        summary: extracted.reason,
-        sourceDate: sourceItem.sourceDate,
-        url: sourceItem.url ?? undefined,
+        summary: item.summary,
+        sourceDate: item.sourceDate,
+        url: item.url,
       }))
     );
 
@@ -147,10 +308,5 @@ export async function extractTasksFromSourceItem(
     sourceItemId: sourceItem.id,
     tasks: savedTasks,
     evidence: savedEvidence,
-    decisions: [],
-    openQuestions: [],
-    risks: [],
-    deadlines: [],
-    acceptanceCriteria: [],
   };
 }

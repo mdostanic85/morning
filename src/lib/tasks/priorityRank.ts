@@ -4,6 +4,11 @@ import type { JiraPendingSnapshot } from "@/lib/connectors/jiraPending";
 import { jiraStatusFocusWeight } from "@/lib/connectors/jiraText";
 import { findTaskIdByJiraKey } from "@/lib/tasks/resolveFocusTask";
 import { DAILY_FOCUS_TASK_LIMIT } from "@/lib/tasks/dailyFocus";
+import {
+  filterFreshTaskSources,
+  sourceAuthorityScoreBoost,
+  type AttendanceContext,
+} from "@/lib/tasks/sourceAuthority";
 
 export interface RankedWorkTask {
   taskId: number;
@@ -12,6 +17,8 @@ export interface RankedWorkTask {
   explanation: string[];
   jiraKey: string | null;
   jiraPriority: string | null;
+  /** True when a meeting the user attended in the last 4 days committed this — must surface. */
+  forceInclude: boolean;
 }
 
 export interface RankedJiraIssue {
@@ -31,6 +38,7 @@ export interface BriefingFocusItemDraft {
   reason: string;
   nextAction: string;
   actionSteps?: string[];
+  todayWorkSummary?: string[];
   referenceLinks?: BriefingReferenceLink[];
   doneCriteria: string[];
   evidenceQuotes: { quote: string }[];
@@ -40,12 +48,12 @@ export interface BriefingFocusItemDraft {
 }
 
 const STATUS_WEIGHT: Record<Exclude<WorkTaskStatus, "done">, number> = {
-  now: 1000,
-  next: 850,
-  later: 500,
-  waiting: 200,
-  tomorrow: 150,
-  unclear: 100,
+  now: 80,
+  next: 40,
+  later: 0,
+  waiting: -300,
+  tomorrow: -120,
+  unclear: -200,
 };
 
 const FOCUS_EXCLUDED_STATUSES = new Set<WorkTaskStatus>(["waiting", "tomorrow", "unclear", "done"]);
@@ -74,14 +82,41 @@ export function jiraPriorityWeight(priority: string | null | undefined): number 
   return 25;
 }
 
-function dueDateWeight(dueDate: string | null | undefined, today: string): { score: number; note: string | null } {
+/** Ignore overdue boosts from ancient calendar leftovers with no fresh evidence. */
+const STALE_OVERDUE_DAYS = 14;
+
+function dueDateWeight(
+  dueDate: string | null | undefined,
+  today: string,
+  options?: { newestEvidenceAgeDays?: number | null }
+): { score: number; note: string | null } {
   const days = dueDate ? daysUntil(dueDate, today) : null;
   if (days == null) return { score: 0, note: null };
-  if (days < 0) return { score: 180, note: `Overdue by ${Math.abs(days)} day(s)` };
+  if (days < 0) {
+    const overdueDays = Math.abs(days);
+    const evidenceAge = options?.newestEvidenceAgeDays;
+    if (
+      overdueDays > STALE_OVERDUE_DAYS &&
+      evidenceAge != null &&
+      evidenceAge > STALE_OVERDUE_DAYS
+    ) {
+      return { score: 0, note: null };
+    }
+    return { score: 180, note: `Overdue by ${overdueDays} day(s)` };
+  }
   if (days === 0) return { score: 150, note: "Due today" };
   if (days === 1) return { score: 110, note: "Due tomorrow" };
   if (days <= 7) return { score: 70, note: `Due in ${days} days` };
   return { score: 20, note: null };
+}
+
+function newestEvidenceAgeDays(sourceDates: string[], now: number = Date.now()): number | null {
+  const newest = sourceDates
+    .map((value) => new Date(value).getTime())
+    .filter((value) => !Number.isNaN(value))
+    .sort((a, b) => b - a)[0];
+  if (newest == null) return null;
+  return (now - newest) / (1000 * 60 * 60 * 24);
 }
 
 function evidenceRecencyWeight(sourceDates: string[]): { score: number; note: string | null } {
@@ -129,6 +164,7 @@ function jiraMetadata(source: SourceItem | undefined): {
 
 export interface WorkTaskForRanking {
   id: number;
+  projectId: number | null;
   title: string;
   status: WorkTaskStatus;
   reason: string;
@@ -145,10 +181,12 @@ export function rankWorkTask(
   task: WorkTaskForRanking,
   today: string,
   sourceById: Map<number, SourceItem>,
-  jiraByKey: Map<string, JiraPendingSnapshot>
+  jiraByKey: Map<string, JiraPendingSnapshot>,
+  attendance?: AttendanceContext
 ): RankedWorkTask {
   let score = 0;
   const explanation: string[] = [];
+  let forceInclude = false;
 
   if (task.status !== "done") {
     score += STATUS_WEIGHT[task.status];
@@ -156,25 +194,41 @@ export function rankWorkTask(
     else if (task.status === "next") explanation.push("Queued as next up");
   }
 
-  if (task.priorityScore != null) {
-    const plannerBoost = Math.round(task.priorityScore * 100);
-    score += plannerBoost;
-    if (plannerBoost >= 70) explanation.push("High planner urgency");
-  }
-
   if (task.statusManuallySet) {
-    score += 90;
+    score += 1000;
     explanation.push("You explicitly set its queue position");
   }
 
-  const sources = task.evidence
+  const taskText = `${task.title} ${task.reason} ${task.nextAction}`;
+  if (/block(?:ing|s|ed)? (?:the )?(?:team|others|someone|release|launch)|others? (?:are )?waiting on/i.test(taskText)) {
+    score += 160;
+    explanation.push("Blocks other people or delivery");
+  }
+  if (/stakeholder|client request|customer request|asked (?:me|you|us) to|explicit request/i.test(taskText)) {
+    score += 120;
+    explanation.push("Direct stakeholder request");
+  }
+  if (/review comment|requested changes|changes requested|pull request|\bPR\b/i.test(taskText)) {
+    score += 100;
+    explanation.push("Review feedback needs action");
+  }
+  if (/requirement changed|scope changed|new update|updated requirement|supersed/i.test(taskText)) {
+    score += 80;
+    explanation.push("Recent requirement change");
+  }
+
+  const allSources = task.evidence
     .map((item) => sourceById.get(item.sourceItemId))
     .filter((source): source is SourceItem => source != null);
+  // Per-task freshness window: evidence more than 5 days older than the
+  // task's newest signal is ignored for scoring — newest information wins.
+  const sources = filterFreshTaskSources(allSources);
 
   let jiraKey: string | null = null;
   let jiraPriority: string | null = null;
 
-  for (const source of sources) {
+  // Jira key is task identity (not stale info) — resolve it from all sources.
+  for (const source of allSources) {
     const meta = jiraMetadata(source);
     if (meta.key) {
       jiraKey = meta.key;
@@ -209,13 +263,20 @@ export function rankWorkTask(
     if (jWeight > 0) explanation.push(`Jira priority: ${jiraPriority}`);
   }
 
-  const dueFromTask = dueDateWeight(task.dueDate, today);
+  const evidenceAgeDays = newestEvidenceAgeDays(
+    allSources.map((source) => source.sourceDate)
+  );
+  const dueFromTask = dueDateWeight(task.dueDate, today, {
+    newestEvidenceAgeDays: evidenceAgeDays,
+  });
   score += dueFromTask.score;
   if (dueFromTask.note) explanation.push(dueFromTask.note);
 
   if (jiraSnapshot?.updatedAt) {
     const jiraDue = jiraSnapshot.excerpt.match(/Due date: (\d{4}-\d{2}-\d{2})/);
-    const dueFromJira = dueDateWeight(jiraDue?.[1] ?? null, today);
+    const dueFromJira = dueDateWeight(jiraDue?.[1] ?? null, today, {
+      newestEvidenceAgeDays: evidenceAgeDays,
+    });
     if (!task.dueDate && dueFromJira.score > 0) {
       score += dueFromJira.score;
       if (dueFromJira.note) explanation.push(`Jira ${dueFromJira.note.toLowerCase()}`);
@@ -234,8 +295,13 @@ export function rankWorkTask(
     );
   }
 
+  const authority = sourceAuthorityScoreBoost(sources, { attendance });
+  score += authority.score;
+  explanation.push(...authority.notes);
+  if (authority.forceInclude) forceInclude = true;
+
   if (sources.length >= 2) {
-    score += 35;
+    score += 25;
     const labels = sources.slice(0, 3).map((source) => `${source.sourceType}: ${source.title}`);
     explanation.push(
       sources.length > 3
@@ -254,7 +320,7 @@ export function rankWorkTask(
   }
 
   if (task.waitingOn) {
-    score -= 120;
+    score -= 250;
     explanation.push(`Waiting on ${task.waitingOn}`);
   }
 
@@ -265,6 +331,7 @@ export function rankWorkTask(
     explanation: explanation.length > 0 ? explanation : ["Open work in your queue"],
     jiraKey,
     jiraPriority,
+    forceInclude,
   };
 }
 
@@ -272,11 +339,12 @@ export function rankWorkTasks(
   tasks: WorkTaskForRanking[],
   today: string,
   sourceById: Map<number, SourceItem>,
-  jiraPending: JiraPendingSnapshot[]
+  jiraPending: JiraPendingSnapshot[],
+  attendance?: AttendanceContext
 ): RankedWorkTask[] {
   const jiraByKey = new Map(jiraPending.map((issue) => [issue.key, issue]));
   const ranked = tasks
-    .map((task) => rankWorkTask(task, today, sourceById, jiraByKey))
+    .map((task) => rankWorkTask(task, today, sourceById, jiraByKey, attendance))
     .sort((a, b) => b.score - a.score);
 
   const maxScore = ranked[0]?.score ?? 1;
@@ -335,9 +403,16 @@ export function buildDeterministicFocusItems(input: {
   today: string;
   sourceById: Map<number, SourceItem>;
   maxItems?: number;
+  attendance?: AttendanceContext;
 }): BriefingFocusItemDraft[] {
   const maxItems = input.maxItems ?? DAILY_FOCUS_TASK_LIMIT;
-  const rankedTasks = rankWorkTasks(input.tasks, input.today, input.sourceById, input.jiraPending);
+  const rankedTasks = rankWorkTasks(
+    input.tasks,
+    input.today,
+    input.sourceById,
+    input.jiraPending,
+    input.attendance
+  );
   const rankedJira = rankJiraIssues(input.jiraPending, input.today);
   const taskById = new Map(input.tasks.map((task) => [task.id, task]));
   const jiraByKey = new Map(input.jiraPending.map((issue) => [issue.key, issue]));
@@ -366,12 +441,24 @@ export function buildDeterministicFocusItems(input: {
     candidates.push({ kind: "jira", score: ranked.score, ranked, issue });
   }
 
-  candidates.sort((a, b) => b.score - a.score);
+  // Commitments from meetings the user attended in the last 4 days are
+  // force-included first, ahead of everything else, even without a Jira ticket.
+  const isForced = (candidate: FocusCandidate): boolean =>
+    candidate.kind === "task" && candidate.ranked.forceInclude;
+  candidates.sort((a, b) => {
+    const forcedDelta = Number(isForced(b)) - Number(isForced(a));
+    if (forcedDelta !== 0) return forcedDelta;
+    return b.score - a.score;
+  });
+
+  const forcedCount = candidates.filter(isForced).length;
+  // Never let the daily limit drop a must-do commitment.
+  const effectiveMax = Math.max(maxItems, forcedCount);
 
   const focus: BriefingFocusItemDraft[] = [];
 
   for (const candidate of candidates) {
-    if (focus.length >= maxItems) break;
+    if (focus.length >= effectiveMax) break;
 
     if (candidate.kind === "task") {
       const { task, ranked } = candidate;
@@ -439,6 +526,12 @@ export function buildQueueDecisionsFromRanking(
       status = "tomorrow";
     } else if (index === 0) {
       status = "now";
+    } else if (index === 1) {
+      status = "next";
+    } else if (item.forceInclude) {
+      // A commitment from a meeting the user attended in the last 4 days must
+      // surface as active work — never buried in "later".
+      status = "next";
     } else {
       status = "later";
     }
