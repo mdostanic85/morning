@@ -5,6 +5,8 @@ import type { SourceType } from "@/domain/sourceItem";
 import { SyncMyDayButton } from "@/components/SyncMyDayButton";
 import { FigmaValidateButton } from "@/components/FigmaValidateButton";
 import { WhyThisButton } from "@/components/WhyThisButton";
+import { TodayMeetingsCard } from "@/components/TodayMeetingsCard";
+import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
 import { priorityExplanationForDisplay } from "@/lib/tasks/priorityExplanation";
 
 interface MinimalTask {
@@ -47,6 +49,8 @@ interface MinimalTodayViewProps {
   primarySummary: string | null;
   primaryWhyFirst: string | null;
   primarySubtasks: { label: string; agreed: string | null }[];
+  meetings: TodayMeeting[];
+  calendarConnected: boolean;
 }
 
 function relativeTime(value: string): string {
@@ -201,6 +205,8 @@ export function MinimalTodayView({
   primarySummary,
   primaryWhyFirst,
   primarySubtasks,
+  meetings,
+  calendarConnected,
 }: MinimalTodayViewProps) {
   const primary = tasks[0] ?? null;
   const otherTasks = tasks.slice(1);
@@ -271,119 +277,125 @@ export function MinimalTodayView({
         </p>
       ) : null}
 
-      {primary ? (
-        <section className="flex flex-col gap-4">
-          <article className="minimal-urgent-card">
-            <div className="flex flex-wrap items-start justify-between gap-3 pr-14">
-              <div className="flex flex-wrap gap-[7px]">
-                <span className="minimal-badge minimal-badge-urgent">Urgent</span>
-                {isJiraTask(primary) ? (
-                  <span className="minimal-badge minimal-badge-jira">Jira</span>
-                ) : null}
-                {confidenceBadge(primary) ? (
-                  <span className="minimal-badge minimal-badge-confidence">
-                    {confidenceBadge(primary)}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            <Link
-              href={`/tasks/${primary.id}`}
-              className="minimal-card-arrow"
-              aria-label={`Open ${primary.title}`}
-            >
-              <ArrowRight className="size-5" />
-            </Link>
-
-            <div className="minimal-urgent-content">
-              <Link href={`/tasks/${primary.id}`} className="block text-inherit no-underline">
-                <h2 className="ft-display">{primary.title}</h2>
-              </Link>
-
-              <strong className="mt-4 block text-xs uppercase tracking-[0.08em] text-muted">
-                Where things stand
-              </strong>
-              <p className="minimal-urgent-description ft-body-lg !mt-2">{narrative}</p>
-
-              {uniqueSteps.length > 0 ? (
-                <>
-                  <strong className="mt-4 block text-xs uppercase tracking-[0.08em] text-muted">
-                    Do this today
-                  </strong>
-                  <ul className="minimal-steps" aria-label="Today’s concrete steps">
-                    {uniqueSteps.map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ul>
-                </>
-              ) : null}
-
-              {primary.figmaAudit ? (
-                <div className="mt-4 rounded-[var(--radius)] border border-border bg-surface-soft/60 px-3.5 py-3">
-                  <p className="text-sm leading-snug">
-                    <span className="font-semibold text-accent-strong">Figma audit · </span>
-                    {primary.figmaAudit.summary}
-                  </p>
-                  {primary.figmaAudit.recommendedNextAction ? (
-                    <p className="mt-1.5 text-sm text-muted">
-                      Next: {primary.figmaAudit.recommendedNextAction}
-                    </p>
+      <section className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-stretch">
+          {primary ? (
+            <article className="minimal-urgent-card min-w-0 flex-1">
+              <div className="flex flex-wrap items-start justify-between gap-3 pr-14">
+                <div className="flex flex-wrap gap-[7px]">
+                  <span className="minimal-badge minimal-badge-urgent">Urgent</span>
+                  {isJiraTask(primary) ? (
+                    <span className="minimal-badge minimal-badge-jira">Jira</span>
+                  ) : null}
+                  {confidenceBadge(primary) ? (
+                    <span className="minimal-badge minimal-badge-confidence">
+                      {confidenceBadge(primary)}
+                    </span>
                   ) : null}
                 </div>
-              ) : null}
+              </div>
 
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/80 pt-3">
-                <p className="ft-source-meta text-muted">
-                  {primary.doneCriteria.length} required outcome
-                  {primary.doneCriteria.length === 1 ? "" : "s"} · Highest source updated{" "}
-                  {relativeTime(latestEvidenceDate(primary))}
-                </p>
-                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                  <WhyThisButton whyFirst={whyFirst} evidence={primary.evidence} />
-                  <FigmaValidateButton
-                    taskId={primary.id}
-                    taskTitle={primary.title}
-                    hasJiraEvidence={isJiraTask(primary)}
-                  />
+              <Link
+                href={`/tasks/${primary.id}`}
+                className="minimal-card-arrow"
+                aria-label={`Open ${primary.title}`}
+              >
+                <ArrowRight className="size-5" />
+              </Link>
+
+              <div className="minimal-urgent-content">
+                <Link href={`/tasks/${primary.id}`} className="block text-inherit no-underline">
+                  <h2 className="ft-display">{primary.title}</h2>
+                </Link>
+
+                <strong className="mt-4 block text-xs uppercase tracking-[0.08em] text-muted">
+                  Where things stand
+                </strong>
+                <p className="minimal-urgent-description ft-body-lg !mt-2">{narrative}</p>
+
+                {uniqueSteps.length > 0 ? (
+                  <>
+                    <strong className="mt-4 block text-xs uppercase tracking-[0.08em] text-muted">
+                      Do this today
+                    </strong>
+                    <ul className="minimal-steps" aria-label="Today’s concrete steps">
+                      {uniqueSteps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+
+                {primary.figmaAudit ? (
+                  <div className="mt-4 rounded-[var(--radius)] border border-border bg-surface-soft/60 px-3.5 py-3">
+                    <p className="text-sm leading-snug">
+                      <span className="font-semibold text-accent-strong">Figma audit · </span>
+                      {primary.figmaAudit.summary}
+                    </p>
+                    {primary.figmaAudit.recommendedNextAction ? (
+                      <p className="mt-1.5 text-sm text-muted">
+                        Next: {primary.figmaAudit.recommendedNextAction}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/80 pt-3">
+                  <p className="ft-source-meta text-muted">
+                    {primary.doneCriteria.length} required outcome
+                    {primary.doneCriteria.length === 1 ? "" : "s"} · Highest source updated{" "}
+                    {relativeTime(latestEvidenceDate(primary))}
+                  </p>
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    <WhyThisButton whyFirst={whyFirst} evidence={primary.evidence} />
+                    <FigmaValidateButton
+                      taskId={primary.id}
+                      taskTitle={primary.title}
+                      hasJiraEvidence={isJiraTask(primary)}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          </article>
-
-          {tasks.length > 1 ? (
-            <div>
-              <p className="mb-2.5 px-0.5 text-xs font-bold uppercase tracking-[0.08em] text-muted-soft">
-                Other priorities
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {tasks.slice(1).map((task) => (
-                  <SecondaryTaskCard key={task.id} task={task} />
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </section>
-      ) : (
-        <section className="rounded-[var(--radius)] border border-border bg-surface p-8">
-          {lastSyncAt ? (
-            <>
-              <h2 className="ft-card-title font-semibold">All clear</h2>
-              <p className="ft-body mt-2 text-muted">
-                Nothing new needs your attention based on the latest sources. Sync again when you
-                want a fresh check.
-              </p>
-            </>
+            </article>
           ) : (
-            <>
-              <h2 className="ft-card-title font-semibold">No priorities yet</h2>
-              <p className="ft-body mt-2 text-muted">
-                Sync your day to collect evidence and build today&apos;s priority order.
-              </p>
-            </>
+            <div className="min-w-0 flex-1 rounded-[var(--radius)] border border-border bg-surface p-8">
+              {lastSyncAt ? (
+                <>
+                  <h2 className="ft-card-title font-semibold">All clear</h2>
+                  <p className="ft-body mt-2 text-muted">
+                    Nothing new needs your attention based on the latest sources. Sync again when
+                    you want a fresh check.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="ft-card-title font-semibold">No priorities yet</h2>
+                  <p className="ft-body mt-2 text-muted">
+                    Sync your day to collect evidence and build today&apos;s priority order.
+                  </p>
+                </>
+              )}
+            </div>
           )}
-        </section>
-      )}
+
+          <aside className="w-full shrink-0 md:w-[18.75rem] lg:w-[20rem]">
+            <TodayMeetingsCard meetings={meetings} calendarConnected={calendarConnected} />
+          </aside>
+        </div>
+
+        {primary && tasks.length > 1 ? (
+          <div>
+            <p className="mb-2.5 px-0.5 text-xs font-bold uppercase tracking-[0.08em] text-muted-soft">
+              Other priorities
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {tasks.slice(1).map((task) => (
+                <SecondaryTaskCard key={task.id} task={task} />
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       <p className="minimal-foot">
         Important recommendations expose their decisive source and the instructions that created the

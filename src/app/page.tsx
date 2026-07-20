@@ -7,6 +7,7 @@ import { OPEN_QUEUE_STATUSES } from "@/domain/workTask";
 import type { ConnectionProvider } from "@/lib/connectors/providers";
 import { getLatestFinishedSyncRun } from "@/services/syncRuns";
 import { resolveFocusLinkedTaskId } from "@/lib/tasks/resolveFocusTask";
+import { getTodayMeetings } from "@/lib/calendar/todayMeetings";
 import { MinimalTodayView } from "@/components/MinimalTodayView";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ const CONNECTED_PROVIDER_LABEL: Record<ConnectionProvider, string> = {
 };
 
 export default async function TodayPage() {
-  const [queue, sourceItems, connections, profile, todayBriefing, latestSync] =
+  const [queue, sourceItems, connections, profile, todayBriefing, latestSync, todayMeetings] =
     await Promise.all([
       getTodayQueue(),
       getSourceItems(),
@@ -32,6 +33,7 @@ export default async function TodayPage() {
       getUserProfile(),
       getTodayBriefing(),
       getLatestFinishedSyncRun(),
+      getTodayMeetings(),
     ]);
 
   const connectedProviderLabels = connections
@@ -146,6 +148,8 @@ export default async function TodayPage() {
       primarySummary={briefingFocus?.reason ?? null}
       primaryWhyFirst={briefingFocus?.priorityExplanation ?? null}
       primarySubtasks={primarySubtasks}
+      meetings={todayMeetings.meetings}
+      calendarConnected={todayMeetings.calendarConnected}
     />
   );
 }
