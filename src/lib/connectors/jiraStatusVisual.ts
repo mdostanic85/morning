@@ -16,6 +16,11 @@ export interface JiraStatusVisual {
   dotClassName: string;
 }
 
+export function isJiraDoneStatus(status: string | null | undefined): boolean {
+  if (!status?.trim()) return false;
+  return /done|closed|resolved|complete/i.test(status.toLowerCase());
+}
+
 export function jiraStatusVisual(status: string | null | undefined): JiraStatusVisual {
   if (!status?.trim()) {
     return {
@@ -28,7 +33,7 @@ export function jiraStatusVisual(status: string | null | undefined): JiraStatusV
 
   const normalized = status.toLowerCase();
 
-  if (/done|closed|resolved|complete/i.test(normalized)) {
+  if (isJiraDoneStatus(normalized)) {
     return {
       label: status,
       icon: CheckCircle2Icon,

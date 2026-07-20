@@ -42,6 +42,61 @@ export async function testDiscordConnection(): Promise<boolean> {
   return true;
 }
 
+export async function fetchDiscordChannelMessages(input: {
+  channelId: string;
+  myUserId?: string | null;
+  keywords?: string[];
+  limit?: number;
+  afterSnowflake?: string | null;
+}): Promise<ConnectorSourceCandidate[]> {
+  const channelId = input.channelId.trim();
+  const query = new URLSearchParams({
+    limit: String(input.limit ?? 50),
+  });
+  if (input.afterSnowflake) query.set("after", input.afterSnowflake);
+
+  const messages = await discordFetch<DiscordMessage[]>(
+    `/channels/${channelId}/messages?${query.toString()}`
+  );
+  const keywords = input.keywords ?? [];
+
+  const relevant = messages.filter((message) => {
+    if (input.myUserId && (message.mentions ?? []).some((mention) => mention.id === input.myUserId)) {
+      return true;
+    }
+    return matchesKeywords(message.content, keywords);
+  });
+
+  return relevant.map((message) => ({
+    sourceType: "discord",
+    sourceExternalId: message.id,
+    title: `Discord: ${message.author?.global_name ?? message.author?.username ?? "message"}`,
+    author: message.author?.username ?? null,
+    sourceDate: message.timestamp,
+    body: [
+      `Channel: ${channelId}`,
+      `Author: ${message.author?.username ?? "unknown"}`,
+      `Mentions me: ${
+        input.myUserId && (message.mentions ?? []).some((mention) => mention.id === input.myUserId)
+          ? "yes"
+          : "no"
+      }`,
+      "",
+      message.content,
+      message.referenced_message?.content
+        ? `\nReferenced message:\n${message.referenced_message.content}`
+        : null,
+    ]
+      .filter((line): line is string => line !== null)
+      .join("\n"),
+    metadata: {
+      channelId,
+      authorId: message.author?.id ?? null,
+      mentionIds: (message.mentions ?? []).map((mention) => mention.id),
+    },
+  }));
+}
+
 export async function fetchDiscordMentions(input: {
   channelIds: string[];
   myUserId?: string | null;
@@ -49,51 +104,15 @@ export async function fetchDiscordMentions(input: {
   limit?: number;
 }): Promise<ConnectorSourceCandidate[]> {
   const candidates: ConnectorSourceCandidate[] = [];
-  const keywords = input.keywords ?? [];
-
   for (const channelId of input.channelIds.map((id) => id.trim()).filter(Boolean)) {
-    const messages = await discordFetch<DiscordMessage[]>(
-      `/channels/${channelId}/messages?limit=${input.limit ?? 50}`
+    candidates.push(
+      ...(await fetchDiscordChannelMessages({
+        channelId,
+        myUserId: input.myUserId,
+        keywords: input.keywords,
+        limit: input.limit,
+      }))
     );
-
-    const relevant = messages.filter((message) => {
-      if (input.myUserId && (message.mentions ?? []).some((mention) => mention.id === input.myUserId)) {
-        return true;
-      }
-      return matchesKeywords(message.content, keywords);
-    });
-
-    for (const message of relevant) {
-      candidates.push({
-        sourceType: "discord",
-        sourceExternalId: message.id,
-        title: `Discord: ${message.author?.global_name ?? message.author?.username ?? "message"}`,
-        author: message.author?.username ?? null,
-        sourceDate: message.timestamp,
-        body: [
-          `Channel: ${channelId}`,
-          `Author: ${message.author?.username ?? "unknown"}`,
-          `Mentions me: ${
-            input.myUserId && (message.mentions ?? []).some((mention) => mention.id === input.myUserId)
-              ? "yes"
-              : "no"
-          }`,
-          "",
-          message.content,
-          message.referenced_message?.content
-            ? `\nReferenced message:\n${message.referenced_message.content}`
-            : null,
-        ]
-          .filter((line): line is string => line !== null)
-          .join("\n"),
-        metadata: {
-          channelId,
-          authorId: message.author?.id ?? null,
-          mentionIds: (message.mentions ?? []).map((mention) => mention.id),
-        },
-      });
-    }
   }
-
   return candidates;
 }

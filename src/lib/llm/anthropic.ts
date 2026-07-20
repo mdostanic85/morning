@@ -7,6 +7,7 @@ const REQUEST_TIMEOUT_MS = 60_000;
 
 interface AnthropicMessage {
   content?: { type: string; text?: string }[];
+  usage?: { input_tokens?: number; output_tokens?: number };
   error?: { message?: string };
 }
 
@@ -65,7 +66,20 @@ async function complete(request: CompletionRequest): Promise<CompletionResponse>
     throw new LlmError("provider_error", "Anthropic response did not contain text content.", body);
   }
 
-  return { text, raw: body };
+  const inputTokens = body.usage?.input_tokens;
+  const outputTokens = body.usage?.output_tokens;
+  return {
+    text,
+    usage:
+      typeof inputTokens === "number" && typeof outputTokens === "number"
+        ? {
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+          }
+        : undefined,
+    raw: body,
+  };
 }
 
 export const anthropicClient: ProviderClient = {

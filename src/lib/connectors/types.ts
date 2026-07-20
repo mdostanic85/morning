@@ -13,27 +13,50 @@ export interface ConnectorSourceCandidate {
 }
 
 export interface ImportedSourceItem {
+  sourceItemId: number;
   title: string;
   url: string | null;
   sourceType: string;
   metadata: Record<string, unknown>;
+  projectId: number | null;
+  projectName: string | null;
+}
+
+export interface SyncExtractedTask {
+  id: number;
+  title: string;
+  nextAction: string;
+  projectId: number | null;
+  projectName: string | null;
+  sourceItemId: number;
+  status: string;
+}
+
+export interface SyncKnowledgeItem {
+  id: number;
+  type: string;
+  title: string;
+  content: string;
+  confidence: number | null;
+  evidenceQuotes: string[];
+  isUnclear: boolean;
+  sourceItemId: number;
+  projectId: number | null;
+  projectName: string | null;
 }
 
 export interface ConnectorSyncResult {
   ok: boolean;
   imported: number;
   skipped: number;
+  itemsCreated: number;
+  itemsUpdated: number;
+  itemsUnchanged: number;
+  itemsFailed: number;
   /** Extracted tasks added to the Today queue. */
   tasksExtracted: number;
   errors: string[];
   importedItems: ImportedSourceItem[];
-  knowledgeExtracted: {
-    id: number;
-    type: string;
-    title: string;
-    content: string;
-    confidence: number | null;
-    evidenceQuotes: string[];
-    isUnclear: boolean;
-  }[];
+  extractedTasks: SyncExtractedTask[];
+  knowledgeExtracted: SyncKnowledgeItem[];
 }

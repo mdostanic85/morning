@@ -1,7 +1,9 @@
 import "server-only";
 import { jiraBodyExcerpt, parseJiraBodyFields } from "@/lib/connectors/jiraText";
+import { buildPersonalJiraJql } from "@/lib/connectors/jira";
 import { getConnectionByProvider } from "@/services/connections";
 import { getActiveProjects } from "@/services/projects";
+import { getUserProfile } from "@/services/userProfile";
 import { isMcpTransport } from "@/lib/connectors/transport";
 
 export interface JiraPendingSnapshot {
@@ -24,12 +26,17 @@ export async function fetchJiraPendingSnapshot(maxResults = 20): Promise<JiraPen
   const projectJiraKeys = Array.from(
     new Set(activeProjects.flatMap((project) => project.jiraKeys).filter(Boolean))
   );
-  if (projectJiraKeys.length === 0) return [];
-
   try {
+    const profile = await getUserProfile();
+    const jql = buildPersonalJiraJql(profile?.name);
+
     if (isMcpTransport(connection)) {
       const { fetchJiraIssuesViaMcp } = await import("@/lib/connectors/mcp/adapters/atlassian");
-      const issues = await fetchJiraIssuesViaMcp({ projectJiraKeys, maxResults });
+      const issues = await fetchJiraIssuesViaMcp({
+        jql,
+        projectJiraKeys: projectJiraKeys.length > 0 ? projectJiraKeys : undefined,
+        maxResults,
+      });
       return issues.map((issue) => {
         const parsed = parseJiraBodyFields(issue.body);
         return {
@@ -49,7 +56,11 @@ export async function fetchJiraPendingSnapshot(maxResults = 20): Promise<JiraPen
     }
 
     const { fetchAssignedJiraIssues } = await import("@/lib/connectors/jira");
-    const issues = await fetchAssignedJiraIssues({ projectJiraKeys, maxResults });
+    const issues = await fetchAssignedJiraIssues({
+      jql,
+      projectJiraKeys: projectJiraKeys.length > 0 ? projectJiraKeys : undefined,
+      maxResults,
+    });
     return issues.map((issue) => {
       const parsed = parseJiraBodyFields(issue.body);
       return {

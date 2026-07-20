@@ -8,7 +8,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 
-const ORIGIN = process.env.MORNING_APP_URL?.trim() || "http://localhost:3000";
+const ORIGIN = process.env.WORKLIGHT_APP_URL?.trim() || "http://localhost:3000";
 const SERVER_URL = "https://mcp.atlassian.com/v1/mcp/authv2";
 const OAUTH_FILE = path.join(process.cwd(), "data/mcp-oauth/atlassian.json");
 
@@ -31,7 +31,7 @@ class ProbeOAuthProvider implements OAuthClientProvider {
   }
   get clientMetadata() {
     return {
-      client_name: "Vantage",
+      client_name: "Worklight",
       redirect_uris: [this.redirectUrl.toString()],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
@@ -123,7 +123,7 @@ async function main() {
   const transport = new StreamableHTTPClientTransport(new URL(SERVER_URL), {
     authProvider: oauthProvider,
   });
-  const client = new Client({ name: "morning-probe", version: "1.0.0" });
+  const client = new Client({ name: "worklight-probe", version: "1.0.0" });
   await client.connect(transport);
 
   try {

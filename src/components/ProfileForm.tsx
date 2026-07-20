@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Toast } from "@heroui/react/toast";
+import { Button } from "@heroui/react/button";
+import { Input } from "@heroui/react/input";
 
 const schema = z.object({
   name: z.string().optional(),
@@ -39,15 +39,15 @@ export function ProfileForm({ initialEmail, initialName }: ProfileFormProps) {
     });
     const data = (await res.json()) as { error?: string };
     if (res.ok) {
-      toast.success("Profile saved.");
+      Toast.toast.success("Profile saved.");
       router.refresh();
     } else {
-      toast.error(data.error ?? "Could not save profile.");
+      Toast.toast.danger(data.error ?? "Could not save profile.");
     }
   }
 
   return (
-    <section className="card p-6">
+    <section className="app-card p-6">
       <h2 className="font-display text-lg font-medium">Your profile</h2>
       <p className="mt-2 text-sm leading-relaxed text-muted">
         Work email for OAuth context when connecting sources.
@@ -61,8 +61,10 @@ export function ProfileForm({ initialEmail, initialName }: ProfileFormProps) {
             placeholder="you@company.com"
             aria-label="Work email"
             aria-invalid={!!errors.email}
+            fullWidth
+            className="h-11 border border-border bg-background/70 text-sm shadow-none"
           />
-          <Button type="submit" variant="outline" disabled={isSubmitting}>
+          <Button type="submit" variant="outline" isDisabled={isSubmitting}>
             {isSubmitting ? "Saving…" : "Save"}
           </Button>
         </div>

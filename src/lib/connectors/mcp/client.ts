@@ -87,7 +87,7 @@ export async function withMcpClient<T>(
   const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
     authProvider: oauthProvider,
   });
-  const client = new Client({ name: "morning", version: "1.0.0" });
+  const client = new Client({ name: "worklight", version: "1.0.0" });
   await client.connect(transport);
   try {
     return await fn(client);

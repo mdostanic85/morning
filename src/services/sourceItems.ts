@@ -1,8 +1,9 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { and, desc, eq, like, or } from "drizzle-orm";
+import { and, desc, eq, inArray, like, or } from "drizzle-orm";
 import { db } from "@/db/client";
-import { sourceItems as sourceItemsTable } from "@/db/schema";
+import { sourceItems as sourceItemsTable } from "@/db/tables";
+import { fetchAll, fetchOne, execute, fetchReturning } from "@/db/query";
 import type { NewSourceItem, SourceItem } from "@/domain/sourceItem";
 
 function toSourceItem(row: typeof sourceItemsTable.$inferSelect): SourceItem {
@@ -22,36 +23,44 @@ function toSourceItem(row: typeof sourceItemsTable.$inferSelect): SourceItem {
 }
 
 export async function createSourceItem(input: NewSourceItem): Promise<SourceItem> {
-  const [row] = db
-    .insert(sourceItemsTable)
-    .values({
-      projectId: input.projectId ?? null,
-      sourceType: input.sourceType,
-      sourceExternalId: input.sourceExternalId ?? null,
-      title: input.title,
-      body: input.body,
-      author: input.author ?? null,
-      sourceDate: input.sourceDate,
-      url: input.url ?? null,
-      metadata: input.metadata ?? null,
-    })
-    .returning()
-    .all();
+  const [row] = await fetchReturning(
+    db
+      .insert(sourceItemsTable)
+      .values({
+        projectId: input.projectId ?? null,
+        sourceType: input.sourceType,
+        sourceExternalId: input.sourceExternalId ?? null,
+        title: input.title,
+        body: input.body,
+        author: input.author ?? null,
+        sourceDate: input.sourceDate,
+        url: input.url ?? null,
+        metadata: input.metadata ?? null,
+      })
+      .returning()
+  );
   return toSourceItem(row);
 }
 
 export async function getSourceItems(): Promise<SourceItem[]> {
-  const rows = db
-    .select()
-    .from(sourceItemsTable)
-    .orderBy(desc(sourceItemsTable.sourceDate))
-    .all();
+  const rows = await fetchAll(
+    db.select().from(sourceItemsTable).orderBy(desc(sourceItemsTable.sourceDate))
+  );
   return rows.map(toSourceItem);
 }
 
 export async function getSourceItemById(id: number): Promise<SourceItem | null> {
-  const row = db.select().from(sourceItemsTable).where(eq(sourceItemsTable.id, id)).get();
+  const row = await fetchOne(db.select().from(sourceItemsTable).where(eq(sourceItemsTable.id, id)));
   return row ? toSourceItem(row) : null;
+}
+
+export async function getSourceItemsByIds(ids: number[]): Promise<SourceItem[]> {
+  if (ids.length === 0) return [];
+  const uniqueIds = Array.from(new Set(ids));
+  const rows = await fetchAll(
+    db.select().from(sourceItemsTable).where(inArray(sourceItemsTable.id, uniqueIds))
+  );
+  return rows.map(toSourceItem);
 }
 
 export async function getSourceItemByExternalId(input: {
@@ -66,18 +75,19 @@ export async function getSourceItemByExternalId(input: {
         eq(sourceItemsTable.sourceType, input.sourceType),
         eq(sourceItemsTable.sourceExternalId, input.sourceExternalId)
       )
-    )
-    .get();
-  return row ? toSourceItem(row) : null;
+    );
+  const found = await fetchOne(row);
+  return found ? toSourceItem(found) : null;
 }
 
 export async function getSourceItemsForProject(projectId: number): Promise<SourceItem[]> {
-  const rows = db
-    .select()
-    .from(sourceItemsTable)
-    .where(eq(sourceItemsTable.projectId, projectId))
-    .orderBy(desc(sourceItemsTable.sourceDate))
-    .all();
+  const rows = await fetchAll(
+    db
+      .select()
+      .from(sourceItemsTable)
+      .where(eq(sourceItemsTable.projectId, projectId))
+      .orderBy(desc(sourceItemsTable.sourceDate))
+  );
   return rows.map(toSourceItem);
 }
 
@@ -87,12 +97,13 @@ export async function searchSourceItems(query: string): Promise<SourceItem[]> {
   if (!trimmed) return getSourceItems();
 
   const pattern = `%${trimmed}%`;
-  const rows = db
-    .select()
-    .from(sourceItemsTable)
-    .where(or(like(sourceItemsTable.title, pattern), like(sourceItemsTable.body, pattern)))
-    .orderBy(desc(sourceItemsTable.sourceDate))
-    .all();
+  const rows = await fetchAll(
+    db
+      .select()
+      .from(sourceItemsTable)
+      .where(or(like(sourceItemsTable.title, pattern), like(sourceItemsTable.body, pattern)))
+      .orderBy(desc(sourceItemsTable.sourceDate))
+  );
 
   return rows.map(toSourceItem);
 }
@@ -101,17 +112,14 @@ export async function updateSourceItem(
   id: number,
   patch: Partial<NewSourceItem>
 ): Promise<SourceItem | null> {
-  const [row] = db
-    .update(sourceItemsTable)
-    .set(patch)
-    .where(eq(sourceItemsTable.id, id))
-    .returning()
-    .all();
+  const [row] = await fetchReturning(
+    db.update(sourceItemsTable).set(patch).where(eq(sourceItemsTable.id, id)).returning()
+  );
   return row ? toSourceItem(row) : null;
 }
 
 export async function deleteSourceItem(id: number): Promise<void> {
-  db.delete(sourceItemsTable).where(eq(sourceItemsTable.id, id)).run();
+  await execute(db.delete(sourceItemsTable).where(eq(sourceItemsTable.id, id)));
 }
 
 /**
@@ -129,12 +137,12 @@ export async function ingestManualTranscript(input: {
   const existing = db
     .select()
     .from(sourceItemsTable)
-    .where(eq(sourceItemsTable.sourceType, "manual_transcript"))
-    .all()
-    .find((row) => (row.metadata as { contentHash?: string } | null)?.contentHash === contentHash);
+    .where(eq(sourceItemsTable.sourceType, "manual_transcript"));
+  const all = await fetchAll(existing);
+  const found = all.find((row) => (row.metadata as { contentHash?: string } | null)?.contentHash === contentHash);
 
-  if (existing) {
-    return { sourceItem: toSourceItem(existing), deduped: true };
+  if (found) {
+    return { sourceItem: toSourceItem(found), deduped: true };
   }
 
   const sourceItem = await createSourceItem({

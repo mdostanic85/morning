@@ -50,9 +50,18 @@ function jobInstructions(currentUserName?: string | null): string {
   - If a task's owner is named and is not clearly the user, lower "confidence" — it may not belong on the user's queue at all.
   - If it sounds like someone else is responsible for the actual work, set status to "waiting" (the user is expecting something back from them) or "unclear" (the user's role in it isn't clear) — never "actionable".
 - Vagueness: if you cannot derive a specific, concrete "nextAction" and specific "doneCriteria" from the source, the task is too vague to act on — set status to "unclear" rather than inventing specificity that isn't in the source.
+- "title" must fit on one desktop UI line: use 3–7 words and no more than 44 characters. Make it immediately clear by naming the concrete action and its object or intended result. Do not copy workflow labels or nested source headings such as "DESIGN -", "Task:", or "Review ticket". For Jira tasks, keep the Jira key once at the start, then use the shortest clear action phrasing (for example, "UATL-367 · Convert file manager to Canvas").
 - "reason" must be 2–4 sentences that together give a complete picture for the user: (1) why this task is on their list and what triggered it, grounded in the source, (2) what specifically they need to deliver or decide, including file/system/person/location names when the source names them, (3) if multiple sources would disagree, state only the winning understanding and note that earlier sources were superseded. Do not pad with vague filler.
 - "nextAction" must be a single, concrete, immediately doable step — not a restatement of the title and not a vague instruction like "follow up". Every task must have one.
 - "doneCriteria" must be an array of specific, independently checkable statements — never a single vague statement like "finish the work". Every task must have at least one.
+- For transcript sources, fill "meetingContext" with a useful, detailed account of what matters for this task:
+  - "overview": 2–4 sentences explaining the discussion and why it changes or clarifies the task.
+  - "keyPoints": the concrete facts and constraints the user needs while doing the work.
+  - "decisions": decisions that were explicitly made in the meeting.
+  - "requestedChanges": specific changes, feedback, or follow-ups requested for this task.
+  - "openQuestions": unresolved questions that still need confirmation.
+  - "evidenceQuotes": short verbatim excerpts supporting the context. Do not include generic meeting discussion unrelated to this task.
+  Use empty arrays when a category was not discussed. For non-transcript sources, use null.
 - "owner", if the source names one, must be copied exactly as written. If no owner is named, use null — never infer or guess a name.
 - "dueDate" must only be filled if the source states an explicit date or day; resolve relative dates (e.g. "Friday") against the given source date only if unambiguous, in ISO 8601 form, otherwise leave it null.
 - Every task must include at least one verbatim quote from the source as evidence. If you cannot find a supporting quote for a candidate task, do not emit it at all — never invent a task that isn't backed by the source text.
@@ -83,6 +92,15 @@ const OUTPUT_SHAPE = `{
       "reason": string,               // why this matters, grounded in the source
       "nextAction": string,
       "doneCriteria": string[],       // at least one
+      "meetingContext": {
+        "overview": string,
+        "keyPoints": string[],
+        "decisions": string[],
+        "requestedChanges": string[],
+        "openQuestions": string[],
+        "evidenceQuotes": string[],
+        "confidence": number
+      } | null,
       "status": "actionable" | "waiting" | "unclear",
       "waitingOn": string | null,     // required when status is "waiting"
       "unclearReason": string | null, // required when status is "unclear"
@@ -149,11 +167,23 @@ export function buildTaskExtractorUserPrompt(input: TaskExtractorInput): string 
 
 export const extractedTaskSchema = z
   .object({
-    title: z.string().min(1),
+    title: z.string().min(1).max(44),
     existingTaskId: z.number().int().positive().nullable().default(null),
     reason: z.string().min(1),
     nextAction: z.string().min(1),
     doneCriteria: z.array(z.string().min(1)).min(1),
+    meetingContext: z
+      .object({
+        overview: z.string().min(1),
+        keyPoints: z.array(z.string().min(1)),
+        decisions: z.array(z.string().min(1)),
+        requestedChanges: z.array(z.string().min(1)),
+        openQuestions: z.array(z.string().min(1)),
+        evidenceQuotes: z.array(z.string().min(1)).min(1),
+        confidence: confidenceSchema,
+      })
+      .nullable()
+      .default(null),
     status: z.enum(["actionable", "waiting", "unclear"]),
     waitingOn: z.string().min(1).nullable(),
     unclearReason: z.string().min(1).nullable(),

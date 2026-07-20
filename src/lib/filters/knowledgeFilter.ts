@@ -2,14 +2,22 @@ import type { KnowledgeItemView } from "@/services/knowledgeItems";
 import type { SourceType } from "@/domain/sourceItem";
 import { parseJiraBodyFields } from "@/lib/connectors/jiraText";
 import { myOwnerFilter, personMatchesFilter } from "@/lib/filters/ownerFilter";
+import {
+  granolaTextsMatchMe,
+  textMentionsPerson,
+  type GranolaWorkContext,
+} from "@/lib/granola/personalKnowledge";
 
 export const KNOWLEDGE_MAX_AGE_DAYS = 10;
 
-const PERSONAL_SOURCE_TYPES = new Set<SourceType>(["manual_transcript", "granola"]);
-
-function normalizePerson(value: string): string {
-  return value.trim().toLowerCase();
-}
+// These connectors represent the user's own inbox/calendar or explicitly
+// supplied material, so their fresh knowledge can be relevant without a
+// project link or a literal mention of the user's name.
+const PERSONAL_SOURCE_TYPES = new Set<SourceType>([
+  "manual_transcript",
+  "gmail",
+  "calendar",
+]);
 
 function itemSortDate(item: Pick<KnowledgeItemView, "sourceDate" | "createdAt">): string {
   return item.sourceDate ?? item.createdAt;
@@ -26,23 +34,28 @@ export function isKnowledgeFresh(
   return now - time <= maxAgeMs;
 }
 
-function textMentionsPerson(text: string, myName: string): boolean {
-  const me = normalizePerson(myName);
-  if (!me) return false;
-
-  const lowered = text.toLowerCase();
-  if (lowered.includes(me)) return true;
-
-  const firstName = me.split(/\s+/)[0];
-  if (firstName && firstName.length >= 3 && lowered.includes(firstName)) return true;
-
-  return false;
-}
-
-function itemTextMentionsMe(item: KnowledgeItemView, myName: string): boolean {
+function textMentionsPersonInItem(item: KnowledgeItemView, myName: string): boolean {
   if (textMentionsPerson(item.title, myName)) return true;
   if (textMentionsPerson(item.content, myName)) return true;
   return item.evidenceQuotes.some((quote) => textMentionsPerson(quote, myName));
+}
+
+function itemTextMentionsMe(item: KnowledgeItemView, myName: string): boolean {
+  return textMentionsPersonInItem(item, myName);
+}
+
+function granolaKnowledgeItemMatchesMe(
+  item: KnowledgeItemView,
+  sourceBody: string | null,
+  context: GranolaWorkContext
+): boolean {
+  const texts = [
+    item.title,
+    item.content,
+    ...item.evidenceQuotes,
+    sourceBody ?? "",
+  ];
+  return granolaTextsMatchMe(texts, context);
 }
 
 function sourceAuthorMatchesMe(
@@ -74,9 +87,15 @@ function jiraSourceMatchesMe(sourceBody: string, myName: string): boolean {
 export function knowledgeItemMatchesMe(
   item: KnowledgeItemView,
   myName: string | null,
-  myEmail: string | null = null
+  myEmail: string | null = null,
+  granolaWorkContext: GranolaWorkContext | null = null
 ): boolean {
   if (!myName?.trim()) return false;
+
+  if (item.sourceType === "granola") {
+    if (!granolaWorkContext) return false;
+    return granolaKnowledgeItemMatchesMe(item, null, granolaWorkContext);
+  }
 
   if (item.sourceType && PERSONAL_SOURCE_TYPES.has(item.sourceType)) return true;
 
@@ -92,10 +111,17 @@ export function knowledgeItemMatchesMeWithSource(
   item: KnowledgeItemView,
   sourceBody: string | null,
   myName: string | null,
-  myEmail: string | null = null
+  myEmail: string | null = null,
+  granolaWorkContext: GranolaWorkContext | null = null
 ): boolean {
   if (!myName?.trim()) return false;
-  if (knowledgeItemMatchesMe(item, myName, myEmail)) return true;
+
+  if (item.sourceType === "granola") {
+    if (!granolaWorkContext) return false;
+    return granolaKnowledgeItemMatchesMe(item, sourceBody, granolaWorkContext);
+  }
+
+  if (knowledgeItemMatchesMe(item, myName, myEmail, granolaWorkContext)) return true;
 
   if (item.sourceType === "jira" && sourceBody && jiraSourceMatchesMe(sourceBody, myName)) {
     return true;
@@ -113,10 +139,16 @@ export function filterKnowledgeForMe(
     myEmail?: string | null;
     sourceBodyByItemId?: Map<number, string>;
     maxAgeDays?: number;
+    granolaWorkContext?: GranolaWorkContext | null;
   }
 ): KnowledgeItemView[] {
-  const { myName, myEmail = null, sourceBodyByItemId, maxAgeDays = KNOWLEDGE_MAX_AGE_DAYS } =
-    options;
+  const {
+    myName,
+    myEmail = null,
+    sourceBodyByItemId,
+    maxAgeDays = KNOWLEDGE_MAX_AGE_DAYS,
+    granolaWorkContext = null,
+  } = options;
 
   return items.filter((item) => {
     if (!isKnowledgeFresh(item, maxAgeDays)) return false;
@@ -124,7 +156,13 @@ export function filterKnowledgeForMe(
     const sourceBody =
       item.sourceItemId != null ? sourceBodyByItemId?.get(item.sourceItemId) ?? null : null;
 
-    return knowledgeItemMatchesMeWithSource(item, sourceBody, myName, myEmail);
+    return knowledgeItemMatchesMeWithSource(
+      item,
+      sourceBody,
+      myName,
+      myEmail,
+      granolaWorkContext
+    );
   });
 }
 

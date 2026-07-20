@@ -235,6 +235,7 @@ export async function runDeliverySyncReview(input: {
         : null,
     }),
     schema: deliverySyncReviewOutputSchema,
+    imageUrls: figmaEvidence?.screenshotUrl ? [figmaEvidence.screenshotUrl] : undefined,
   });
 
   if (!result.ok) {

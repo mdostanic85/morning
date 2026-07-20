@@ -44,7 +44,7 @@ Full rules live in `.cursor/rules/*.mdc` and apply to every change:
   all part of the first commit; there is no per-step commit history).
 - `npx tsc --noEmit` and `npm run lint` both pass clean as of this
   inspection.
-- Local SQLite DB at `data/morning.db` (gitignored) is migrated and seeded
+- Local SQLite DB at `data/worklight.db` (gitignored) is migrated and seeded
   (1 project, 1 source item, 3 tasks, 3 evidence rows, 1 knowledge item —
   see `npm run db:seed` / `npm run db:verify`).
 - API keys: none configured in this environment (`data/secrets.json` exists

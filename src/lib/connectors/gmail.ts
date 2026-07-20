@@ -1,12 +1,14 @@
 import "server-only";
 import { bearerFetch } from "./auth";
 import type { ConnectorSourceCandidate } from "./types";
+import type { ShouldCancelSync } from "@/lib/imports/syncCancellation";
 
 export const DEFAULT_GMAIL_MEET_QUERY =
-  '("Gemini" OR "Google Meet" OR "meeting notes" OR "transcript" OR "Take notes for me") newer_than:30d';
+  '("Gemini" OR "Google Meet" OR "meeting notes" OR "transcript" OR "Take notes for me")';
 
 interface GmailListResponse {
   messages?: { id: string; threadId: string }[];
+  nextPageToken?: string;
 }
 
 interface GmailMessage {
@@ -60,58 +62,81 @@ function buildEmailBody(message: GmailMessage): string {
   return message.snippet ?? "";
 }
 
+async function fetchMessageCandidate(
+  item: { id: string; threadId: string },
+  query: string
+): Promise<ConnectorSourceCandidate> {
+  const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${item.id}`);
+  messageUrl.searchParams.set("format", "full");
+  const response = await bearerFetch("gmail", messageUrl.toString());
+  const message = (await response.json()) as GmailMessage & { error?: { message?: string } };
+  if (!response.ok) {
+    throw new Error(message.error?.message ?? `Could not read Gmail message ${item.id}.`);
+  }
+
+  const subject = header(message, "Subject") ?? "Gmail note";
+  const from = header(message, "From");
+  const dateHeader = header(message, "Date");
+  const sourceDate = message.internalDate
+    ? new Date(Number(message.internalDate)).toISOString()
+    : dateHeader
+      ? new Date(dateHeader).toISOString()
+      : new Date().toISOString();
+  const body = buildEmailBody(message);
+
+  return {
+    sourceType: "gmail",
+    sourceExternalId: message.id,
+    title: subject,
+    body: [`From: ${from ?? "unknown"}`, `Thread: ${message.threadId}`, "", body].join("\n"),
+    author: from,
+    sourceDate,
+    url: `https://mail.google.com/mail/u/0/#inbox/${message.id}`,
+    metadata: {
+      threadId: message.threadId,
+      query,
+      importedFrom: "gmail_gemini_meet_notes",
+    },
+  };
+}
+
 export async function fetchGeminiMeetNotes(input?: {
   query?: string;
   maxResults?: number;
+  shouldCancel?: ShouldCancelSync;
 }): Promise<ConnectorSourceCandidate[]> {
   const query = input?.query?.trim() || DEFAULT_GMAIL_MEET_QUERY;
-  const maxResults = input?.maxResults ?? 25;
-  const listUrl = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
-  listUrl.searchParams.set("q", query);
-  listUrl.searchParams.set("maxResults", String(maxResults));
+  const messages: { id: string; threadId: string }[] = [];
+  let pageToken: string | null = null;
 
-  const listResponse = await bearerFetch("gmail", listUrl.toString());
-  const listBody = (await listResponse.json()) as GmailListResponse & { error?: { message?: string } };
-  if (!listResponse.ok) {
-    throw new Error(listBody.error?.message ?? "Gmail search failed.");
-  }
+  do {
+    if (input?.shouldCancel && (await input.shouldCancel())) break;
 
-  const messages = listBody.messages ?? [];
-  const candidates: ConnectorSourceCandidate[] = [];
+    const listUrl = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
+    listUrl.searchParams.set("q", query);
+    listUrl.searchParams.set("maxResults", String(Math.min(100, input?.maxResults ?? 100)));
+    if (pageToken) listUrl.searchParams.set("pageToken", pageToken);
 
-  for (const item of messages) {
-    const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${item.id}`);
-    messageUrl.searchParams.set("format", "full");
-    const response = await bearerFetch("gmail", messageUrl.toString());
-    const message = (await response.json()) as GmailMessage & { error?: { message?: string } };
-    if (!response.ok) {
-      throw new Error(message.error?.message ?? `Could not read Gmail message ${item.id}.`);
+    const listResponse = await bearerFetch("gmail", listUrl.toString());
+    const listBody = (await listResponse.json()) as GmailListResponse & {
+      error?: { message?: string };
+    };
+    if (!listResponse.ok) {
+      throw new Error(listBody.error?.message ?? "Gmail search failed.");
     }
 
-    const subject = header(message, "Subject") ?? "Gmail note";
-    const from = header(message, "From");
-    const dateHeader = header(message, "Date");
-    const sourceDate = message.internalDate
-      ? new Date(Number(message.internalDate)).toISOString()
-      : dateHeader
-        ? new Date(dateHeader).toISOString()
-        : new Date().toISOString();
-    const body = buildEmailBody(message);
+    messages.push(...(listBody.messages ?? []));
+    pageToken = listBody.nextPageToken ?? null;
+  } while (pageToken && (input?.maxResults == null || messages.length < input.maxResults));
 
-    candidates.push({
-      sourceType: "gmail",
-      sourceExternalId: message.id,
-      title: subject,
-      body: [`From: ${from ?? "unknown"}`, `Thread: ${message.threadId}`, "", body].join("\n"),
-      author: from,
-      sourceDate,
-      url: `https://mail.google.com/mail/u/0/#inbox/${message.id}`,
-      metadata: {
-        threadId: message.threadId,
-        query,
-        importedFrom: "gmail_gemini_meet_notes",
-      },
-    });
+  const selectedMessages = input?.maxResults
+    ? messages.slice(0, input.maxResults)
+    : messages;
+  const candidates: ConnectorSourceCandidate[] = [];
+
+  for (let offset = 0; offset < selectedMessages.length; offset += 10) {
+    const batch = selectedMessages.slice(offset, offset + 10);
+    candidates.push(...(await Promise.all(batch.map((item) => fetchMessageCandidate(item, query)))));
   }
 
   return candidates;

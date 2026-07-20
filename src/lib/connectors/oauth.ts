@@ -6,6 +6,10 @@ import { saveConnectionSecret, type ConnectionSecret } from "@/services/connecti
 import { fetchWithTimeout } from "@/lib/http";
 
 export const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"] as const;
+export const CALENDAR_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.readonly",
+] as const;
+export const DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.readonly"] as const;
 export const JIRA_SCOPES = [
   "read:jira-work",
   "write:jira-work",
@@ -22,7 +26,21 @@ export const CONFLUENCE_SCOPES = [
 export const DISCORD_SCOPES = ["identify", "guilds", "bot"] as const;
 export const GITHUB_SCOPES = ["read:user", "read:org", "repo"] as const;
 
-export type OAuthProvider = "gmail" | "jira" | "confluence" | "discord" | "github";
+export type OAuthProvider =
+  | "gmail"
+  | "calendar"
+  | "drive"
+  | "jira"
+  | "confluence"
+  | "discord"
+  | "github";
+
+/** Google APIs share one OAuth client; keep their redirect URI identical. */
+export function isGoogleOAuthProvider(
+  provider: OAuthProvider
+): provider is "gmail" | "calendar" | "drive" {
+  return provider === "gmail" || provider === "calendar" || provider === "drive";
+}
 
 interface OAuthConfig {
   clientId: string;
@@ -63,6 +81,24 @@ export function getOAuthConfig(provider: OAuthProvider): OAuthConfig | null {
         authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
         tokenUrl: "https://oauth2.googleapis.com/token",
         scopes: GMAIL_SCOPES,
+        extraAuthParams: { access_type: "offline", prompt: "consent" },
+      };
+    case "calendar":
+      return {
+        clientId: env("GOOGLE_CLIENT_ID"),
+        clientSecret: env("GOOGLE_CLIENT_SECRET"),
+        authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+        tokenUrl: "https://oauth2.googleapis.com/token",
+        scopes: CALENDAR_SCOPES,
+        extraAuthParams: { access_type: "offline", prompt: "consent" },
+      };
+    case "drive":
+      return {
+        clientId: env("GOOGLE_CLIENT_ID"),
+        clientSecret: env("GOOGLE_CLIENT_SECRET"),
+        authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+        tokenUrl: "https://oauth2.googleapis.com/token",
+        scopes: DRIVE_SCOPES,
         extraAuthParams: { access_type: "offline", prompt: "consent" },
       };
     case "jira":
@@ -123,6 +159,15 @@ export function createOAuthState(provider: OAuthProvider): string {
   return state;
 }
 
+export function getOAuthStateProvider(state: string): OAuthProvider | null {
+  const states = readStateFile();
+  const entry = states[state];
+  if (!entry) return null;
+  const ageMs = Date.now() - new Date(entry.createdAt).getTime();
+  if (ageMs >= STATE_TTL_MS) return null;
+  return entry.provider;
+}
+
 export function consumeOAuthState(state: string, provider: OAuthProvider): boolean {
   const states = readStateFile();
   const entry = states[state];
@@ -134,7 +179,32 @@ export function consumeOAuthState(state: string, provider: OAuthProvider): boole
 }
 
 export function buildRedirectUri(origin: string, provider: OAuthProvider): string {
+  // Google Cloud OAuth clients typically register a single localhost redirect URI.
+  // Route calendar through the already-registered gmail callback; the real provider
+  // is recovered from OAuth state in the callback handler.
+  if (isGoogleOAuthProvider(provider)) {
+    return `${origin}/api/connections/gmail/callback`;
+  }
   return `${origin}/api/connections/${provider}/callback`;
+}
+
+/**
+ * Resolve which provider an OAuth callback belongs to.
+ * Google providers share one redirect URI, so the path may say "gmail" while
+ * state says "calendar".
+ */
+export function resolveOAuthCallbackProvider(
+  urlProvider: OAuthProvider,
+  state: string | null
+): OAuthProvider {
+  if (!state) return urlProvider;
+  const stateProvider = getOAuthStateProvider(state);
+  if (!stateProvider) return urlProvider;
+  if (stateProvider === urlProvider) return stateProvider;
+  if (isGoogleOAuthProvider(urlProvider) && isGoogleOAuthProvider(stateProvider)) {
+    return stateProvider;
+  }
+  return urlProvider;
 }
 
 export function buildAuthorizationUrl(input: {

@@ -1,4 +1,5 @@
 import "server-only";
+import { z } from "zod";
 import { getActiveProviders, getAvailableApiKey } from "@/services/settings";
 import { openaiClient, openaiEmbed } from "./openai";
 import { anthropicClient } from "./anthropic";
@@ -12,8 +13,11 @@ import { KNOWLEDGE_EXTRACTOR_SYSTEM_PROMPT } from "./prompts/knowledgeExtractor"
 import { DELIVERY_VERIFIER_SYSTEM_PROMPT } from "./prompts/deliveryVerifier";
 import { DAILY_MEMORY_SYSTEM_PROMPT } from "./prompts/dailyMemory";
 import { KNOWLEDGE_QA_SYSTEM_PROMPT } from "./prompts/knowledgeQa";
+import { TASK_QA_SYSTEM_PROMPT } from "./prompts/taskQa";
 import { FOCUS_ACTION_PLAN_SYSTEM_PROMPT } from "./prompts/focusActionPlan";
+import { FIGMA_FRAME_DISCOVERY_SYSTEM_PROMPT } from "./prompts/figmaFrameDiscovery";
 import { DELIVERY_SYNC_REVIEW_SYSTEM_PROMPT } from "./prompts/deliverySyncReview";
+import { HYDRA_REPORT_SYSTEM_PROMPT } from "./prompts/hydraReport";
 import {
   LlmError,
   type JobType,
@@ -106,6 +110,11 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
     maxTokens: 2048,
     fallbacks: STANDARD_TEXT_FALLBACKS,
   },
+  task_qa: {
+    provider: "openai",
+    model: "gpt-5.4",
+    maxTokens: 4096,
+  },
   priority_planning: {
     provider: "groq",
     model: GROQ_70B,
@@ -143,15 +152,28 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
     maxTokens: 4096,
     fallbacks: HEAVY_TEXT_FALLBACKS,
   },
-  delivery_sync_review: {
+  figma_frame_discovery: {
     provider: "openai",
     model: OPENAI_FULL,
-    maxTokens: 3072,
+    maxTokens: 2048,
+  },
+  delivery_sync_review: {
+    provider: "openai",
+    model: "gpt-5.4",
+    maxTokens: 4096,
+    fallbacks: [
+      { provider: "anthropic", model: ANTHROPIC_SONNET, maxTokens: 4096 },
+      { provider: "openai", model: OPENAI_FULL, maxTokens: 3072 },
+    ],
+  },
+  hydra_report: {
+    provider: "openai",
+    model: OPENAI_FULL,
+    maxTokens: 6144,
     fallbacks: [
       OPENAI_MINI_FALLBACK,
-      { provider: "groq", model: GROQ_70B, maxTokens: 3072 },
-      { ...GROQ_8B_FALLBACK, maxTokens: 3072 },
-      { ...ANTHROPIC_FALLBACK, maxTokens: 3072 },
+      { provider: "groq", model: GROQ_70B, maxTokens: 6144 },
+      { ...ANTHROPIC_FALLBACK, maxTokens: 6144 },
     ],
   },
 };
@@ -172,8 +194,11 @@ export const JOB_SYSTEM_PROMPTS: Record<JobType, string> = {
   delivery_verification: DELIVERY_VERIFIER_SYSTEM_PROMPT,
   daily_memory: DAILY_MEMORY_SYSTEM_PROMPT,
   knowledge_qa: KNOWLEDGE_QA_SYSTEM_PROMPT,
+  task_qa: TASK_QA_SYSTEM_PROMPT,
   focus_action_plan: FOCUS_ACTION_PLAN_SYSTEM_PROMPT,
+  figma_frame_discovery: FIGMA_FRAME_DISCOVERY_SYSTEM_PROMPT,
   delivery_sync_review: DELIVERY_SYNC_REVIEW_SYSTEM_PROMPT,
+  hydra_report: HYDRA_REPORT_SYSTEM_PROMPT,
 };
 
 function getProviderClient(provider: Provider): ProviderClient {
@@ -205,6 +230,24 @@ async function configsForJob(jobType: JobType): Promise<ModelConfig[]> {
   return chain.filter((config) => active.has(config.provider));
 }
 
+/**
+ * OpenAI/Groq strict structured outputs reject JSON Schema "format" annotations
+ * (e.g. "uri" from z.string().url()). Strip them — Zod still validates the
+ * parsed response locally, so nothing is lost.
+ */
+function sanitizeJsonSchemaForProviders(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(sanitizeJsonSchemaForProviders);
+  if (node && typeof node === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "format" && typeof value === "string") continue;
+      result[key] = sanitizeJsonSchemaForProviders(value);
+    }
+    return result;
+  }
+  return node;
+}
+
 function tryParseJson(text: string): { ok: true; data: unknown } | { ok: false; error: string } {
   try {
     return { ok: true, data: JSON.parse(text) };
@@ -234,13 +277,23 @@ function logJobEvent(event: {
   model: string;
   ok: boolean;
   kind?: string;
+  error?: string;
   durationMs: number;
   fallback?: boolean;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
 }) {
   const status = event.ok ? "ok" : `failed (${event.kind})`;
   const via = event.fallback ? " (fallback)" : "";
+  const usage = event.usage
+    ? ` · ${event.usage.inputTokens} in / ${event.usage.outputTokens} out`
+    : "";
+  const error = event.error ? ` — ${event.error.slice(0, 300)}` : "";
   console.info(
-    `[llm] ${event.jobType} via ${event.provider}/${event.model}${via} — ${status} in ${event.durationMs}ms`
+    `[llm] ${event.jobType} via ${event.provider}/${event.model}${via} — ${status} in ${event.durationMs}ms${usage}${error}`
   );
 }
 
@@ -280,6 +333,7 @@ async function runWithConfig<T>(
       model,
       ok: false,
       kind,
+      error,
       durationMs: Date.now() - startedAt,
       fallback: isFallback,
     });
@@ -308,6 +362,10 @@ async function runWithConfig<T>(
           userPrompt,
           temperature: params.temperature,
           maxTokens,
+          responseJsonSchema: sanitizeJsonSchemaForProviders(
+            z.toJSONSchema(schema, { io: "output" })
+          ) as Record<string, unknown>,
+          imageUrls: params.imageUrls,
         })
       );
     } catch (err) {
@@ -342,6 +400,7 @@ async function runWithConfig<T>(
       ok: true,
       durationMs: Date.now() - startedAt,
       fallback: isFallback,
+      usage: completion.usage,
     });
     return { ok: true, jobType, provider, model, data: validated.data };
   }

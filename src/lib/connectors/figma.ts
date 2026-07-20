@@ -11,6 +11,7 @@ export interface FigmaFrameEvidence {
   metadata: string;
   designContext: string;
   screenshotNote: string | null;
+  screenshotUrl: string | null;
 }
 
 interface FigmaApiError {
@@ -46,6 +47,10 @@ interface FigmaNodesResponse {
       styles?: Record<string, { name?: string; description?: string }>;
     } | null
   >;
+}
+
+interface FigmaImagesResponse {
+  images?: Record<string, string | null>;
 }
 
 async function getToken(): Promise<string> {
@@ -85,7 +90,8 @@ function resolveFileKey(value: string): string | null {
 function formatNodeTree(node: FigmaNode | undefined, depth = 0): string {
   if (!node) return "";
   const indent = "  ".repeat(depth);
-  const label = [node.type, node.name].filter(Boolean).join(" — ");
+  const nodeId = node.id ? ` [node-id=${node.id}]` : "";
+  const label = `${[node.type, node.name].filter(Boolean).join(" — ")}${nodeId}`;
   const text =
     node.type === "TEXT" && node.characters
       ? `${indent}${label}: "${node.characters.trim()}"`
@@ -108,6 +114,54 @@ function summarizeComponents(
     })
     .filter(Boolean);
   return lines.length > 0 ? `Components:\n${lines.join("\n")}` : "";
+}
+
+export async function fetchFigmaFileIfUpdated(input: {
+  fileKey: string;
+  updatedSinceIso?: string;
+}): Promise<ConnectorSourceCandidate[]> {
+  const fileKey = resolveFileKey(input.fileKey);
+  if (!fileKey) return [];
+
+  const meta = await figmaFetch<FigmaFileResponse>(
+    `/v1/files/${encodeURIComponent(fileKey)}?depth=1`
+  );
+  const lastModified = meta.lastModified ?? null;
+  if (
+    input.updatedSinceIso &&
+    lastModified &&
+    Date.parse(lastModified) < Date.parse(input.updatedSinceIso)
+  ) {
+    return [];
+  }
+
+  const file = await figmaFetch<FigmaFileResponse>(
+    `/v1/files/${encodeURIComponent(fileKey)}?depth=2`
+  );
+  const body = [
+    file.name ? `File: ${file.name}` : null,
+    file.lastModified ? `Last modified: ${file.lastModified}` : null,
+    formatNodeTree(file.document),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  if (!body.trim()) return [];
+
+  return [
+    {
+      sourceType: "figma",
+      sourceExternalId: `${fileKey}:structure`,
+      title: file.name ? `Figma file ${file.name}` : `Figma file ${fileKey}`,
+      sourceDate: file.lastModified ?? new Date().toISOString(),
+      url: figmaDesignUrl(fileKey),
+      body,
+      metadata: {
+        transport: "api",
+        fileKey,
+        importedFrom: "figma",
+      },
+    },
+  ];
 }
 
 export async function fetchFigmaFilesViaApi(input: {
@@ -180,6 +234,15 @@ export async function fetchFigmaFrameEvidenceViaApi(input: {
     "Read-only Figma REST API snapshot (personal access token).",
     metadata,
   ].join("\n\n");
+  let screenshotUrl: string | null = null;
+  try {
+    const imageResponse = await figmaFetch<FigmaImagesResponse>(
+      `/v1/images/${encodeURIComponent(input.fileKey)}?ids=${encodeURIComponent(input.nodeId)}&format=png&scale=2`
+    );
+    screenshotUrl = imageResponse.images?.[input.nodeId] ?? null;
+  } catch {
+    // The structural audit can still run when Figma cannot render an image.
+  }
 
   return {
     fileKey: input.fileKey,
@@ -188,5 +251,6 @@ export async function fetchFigmaFrameEvidenceViaApi(input: {
     metadata,
     designContext,
     screenshotNote: null,
+    screenshotUrl,
   };
 }

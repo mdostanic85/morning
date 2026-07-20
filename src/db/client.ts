@@ -1,8 +1,10 @@
 import "server-only";
 
-// This is the only import path the app (route handlers, server components,
-// services) should use to reach the database. The `server-only` guard turns
-// an accidental import from a client component into a build error.
-// Standalone scripts (migrations) import `./connection` directly since
-// they never run inside the Next.js client bundle.
-export { db } from "./connection";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import * as schema from "./schema";
+
+// Runtime may be SQLite or PostgreSQL; schema shapes are aligned for query compatibility.
+export { db as rawDb } from "./connection";
+import { db as connectionDb } from "./connection";
+
+export const db = connectionDb as PostgresJsDatabase<typeof schema>;

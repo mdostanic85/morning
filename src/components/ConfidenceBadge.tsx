@@ -1,7 +1,7 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Chip } from "@heroui/react/chip";
+import { Tooltip } from "@heroui/react/tooltip";
 import { cn } from "@/lib/utils";
 
 function bucket(value: number): { label: string; className: string } {
@@ -25,17 +25,23 @@ function bucket(value: number): { label: string; className: string } {
 export function ConfidenceBadge({ level }: { level: number }) {
   const { label, className } = bucket(level);
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger>
-          <Badge variant="outline" className={cn("gap-1 font-medium cursor-default", className)}>
-            {label} · {Math.round(level * 100)}%
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent>
-          How confident the AI is that this task was correctly extracted from the source. Low = needs your review.
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip delay={400}>
+      <Tooltip.Trigger>
+        <Chip
+          variant="tertiary"
+          color="default"
+          className={cn(
+            "tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border text-foreground transition-colors gap-1 font-medium cursor-default",
+            className
+          )}
+        >
+          {label} · {Math.round(level * 100)}%
+        </Chip>
+      </Tooltip.Trigger>
+      <Tooltip.Content placement="top" showArrow className="max-w-xs bg-foreground px-3 py-1.5 text-xs text-background">
+        <Tooltip.Arrow />
+        How confident the AI is that this task was correctly extracted from the source. Low = needs your review.
+      </Tooltip.Content>
+    </Tooltip>
   );
 }

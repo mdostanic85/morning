@@ -1,30 +1,41 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
+import { Inter } from "next/font/google";
+import Script from "next/script";
 import { NavBar } from "@/components/NavBar";
+import { WelcomeModal } from "@/components/WelcomeModal";
 import { AskMemoryProvider } from "@/components/AskMemoryWidget";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { Toaster } from "sonner";
+import { Toast } from "@heroui/react/toast";
+import { AppFooter } from "@/components/AppFooter";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
-});
+const themeInitScript = `
+  (() => {
+    const key = "worklight:theme";
+    let saved = null;
+    try {
+      saved = localStorage.getItem(key);
+    } catch {}
+    const theme =
+      saved === "light" || saved === "dark"
+        ? saved
+        : matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+  })();
+`;
 
 export const metadata: Metadata = {
-  title: "Vantage — Daily Work Operator",
-  description: "What to do first, why it matters, and how you'll know it's done.",
+  title: "Worklight — Daily Work Operator",
+  description:
+    "Evidence-backed daily direction for what matters, what to do next, and what done looks like.",
 };
 
 export default function RootLayout({
@@ -35,32 +46,28 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
+      className={`${inter.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <Script
+          id="worklight-theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <TooltipProvider delay={400}>
-          <Suspense fallback={null}>
-            <AskMemoryProvider>
-              <NavBar />
-              <main className="flex-1 w-full max-w-5xl mx-auto px-5 py-10 sm:px-8 sm:py-14">
-                {children}
-              </main>
-              <footer className="w-full max-w-5xl mx-auto px-5 pb-10 sm:px-8">
-                <p className="text-xs text-muted-soft">
-                  Everything stays on this machine. Sources are read-only.
-                </p>
-              </footer>
-              <Toaster
-                position="top-center"
-                richColors
-                closeButton
-                toastOptions={{
-                  className: "font-sans text-sm",
-                }}
-              />
-            </AskMemoryProvider>
-          </Suspense>
-        </TooltipProvider>
+        <Suspense fallback={null}>
+          <AskMemoryProvider>
+            <WelcomeModal />
+            <NavBar />
+            <main className="today-main mx-auto w-full max-w-content flex-1">
+              {children}
+            </main>
+            <AppFooter />
+            <Toast.Provider placement="top" />
+          </AskMemoryProvider>
+        </Suspense>
       </body>
     </html>
   );

@@ -138,7 +138,7 @@ function significantTokens(text: string): Set<string> {
   return new Set(tokens);
 }
 
-function topicOverlapScore(a: string, b: string): number {
+export function topicOverlapScore(a: string, b: string): number {
   const left = significantTokens(a);
   const right = significantTokens(b);
   if (left.size === 0 || right.size === 0) return 0;

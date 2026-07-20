@@ -1,7 +1,8 @@
 import "server-only";
 import { eq, ne } from "drizzle-orm";
 import { db } from "@/db/client";
-import { projects as projectsTable, workTasks as workTasksTable } from "@/db/schema";
+import { projects as projectsTable, workTasks as workTasksTable } from "@/db/tables";
+import { fetchAll, fetchOne, fetchReturning, execute } from "@/db/query";
 import type { NewProject, Project, ProjectPatch, ProjectWithCounts } from "@/domain/project";
 import type { SourceItem } from "@/domain/sourceItem";
 
@@ -26,33 +27,30 @@ function toProject(row: typeof projectsTable.$inferSelect): Project {
 }
 
 export async function createProject(input: NewProject): Promise<Project> {
-  const [row] = db
-    .insert(projectsTable)
-    .values({
-      name: input.name,
-      description: input.description ?? null,
-      keywords: input.keywords ?? [],
-      people: input.people ?? [],
-      jiraKeys: input.jiraKeys ?? [],
-      repoPaths: input.repoPaths ?? [],
-      githubRepositories: input.githubRepositories ?? [],
-      confluenceSpaces: input.confluenceSpaces ?? [],
-      confluencePageUrls: input.confluencePageUrls ?? [],
-      discordChannels: input.discordChannels ?? [],
-      figmaFileKeys: input.figmaFileKeys ?? [],
-    })
-    .returning()
-    .all();
+  const [row] = await fetchReturning(
+    db
+      .insert(projectsTable)
+      .values({
+        name: input.name,
+        description: input.description ?? null,
+        keywords: input.keywords ?? [],
+        people: input.people ?? [],
+        jiraKeys: input.jiraKeys ?? [],
+        repoPaths: input.repoPaths ?? [],
+        githubRepositories: input.githubRepositories ?? [],
+        confluenceSpaces: input.confluenceSpaces ?? [],
+        confluencePageUrls: input.confluencePageUrls ?? [],
+        discordChannels: input.discordChannels ?? [],
+        figmaFileKeys: input.figmaFileKeys ?? [],
+      })
+      .returning()
+  );
   return toProject(row);
 }
 
 export async function getProjects(): Promise<ProjectWithCounts[]> {
-  const rows = db.select().from(projectsTable).all();
-  const openTasks = db
-    .select()
-    .from(workTasksTable)
-    .where(ne(workTasksTable.status, "done"))
-    .all();
+  const rows = await fetchAll(db.select().from(projectsTable));
+  const openTasks = await fetchAll(db.select().from(workTasksTable).where(ne(workTasksTable.status, "done")));
 
   const countByProject = new Map<number, number>();
   for (const t of openTasks) {
@@ -109,22 +107,19 @@ export function isSourceFromInactiveProject(
 }
 
 export async function getProjectById(id: number): Promise<Project | null> {
-  const row = db.select().from(projectsTable).where(eq(projectsTable.id, id)).get();
+  const row = await fetchOne(db.select().from(projectsTable).where(eq(projectsTable.id, id)));
   return row ? toProject(row) : null;
 }
 
 export async function updateProject(id: number, patch: ProjectPatch): Promise<Project | null> {
-  const [row] = db
-    .update(projectsTable)
-    .set({ ...patch, updatedAt: new Date().toISOString() })
-    .where(eq(projectsTable.id, id))
-    .returning()
-    .all();
+  const [row] = await fetchReturning(
+    db.update(projectsTable).set({ ...patch, updatedAt: new Date().toISOString() }).where(eq(projectsTable.id, id)).returning()
+  );
   return row ? toProject(row) : null;
 }
 
 export async function deleteProject(id: number): Promise<void> {
-  db.delete(projectsTable).where(eq(projectsTable.id, id)).run();
+  await execute(db.delete(projectsTable).where(eq(projectsTable.id, id)));
 }
 
 export async function setProjectStatus(

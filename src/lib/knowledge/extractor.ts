@@ -5,6 +5,7 @@ import {
   knowledgeExtractionOutputSchema,
   type KnowledgeItemCandidate,
 } from "@/lib/llm/prompts/knowledgeExtractor";
+import { granolaKnowledgeCandidateMatchesMe, type GranolaWorkContext } from "@/lib/granola/personalKnowledge";
 import { createKnowledgeItem } from "@/services/knowledgeItems";
 import { indexKnowledgeItem } from "@/lib/knowledge/embeddings";
 import type { KnowledgeItem } from "@/domain/knowledgeItem";
@@ -14,6 +15,7 @@ import type { SourceItem } from "@/domain/sourceItem";
 export interface ExtractKnowledgeOptions {
   sourceItem: SourceItem;
   project?: Pick<Project, "name" | "description" | "keywords" | "people"> | null;
+  granolaWorkContext?: GranolaWorkContext | null;
 }
 
 export interface ExtractedKnowledgeItem {
@@ -78,7 +80,11 @@ async function saveCandidate(
 export async function extractKnowledgeFromSourceItem(
   options: ExtractKnowledgeOptions
 ): Promise<KnowledgeExtractionRunResult> {
-  const { sourceItem, project = null } = options;
+  const { sourceItem, project = null, granolaWorkContext = null } = options;
+
+  if (sourceItem.sourceType === "granola" && !granolaWorkContext) {
+    return emptyResult(sourceItem.id);
+  }
 
   const result = await runLlmJob({
     jobType: "knowledge_extraction",
@@ -88,6 +94,8 @@ export async function extractKnowledgeFromSourceItem(
       sourceDate: sourceItem.sourceDate,
       sourceBody: sourceItem.body,
       project,
+      granolaWorkContext:
+        sourceItem.sourceType === "granola" ? granolaWorkContext : null,
     }),
     schema: knowledgeExtractionOutputSchema,
   });
@@ -96,8 +104,15 @@ export async function extractKnowledgeFromSourceItem(
     return emptyResult(sourceItem.id, `${result.kind}: ${result.error}`);
   }
 
+  const candidates: KnowledgeItemCandidate[] =
+    sourceItem.sourceType === "granola" && granolaWorkContext
+      ? result.data.items.filter((candidate) =>
+          granolaKnowledgeCandidateMatchesMe(candidate, granolaWorkContext)
+        )
+      : result.data.items;
+
   const items: ExtractedKnowledgeItem[] = [];
-  for (const candidate of result.data.items) {
+  for (const candidate of candidates) {
     items.push(await saveCandidate(candidate, sourceItem));
   }
 

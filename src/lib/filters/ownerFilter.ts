@@ -159,7 +159,6 @@ export function filterBriefingByOwners(
     ...briefing,
     focusItems,
     jiraPending,
-    knowledgeHighlights: [],
     waitingOn: [],
     risks: [],
     jiraIssueCount: jiraPending.length,

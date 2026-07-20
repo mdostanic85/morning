@@ -4,6 +4,7 @@ import type { JiraPendingSnapshot } from "@/lib/connectors/jiraPending";
 import { jiraStatusFocusWeight } from "@/lib/connectors/jiraText";
 import { findTaskIdByJiraKey } from "@/lib/tasks/resolveFocusTask";
 import { DAILY_FOCUS_TASK_LIMIT } from "@/lib/tasks/dailyFocus";
+import { priorityExplanationForDisplay } from "@/lib/tasks/priorityExplanation";
 import {
   filterFreshTaskSources,
   sourceAuthorityScoreBoost,
@@ -480,7 +481,7 @@ export function buildDeterministicFocusItems(input: {
         evidenceQuotes: quotes,
         linkedTaskId: task.id,
         linkedJiraKey: ranked.jiraKey,
-        priorityExplanation: ranked.explanation.join(" · "),
+        priorityExplanation: priorityExplanationForDisplay(ranked.explanation.join(" · ")),
       });
       continue;
     }
@@ -498,7 +499,7 @@ export function buildDeterministicFocusItems(input: {
       evidenceQuotes: excerptQuote ? [{ quote: excerptQuote }] : [{ quote: issue.title }],
       linkedTaskId: findTaskIdByJiraKey(input.tasks, issue.key),
       linkedJiraKey: issue.key,
-      priorityExplanation: ranked.explanation.join(" · "),
+      priorityExplanation: priorityExplanationForDisplay(ranked.explanation.join(" · ")),
     });
   }
 
@@ -540,7 +541,9 @@ export function buildQueueDecisionsFromRanking(
       taskId: item.taskId,
       status,
       priorityScore: item.normalizedScore,
-      reason: `Priority ${Math.round(item.normalizedScore * 100)}% — ${item.explanation.join(" · ")}`,
+      // Ranking must never replace the source-grounded explanation of the
+      // actual work with internal scores or terse signal labels.
+      reason: task?.reason ?? "The task needs source review before work begins.",
     };
   });
 }

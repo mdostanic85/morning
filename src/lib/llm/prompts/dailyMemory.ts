@@ -6,6 +6,7 @@ export const JOB_TYPE: JobType = "daily_memory";
 
 export interface DailyMemoryInput {
   today: string;
+  userNotes: string | null;
   completedTasks: { id: number; title: string; projectName: string | null; updatedAt: string }[];
   startedTasks: { id: number; title: string; projectName: string | null; updatedAt: string }[];
   openTasks: {
@@ -42,9 +43,12 @@ export interface DailyMemoryInput {
 export const DAILY_MEMORY_SYSTEM_PROMPT = buildStrictSystemPrompt({
   role: `You are the end-of-day memory engine for a local-first daily work operator app. You convert today's local task/source/git evidence into a concise memory for tomorrow.`,
   jobInstructions: `
-- Summarize only evidence present in the provided data. Do not invent completed work or commitments.
-- "whatWorkedOn" should include started tasks, active local git work, and meaningful source activity.
-- "completed" should include only tasks explicitly marked done or verification reports that support completion.
+- Summarize only evidence present in the provided data and the user's own notes. Do not invent completed work or commitments.
+- When user notes are present, treat them as the user's first-person account of the day. Reconcile them with automated evidence — use notes for nuance, context, and work the system did not capture.
+- Route user-note content to the right fields: active/finished work → whatWorkedOn; explicit completions → completed (only when the user says something is done or a task is marked done / verified); unresolved items → stillOpen; blockers → waitingOn; loose ends and concerns → risks; tomorrow intent → firstTomorrow when consistent with open tasks.
+- If user notes conflict with task status (e.g. user says they finished something still open in the queue), reflect the work in whatWorkedOn and note the mismatch in stillOpen or risks — do not silently mark it completed.
+- "whatWorkedOn" should include started tasks, active local git work, meaningful source activity, and relevant user-note work.
+- "completed" should include tasks explicitly marked done, verification reports that support completion, or work the user explicitly states they finished today.
 - "stillOpen" should include unresolved open tasks worth remembering.
 - "waitingOn" should include tasks that are blocked on another person/system.
 - "firstTomorrow" should be one concrete task title the user can act on tomorrow morning. Prefer a high-priority open/next task. Never pick a waiting/blocked task — if the top item is blocked, pick the next actionable one. If nothing is clear, return null.
@@ -64,13 +68,25 @@ export const DAILY_MEMORY_SYSTEM_PROMPT = buildStrictSystemPrompt({
 });
 
 export function buildDailyMemoryUserPrompt(input: DailyMemoryInput): string {
-  return [
+  const sections = [
     `Date: ${input.today}`,
     "",
     "Create an end-of-day memory from the local evidence below.",
-    "",
-    wrapUntrustedContent("daily evidence", JSON.stringify(input, null, 2)),
-  ].join("\n");
+  ];
+
+  if (input.userNotes?.trim()) {
+    sections.push(
+      "",
+      wrapUntrustedContent("user notes", input.userNotes.trim()),
+      "",
+      "Incorporate the user notes into the correct memory fields. They override gaps in automated evidence but must still be reconciled with task status and verification data."
+    );
+  }
+
+  const { userNotes: _userNotes, ...automatedEvidence } = input;
+  sections.push("", wrapUntrustedContent("daily evidence", JSON.stringify(automatedEvidence, null, 2)));
+
+  return sections.join("\n");
 }
 
 export const dailyMemoryOutputSchema = z.object({

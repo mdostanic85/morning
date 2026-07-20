@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
+import { Toast } from "@heroui/react/toast";
 import type { ProjectStatus } from "@/domain/project";
-import { Badge } from "@/components/ui/badge";
+import { Chip } from "@heroui/react/chip";
 import { ProjectStatusToggle } from "@/components/ProjectStatusToggle";
 
 interface ProjectCardProps {
@@ -34,9 +34,13 @@ export function ProjectCard({
   const [active, setActive] = useState(status !== "inactive");
   const totalOpen = openTaskCount + jiraIssueCount;
 
-  useEffect(() => {
+  // Follow the server-provided status when it changes. Render-time
+  // adjustment instead of an effect to avoid a cascading re-render.
+  const [prevStatus, setPrevStatus] = useState(status);
+  if (prevStatus !== status) {
+    setPrevStatus(status);
     setActive(status !== "inactive");
-  }, [status]);
+  }
 
   async function toggleStatus(nextActive: boolean) {
     const prevActive = active;
@@ -50,18 +54,18 @@ export function ProjectCard({
         body: JSON.stringify({ status: nextStatus }),
       });
       if (!res.ok) throw new Error("Could not update project status.");
-      toast.success(nextActive ? "Project restored." : "Project turned off.");
+      Toast.toast.success(nextActive ? "Project restored." : "Project turned off.");
       router.refresh();
     } catch {
       setActive(prevActive);
-      toast.error("Could not update project status.");
+      Toast.toast.danger("Could not update project status.");
     } finally {
       setPending(false);
     }
   }
 
   return (
-    <div className="card flex items-start gap-3 p-5 transition-colors hover:border-border-strong hover:bg-surface-raised">
+    <div className="app-card flex items-start gap-3 p-5 transition-colors hover:border-border-strong hover:bg-surface-raised">
       <Link href={`/projects/${id}?tab=tasks`} className="min-w-0 flex-1">
         <h3 className="text-base font-medium leading-snug">{name}</h3>
         {description ? (
@@ -80,9 +84,13 @@ export function ProjectCard({
           disabled={pending}
           aria-label={active ? "Turn off project" : "Restore project"}
         />
-        <Badge variant="outline" className="tabular-nums text-muted">
+        <Chip
+          variant="tertiary"
+          color="default"
+          className="tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border text-foreground transition-colors tabular-nums text-muted"
+        >
           {totalOpen} open
-        </Badge>
+        </Chip>
       </div>
     </div>
   );

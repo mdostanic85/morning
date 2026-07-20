@@ -1,12 +1,15 @@
 "use client";
 
 import type { SourceType } from "@/domain/sourceItem";
-import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Chip } from "@heroui/react/chip";
+import { Tooltip } from "@heroui/react/tooltip";
+import { cn } from "@/lib/utils";
 
 const SOURCE_TYPE_LABEL: Record<SourceType, string> = {
   manual_transcript: "Transcript",
   gmail: "Gmail",
+  calendar: "Calendar",
+  drive: "Drive",
   jira: "Jira",
   confluence: "Confluence",
   granola: "Granola",
@@ -19,6 +22,8 @@ const SOURCE_TYPE_LABEL: Record<SourceType, string> = {
 const SOURCE_TYPE_DESCRIPTION: Record<SourceType, string> = {
   manual_transcript: "Manually pasted meeting transcript",
   gmail: "Email from Gmail",
+  calendar: "Meeting from Google Calendar",
+  drive: "Gemini / meeting notes from Google Drive",
   jira: "Jira ticket or issue",
   confluence: "Confluence page or doc",
   granola: "Meeting note from Granola",
@@ -29,42 +34,38 @@ const SOURCE_TYPE_DESCRIPTION: Record<SourceType, string> = {
 };
 
 const SOURCE_TYPE_STYLES: Record<SourceType, string> = {
-  manual_transcript:
-    "border-violet-400/45 bg-violet-500/12 text-violet-800 dark:border-violet-400/35 dark:bg-violet-500/18 dark:text-violet-200",
-  gmail:
-    "border-rose-400/45 bg-rose-500/12 text-rose-900 dark:border-rose-400/35 dark:bg-rose-500/18 dark:text-rose-200",
-  jira:
-    "border-sky-400/45 bg-sky-500/12 text-sky-900 dark:border-sky-400/35 dark:bg-sky-500/18 dark:text-sky-200",
-  confluence:
-    "border-teal-400/45 bg-teal-500/12 text-teal-900 dark:border-teal-400/35 dark:bg-teal-500/18 dark:text-teal-200",
-  granola:
-    "border-amber-400/45 bg-amber-500/12 text-amber-950 dark:border-amber-400/35 dark:bg-amber-500/18 dark:text-amber-100",
-  github:
-    "border-slate-400/45 bg-slate-500/12 text-slate-900 dark:border-slate-400/35 dark:bg-slate-500/18 dark:text-slate-200",
-  figma:
-    "border-fuchsia-400/45 bg-fuchsia-500/12 text-fuchsia-900 dark:border-fuchsia-400/35 dark:bg-fuchsia-500/18 dark:text-fuchsia-200",
-  discord:
-    "border-indigo-400/45 bg-indigo-500/12 text-indigo-900 dark:border-indigo-400/35 dark:bg-indigo-500/18 dark:text-indigo-200",
-  git:
-    "border-emerald-400/45 bg-emerald-500/12 text-emerald-900 dark:border-emerald-400/35 dark:bg-emerald-500/18 dark:text-emerald-200",
+  manual_transcript: "border-accent/40 bg-accent-soft-surface text-accent-strong",
+  gmail: "border-pink/50 bg-pink-soft text-pink-foreground",
+  calendar: "border-sky/50 bg-sky-soft text-sky-foreground",
+  drive: "border-sky/45 bg-sky-soft text-sky-foreground",
+  jira: "border-sky/50 bg-sky-soft text-sky-foreground",
+  confluence: "border-mint/50 bg-mint-soft text-mint-foreground",
+  granola: "border-sun/55 bg-sun-soft text-sun-foreground",
+  github: "border-border-strong bg-surface-soft text-muted",
+  figma: "border-pink/55 bg-pink-soft text-pink-foreground",
+  discord: "border-accent/35 bg-accent-soft-surface text-accent-strong",
+  git: "border-mint/50 bg-mint-soft text-mint-foreground",
 };
 
 export function SourceBadge({ sourceType }: { sourceType: SourceType }) {
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger>
-          <Badge
-            variant="outline"
-            className={`font-normal cursor-default ${SOURCE_TYPE_STYLES[sourceType] ?? "border-border-strong/60 bg-surface-soft text-muted"}`}
-          >
-            {SOURCE_TYPE_LABEL[sourceType] ?? sourceType}
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent>
-          {SOURCE_TYPE_DESCRIPTION[sourceType] ?? `Source: ${sourceType}`}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip delay={400}>
+      <Tooltip.Trigger>
+        <Chip
+          variant="tertiary"
+          color="default"
+          className={cn(
+            "tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border text-foreground transition-colors font-normal cursor-default",
+            SOURCE_TYPE_STYLES[sourceType] ?? "border-border-strong/60 bg-surface-soft text-muted"
+          )}
+        >
+          {SOURCE_TYPE_LABEL[sourceType] ?? sourceType}
+        </Chip>
+      </Tooltip.Trigger>
+      <Tooltip.Content placement="top" showArrow className="max-w-xs bg-foreground px-3 py-1.5 text-xs text-background">
+        <Tooltip.Arrow />
+        {SOURCE_TYPE_DESCRIPTION[sourceType] ?? `Source: ${sourceType}`}
+      </Tooltip.Content>
+    </Tooltip>
   );
 }

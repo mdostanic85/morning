@@ -53,7 +53,7 @@ export default async function KnowledgePage() {
           ) : !myName ? (
             <EmptyState
               title="Your name is not set."
-              description="Add your name in Settings so Morning can show only learnings relevant to you."
+              description="Add your name in Settings so Worklight can show only learnings relevant to you."
             />
           ) : (
             <KnowledgeFilteredView items={knowledgeItems} myName={myName} />

@@ -5,10 +5,10 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Toast } from "@heroui/react/toast";
+import { Button } from "@heroui/react/button";
+import { Input } from "@heroui/react/input";
+import { TextArea } from "@heroui/react/textarea";
 
 const schema = z.object({
   title: z.string().optional(),
@@ -108,39 +108,41 @@ export function IngestForm() {
       reset();
       const msg = describeExtraction(data as IngestResponse);
       setMessage(msg);
-      if (msg.tone === "success") toast.success("Transcript ingested.");
-      else if (msg.tone === "warning") toast.warning("Saved with warnings.");
+      if (msg.tone === "success") Toast.toast.success("Transcript ingested.");
+      else if (msg.tone === "warning") Toast.toast.warning("Saved with warnings.");
       router.refresh();
     } catch (err) {
       const text = err instanceof Error ? err.message : "Something went wrong. Try again.";
       setMessage({ tone: "error", text });
-      toast.error(text);
+      Toast.toast.danger(text);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="card p-6 sm:p-7">
+    <form onSubmit={handleSubmit(onSubmit)} className="app-card p-6 sm:p-7">
       <p className="eyebrow">Paste a transcript</p>
       <Input
         {...register("title")}
         type="text"
         placeholder="Title (optional)"
         aria-label="Transcript title"
-        className="mt-3"
+        fullWidth
+        className="h-11 border border-border bg-background/70 text-sm shadow-none mt-3"
       />
-      <Textarea
+      <TextArea
         {...register("content")}
         placeholder="Paste meeting notes, a transcript, or any raw text…"
         rows={5}
         aria-label="Transcript text"
         aria-invalid={!!errors.content}
-        className="mt-2"
+        fullWidth
+        className="min-h-16 border border-border bg-background/70 text-sm shadow-none mt-2"
       />
       {errors.content && (
         <p className="mt-1 text-xs text-danger">{errors.content.message}</p>
       )}
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" isDisabled={isSubmitting}>
           {isSubmitting ? "Saving and extracting…" : "Save and extract"}
         </Button>
         <p className="text-xs leading-relaxed text-muted">

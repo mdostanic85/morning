@@ -15,10 +15,13 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-0.5 text-accent underline-offset-2 hover:underline"
+      className="text-accent underline-offset-2 [overflow-wrap:anywhere] hover:underline"
     >
       {children}
-      <ExternalLinkIcon className="size-3 shrink-0" aria-hidden />
+      <ExternalLinkIcon
+        className="ml-0.5 inline-block size-3 shrink-0 align-[-1px]"
+        aria-hidden
+      />
     </a>
   );
 }

@@ -6,7 +6,7 @@ import type { ConnectorSourceCandidate } from "@/lib/connectors/types";
 import { callMcpTool, withMcpClient } from "../client";
 import { asArray, asRecord, parseMcpToolPayload } from "../parse";
 
-const APP_ORIGIN = process.env.MORNING_APP_URL?.trim() || "http://localhost:3000";
+const APP_ORIGIN = process.env.WORKLIGHT_APP_URL?.trim() || "http://localhost:3000";
 
 export interface JiraProjectSnapshot {
   key: string;

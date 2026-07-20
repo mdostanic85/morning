@@ -2,6 +2,7 @@ import "server-only";
 import { getConnectionSecret } from "@/services/connectionSecrets";
 import type { ConnectorSourceCandidate } from "./types";
 import { fetchWithTimeout } from "@/lib/http";
+import type { ShouldCancelSync } from "@/lib/imports/syncCancellation";
 
 /**
  * Granola public REST API connector (https://public-api.granola.ai/v1).
@@ -77,15 +78,23 @@ export async function testGranolaConnection(): Promise<boolean> {
   return true;
 }
 
-async function listRecentNoteSummaries(apiKey: string): Promise<GranolaNoteSummary[]> {
-  const createdAfter = new Date(
-    Date.now() - DEFAULT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
-  ).toISOString();
+async function listRecentNoteSummaries(
+  apiKey: string,
+  input?: {
+    createdAfterIso?: string;
+    shouldCancel?: ShouldCancelSync;
+  }
+): Promise<GranolaNoteSummary[]> {
+  const createdAfter =
+    input?.createdAfterIso ??
+    new Date(Date.now() - DEFAULT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   const summaries: GranolaNoteSummary[] = [];
   let cursor: string | null = null;
 
   while (summaries.length < MAX_NOTES_PER_SYNC) {
+    if (input?.shouldCancel && (await input.shouldCancel())) break;
+
     const url = new URL(`${baseUrl()}/notes`);
     url.searchParams.set("created_after", createdAfter);
     url.searchParams.set("page_size", "30");
@@ -172,9 +181,12 @@ function noteToCandidate(note: GranolaNote): ConnectorSourceCandidate {
   };
 }
 
-export async function fetchGranolaNotes(): Promise<ConnectorSourceCandidate[]> {
+export async function fetchGranolaNotes(input?: {
+  createdAfterIso?: string;
+  shouldCancel?: ShouldCancelSync;
+}): Promise<ConnectorSourceCandidate[]> {
   const apiKey = await getApiKey();
-  const summaries = await listRecentNoteSummaries(apiKey);
+  const summaries = await listRecentNoteSummaries(apiKey, input);
 
   const candidates: ConnectorSourceCandidate[] = [];
   for (const summary of summaries) {

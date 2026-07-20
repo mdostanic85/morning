@@ -1,10 +1,16 @@
 import "server-only";
 import { fetchConfluencePages } from "./confluence";
 import { fetchDiscordMentions } from "./discord";
-import { fetchGeminiMeetNotes } from "./gmail";
+import { DEFAULT_GMAIL_MEET_QUERY, fetchGeminiMeetNotes } from "./gmail";
+import { DEFAULT_DRIVE_GEMINI_QUERY, fetchGeminiDriveNotes } from "./drive";
+import { loadCalendarSyncToken } from "@/lib/imports/calendarConnectionCursor";
+import { setPendingCalendarSync } from "@/lib/imports/calendarSyncState";
+import { fetchCalendarEventsIncremental } from "./calendar";
+import { clearCalendarSyncToken } from "@/lib/imports/calendarConnectionCursor";
 import { fetchGitHubPrSignals, githubRepositoriesForSync } from "./github";
 import { fetchGranolaNotes } from "./granola";
-import { fetchAssignedJiraIssues } from "./jira";
+import { buildPersonalJiraJql, fetchAssignedJiraIssues } from "./jira";
+import { loadDriveIncrementalSinceIso } from "@/lib/imports/driveConnectionCursor";
 import {
   fetchConfluencePagesViaMcp,
   fetchJiraIssuesViaMcp,
@@ -17,6 +23,11 @@ import { isMcpTransport } from "./transport";
 import type { ConnectorSourceCandidate } from "./types";
 import type { Project } from "@/domain/project";
 import { getConnectionByProvider } from "@/services/connections";
+import { getUserProfile } from "@/services/userProfile";
+import { loadGranolaIncrementalSinceIso } from "@/lib/imports/granolaConnectionCursor";
+import { loadGmailIncrementalAfterDate } from "@/lib/imports/gmailConnectionCursor";
+import { loadJiraIncrementalWindow } from "@/lib/imports/jiraConnectionCursor";
+import type { ShouldCancelSync } from "@/lib/imports/syncCancellation";
 
 // Note: the local-git connector (`./localGit`) is intentionally not in this
 // registry — it doesn't produce importable source items on sync; it provides
@@ -26,6 +37,7 @@ export interface ConnectorSyncContext {
   projects: Project[];
   /** Per-provider options forwarded from the request body (e.g. a Gmail query). */
   options: Record<string, unknown>;
+  shouldCancel?: ShouldCancelSync;
 }
 
 /**
@@ -52,23 +64,89 @@ function stringsFrom(value: unknown): string[] {
 const gmailConnector: Connector = {
   provider: "gmail",
   configError: () => null,
-  listItems: ({ options }) =>
-    fetchGeminiMeetNotes({
-      query: typeof options.query === "string" ? options.query : undefined,
-    }),
+  listItems: async ({ options, shouldCancel }) => {
+    const connection = await getConnectionByProvider("gmail");
+    const baseQuery =
+      typeof options.query === "string" && options.query.trim()
+        ? options.query.trim()
+        : DEFAULT_GMAIL_MEET_QUERY;
+    const afterDate = connection
+      ? (await loadGmailIncrementalAfterDate(connection.id)).afterDate
+      : null;
+    const timeFilter = afterDate ? `after:${afterDate}` : "newer_than:30d";
+
+    return fetchGeminiMeetNotes({
+      query: `${baseQuery} ${timeFilter}`,
+      maxResults: 50,
+      shouldCancel,
+    });
+  },
+};
+
+const calendarConnector: Connector = {
+  provider: "calendar",
+  configError: () => null,
+  listItems: async ({ shouldCancel }) => {
+    const connection = await getConnectionByProvider("calendar");
+    let syncToken = connection ? await loadCalendarSyncToken(connection.id) : null;
+    let result = await fetchCalendarEventsIncremental({ syncToken, shouldCancel });
+    if (result.syncTokenExpired && connection) {
+      await clearCalendarSyncToken(connection.id);
+      syncToken = null;
+      result = await fetchCalendarEventsIncremental({ shouldCancel });
+    }
+    setPendingCalendarSync({
+      nextSyncToken: result.nextSyncToken,
+      syncTokenExpired: result.syncTokenExpired,
+    });
+    return result.candidates;
+  },
+};
+
+const driveConnector: Connector = {
+  provider: "drive",
+  configError: () => null,
+  listItems: async ({ options, shouldCancel }) => {
+    const connection = await getConnectionByProvider("drive");
+    const query =
+      typeof options.query === "string" && options.query.trim()
+        ? options.query.trim()
+        : DEFAULT_DRIVE_GEMINI_QUERY;
+    const modifiedAfterIso = connection
+      ? (await loadDriveIncrementalSinceIso(connection.id)).modifiedAfterIso
+      : undefined;
+    return fetchGeminiDriveNotes({
+      query,
+      modifiedAfterIso,
+      maxResults: 40,
+      shouldCancel,
+    });
+  },
 };
 
 const jiraConnector: Connector = {
   provider: "jira",
   configError: () => null,
-  listItems: async ({ projects }) => {
+  listItems: async ({ projects, shouldCancel }) => {
     const connection = await getConnectionByProvider("jira");
     const projectJiraKeys = unique(projects.flatMap((project) => project.jiraKeys));
-    if (projectJiraKeys.length === 0) return [];
+    const profile = await getUserProfile();
+    const jql = buildPersonalJiraJql(profile?.name);
     if (isMcpTransport(connection)) {
-      return fetchJiraIssuesViaMcp({ projectJiraKeys });
+      return fetchJiraIssuesViaMcp({
+        jql,
+        projectJiraKeys: projectJiraKeys.length > 0 ? projectJiraKeys : undefined,
+      });
     }
-    return fetchAssignedJiraIssues({ projectJiraKeys });
+    const updatedSinceIso = connection
+      ? (await loadJiraIncrementalWindow(connection.id)).updatedSinceIso
+      : undefined;
+    return fetchAssignedJiraIssues({
+      jql,
+      projectJiraKeys: projectJiraKeys.length > 0 ? projectJiraKeys : undefined,
+      updatedSinceIso,
+      shouldCancel,
+    });
   },
 };
 
@@ -109,12 +187,15 @@ const confluenceConnector: Connector = {
 const granolaConnector: Connector = {
   provider: "granola",
   configError: () => null,
-  listItems: async () => {
+  listItems: async ({ shouldCancel }) => {
     const connection = await getConnectionByProvider("granola");
     if (isMcpTransport(connection)) {
       return fetchGranolaMeetingsViaMcp();
     }
-    return fetchGranolaNotes();
+    const createdAfterIso = connection
+      ? (await loadGranolaIncrementalSinceIso(connection.id)).createdAfterIso
+      : undefined;
+    return fetchGranolaNotes({ shouldCancel, createdAfterIso });
   },
 };
 
@@ -165,6 +246,8 @@ const figmaConnector: Connector = {
 
 export const CONNECTOR_REGISTRY: Record<ConnectionProvider, Connector> = {
   gmail: gmailConnector,
+  calendar: calendarConnector,
+  drive: driveConnector,
   jira: jiraConnector,
   confluence: confluenceConnector,
   granola: granolaConnector,

@@ -6,6 +6,8 @@
 export const SOURCE_TYPES = [
   "manual_transcript",
   "gmail",
+  "calendar",
+  "drive",
   "jira",
   "confluence",
   "granola",

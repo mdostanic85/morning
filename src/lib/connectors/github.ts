@@ -255,83 +255,98 @@ async function fetchPrEvidence(repo: string, pr: GitHubPullRequest) {
   return { comments, reviewComments, commits, checkRuns };
 }
 
+export async function fetchGitHubPrSignalsForRepo(input: {
+  repository: string;
+  updatedSinceIso?: string;
+}): Promise<ConnectorSourceCandidate[]> {
+  const me = await testGitHubConnection();
+  const repo = parseGitHubRepo(input.repository);
+  if (!repo) throw new Error("GitHub repository must look like owner/repo or a github.com URL.");
+
+  const prs = await githubFetch<GitHubPullRequest[]>(`/repos/${repo}/pulls?state=open&per_page=50`);
+  const sinceMs = input.updatedSinceIso ? Date.parse(input.updatedSinceIso) : Number.NEGATIVE_INFINITY;
+  const relevant = prs.filter((pr) => {
+    const updatedMs = Date.parse(pr.updated_at);
+    if (Number.isFinite(sinceMs) && Number.isFinite(updatedMs) && updatedMs < sinceMs) {
+      return false;
+    }
+    if (pr.user.login === me) return true;
+    return (pr.requested_reviewers ?? []).some((reviewer) => reviewer.login === me);
+  });
+
+  const candidates: ConnectorSourceCandidate[] = [];
+  for (const pr of relevant) {
+    const { comments, reviewComments, commits, checkRuns } = await fetchPrEvidence(repo, pr);
+    const failingChecks = checkRuns.filter((check) =>
+      ["failure", "timed_out", "cancelled", "action_required"].includes(check.conclusion ?? "")
+    );
+    const role = pr.user.login === me ? "authored_by_me" : "review_requested";
+    candidates.push({
+      sourceType: "github",
+      sourceExternalId: `${repo}#${pr.number}`,
+      title: `${repo} PR #${pr.number}: ${pr.title}`,
+      author: pr.user.login,
+      sourceDate: pr.updated_at,
+      url: pr.html_url,
+      body: [
+        `Repository: ${repo}`,
+        `PR: #${pr.number}`,
+        `Role: ${role}`,
+        `Author: ${pr.user.login}`,
+        `Branch: ${pr.head.ref} -> ${pr.base.ref}`,
+        `Head SHA: ${pr.head.sha}`,
+        `URL: ${pr.html_url}`,
+        "",
+        "Description:",
+        pr.body ?? "(empty)",
+        "",
+        "PR comments:",
+        comments
+          .map((comment) => `- ${comment.user?.login ?? "unknown"}: ${comment.body ?? ""}`)
+          .join("\n") || "(none)",
+        "",
+        "Review comments:",
+        reviewComments
+          .map((comment) => `- ${comment.user?.login ?? "unknown"}: ${comment.body ?? ""}`)
+          .join("\n") || "(none)",
+        "",
+        "Recent commits:",
+        commits
+          .slice(-5)
+          .map(
+            (commit) =>
+              `- ${commit.sha.slice(0, 7)} ${commit.commit?.message?.split("\n")[0] ?? ""}`
+          )
+          .join("\n") || "(none)",
+        "",
+        "Failing checks:",
+        failingChecks
+          .map((check) => `- ${check.name ?? "unknown"}: ${check.conclusion ?? check.status ?? "unknown"}`)
+          .join("\n") || "(none)",
+      ].join("\n"),
+      metadata: {
+        repository: repo,
+        prNumber: pr.number,
+        role,
+        requestedReviewers: (pr.requested_reviewers ?? []).map((reviewer) => reviewer.login),
+        recentCommits: commits.slice(-5).map((commit) => ({
+          sha: commit.sha,
+          message: commit.commit?.message ?? "",
+          date: commit.commit?.author?.date ?? null,
+        })),
+        failingChecks,
+      },
+    });
+  }
+  return candidates;
+}
+
 export async function fetchGitHubPrSignals(input: {
   repositories: string[];
 }): Promise<ConnectorSourceCandidate[]> {
-  const me = await testGitHubConnection();
   const candidates: ConnectorSourceCandidate[] = [];
-
   for (const repo of input.repositories.map((item) => item.trim()).filter(Boolean)) {
-    const prs = await githubFetch<GitHubPullRequest[]>(`/repos/${repo}/pulls?state=open&per_page=50`);
-    const relevant = prs.filter((pr) => {
-      if (pr.user.login === me) return true;
-      return (pr.requested_reviewers ?? []).some((reviewer) => reviewer.login === me);
-    });
-
-    for (const pr of relevant) {
-      const { comments, reviewComments, commits, checkRuns } = await fetchPrEvidence(repo, pr);
-      const failingChecks = checkRuns.filter((check) =>
-        ["failure", "timed_out", "cancelled", "action_required"].includes(check.conclusion ?? "")
-      );
-      const role = pr.user.login === me ? "authored_by_me" : "review_requested";
-      candidates.push({
-        sourceType: "github",
-        sourceExternalId: `${repo}#${pr.number}`,
-        title: `${repo} PR #${pr.number}: ${pr.title}`,
-        author: pr.user.login,
-        sourceDate: pr.updated_at,
-        url: pr.html_url,
-        body: [
-          `Repository: ${repo}`,
-          `PR: #${pr.number}`,
-          `Role: ${role}`,
-          `Author: ${pr.user.login}`,
-          `Branch: ${pr.head.ref} -> ${pr.base.ref}`,
-          `Head SHA: ${pr.head.sha}`,
-          `URL: ${pr.html_url}`,
-          "",
-          "Description:",
-          pr.body ?? "(empty)",
-          "",
-          "PR comments:",
-          comments
-            .map((comment) => `- ${comment.user?.login ?? "unknown"}: ${comment.body ?? ""}`)
-            .join("\n") || "(none)",
-          "",
-          "Review comments:",
-          reviewComments
-            .map((comment) => `- ${comment.user?.login ?? "unknown"}: ${comment.body ?? ""}`)
-            .join("\n") || "(none)",
-          "",
-          "Recent commits:",
-          commits
-            .slice(-5)
-            .map(
-              (commit) =>
-                `- ${commit.sha.slice(0, 7)} ${commit.commit?.message?.split("\n")[0] ?? ""}`
-            )
-            .join("\n") || "(none)",
-          "",
-          "Failing checks:",
-          failingChecks
-            .map((check) => `- ${check.name ?? "unknown"}: ${check.conclusion ?? check.status ?? "unknown"}`)
-            .join("\n") || "(none)",
-        ].join("\n"),
-        metadata: {
-          repository: repo,
-          prNumber: pr.number,
-          role,
-          requestedReviewers: (pr.requested_reviewers ?? []).map((reviewer) => reviewer.login),
-          recentCommits: commits.slice(-5).map((commit) => ({
-            sha: commit.sha,
-            message: commit.commit?.message ?? "",
-            date: commit.commit?.author?.date ?? null,
-          })),
-          failingChecks,
-        },
-      });
-    }
+    candidates.push(...(await fetchGitHubPrSignalsForRepo({ repository: repo })));
   }
-
   return candidates;
 }

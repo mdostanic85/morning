@@ -7,7 +7,7 @@ import { asRecord } from "../parse";
 
 export type { FigmaFrameEvidence };
 
-const APP_ORIGIN = process.env.MORNING_APP_URL?.trim() || "http://localhost:3000";
+const APP_ORIGIN = process.env.WORKLIGHT_APP_URL?.trim() || "http://localhost:3000";
 
 const MCP_CLIENT_ARGS = {
   clientLanguages: "typescript",
@@ -28,6 +28,25 @@ function toolResultText(raw: unknown): string {
   const record = asRecord(raw);
   if (record && typeof record.text === "string") return record.text;
   return raw == null ? "" : JSON.stringify(raw, null, 2);
+}
+
+function toolResultImageDataUrl(raw: unknown): string | null {
+  const entries = Array.isArray(raw)
+    ? raw
+    : Array.isArray(asRecord(raw)?.content)
+      ? (asRecord(raw)?.content as unknown[])
+      : [raw];
+  for (const item of entries) {
+    const row = asRecord(item);
+    if (
+      row?.type === "image" &&
+      typeof row.data === "string" &&
+      typeof row.mimeType === "string"
+    ) {
+      return `data:${row.mimeType};base64,${row.data}`;
+    }
+  }
+  return null;
 }
 
 function resolveFileKey(value: string): string | null {
@@ -111,6 +130,10 @@ export async function fetchFigmaFrameEvidenceViaMcp(input: {
       designResult.status === "fulfilled" ? toolResultText(designResult.value) : "";
     const screenshotNote =
       screenshotResult.status === "fulfilled" ? toolResultText(screenshotResult.value) : null;
+    const screenshotUrl =
+      screenshotResult.status === "fulfilled"
+        ? toolResultImageDataUrl(screenshotResult.value)
+        : null;
 
     if (!metadata.trim() && !designContext.trim()) {
       const reason =
@@ -129,6 +152,7 @@ export async function fetchFigmaFrameEvidenceViaMcp(input: {
       metadata,
       designContext,
       screenshotNote,
+      screenshotUrl,
     };
   });
 }

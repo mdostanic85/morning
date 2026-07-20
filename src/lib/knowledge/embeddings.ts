@@ -1,12 +1,12 @@
 import "server-only";
 import { and, eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { knowledgeEmbeddings as embeddingsTable } from "@/db/schema";
+import { knowledgeEmbeddings as embeddingsTable } from "@/db/tables";
 import { EMBEDDING_MODEL_CONFIG, runEmbeddingJob } from "@/lib/llm/router";
 import { chunkTextSafely, type TextChunk } from "./chunker";
 import type { KnowledgeItem } from "@/domain/knowledgeItem";
 import type { SourceItem } from "@/domain/sourceItem";
+import { execute } from "@/db/query";
 
 type EmbeddingItemType = "source_item" | "knowledge_item";
 
@@ -20,24 +20,7 @@ export interface StoredEmbeddingInput {
 }
 
 export async function ensureKnowledgeEmbeddingsTable(): Promise<void> {
-  db.run(sql`
-    CREATE TABLE IF NOT EXISTS knowledge_embeddings (
-      id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-      item_type text NOT NULL,
-      source_item_id integer,
-      knowledge_item_id integer,
-      project_id integer,
-      chunk_index integer NOT NULL,
-      chunk_text text NOT NULL,
-      embedding text NOT NULL,
-      model text NOT NULL,
-      source_date text NOT NULL,
-      created_at text DEFAULT (current_timestamp) NOT NULL,
-      FOREIGN KEY (source_item_id) REFERENCES source_items(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (knowledge_item_id) REFERENCES knowledge_items(id) ON UPDATE no action ON DELETE no action,
-      FOREIGN KEY (project_id) REFERENCES projects(id) ON UPDATE no action ON DELETE no action
-    )
-  `);
+  // PostgreSQL migrations own table creation; nothing to bootstrap at runtime.
 }
 
 /** All embedding calls go through the central LLM router — never a provider API directly. */
@@ -56,30 +39,20 @@ export async function storeEmbeddings(input: StoredEmbeddingInput): Promise<void
   const vectors = await embedTexts(input.chunks.map((chunk) => chunk.text));
 
   if (input.itemType === "source_item" && input.sourceItemId != null) {
-    db.delete(embeddingsTable)
-      .where(
-        and(
-          eq(embeddingsTable.itemType, "source_item"),
-          eq(embeddingsTable.sourceItemId, input.sourceItemId)
-        )
-      )
-      .run();
+    await execute(
+      db.delete(embeddingsTable).where(and(eq(embeddingsTable.itemType, "source_item"), eq(embeddingsTable.sourceItemId, input.sourceItemId)))
+    );
   }
 
   if (input.itemType === "knowledge_item" && input.knowledgeItemId != null) {
-    db.delete(embeddingsTable)
-      .where(
-        and(
-          eq(embeddingsTable.itemType, "knowledge_item"),
-          eq(embeddingsTable.knowledgeItemId, input.knowledgeItemId)
-        )
-      )
-      .run();
+    await execute(
+      db.delete(embeddingsTable).where(and(eq(embeddingsTable.itemType, "knowledge_item"), eq(embeddingsTable.knowledgeItemId, input.knowledgeItemId)))
+    );
   }
-
-  input.chunks.forEach((chunk, index) => {
-    db.insert(embeddingsTable)
-      .values({
+  for (let index = 0; index < input.chunks.length; index++) {
+    const chunk = input.chunks[index];
+    await execute(
+      db.insert(embeddingsTable).values({
         itemType: input.itemType,
         sourceItemId: input.sourceItemId ?? null,
         knowledgeItemId: input.knowledgeItemId ?? null,
@@ -90,8 +63,8 @@ export async function storeEmbeddings(input: StoredEmbeddingInput): Promise<void
         model: EMBEDDING_MODEL_CONFIG.model,
         sourceDate: input.sourceDate,
       })
-      .run();
-  });
+    );
+  }
 }
 
 export async function indexSourceItem(sourceItem: SourceItem): Promise<void> {
@@ -106,14 +79,14 @@ export async function indexSourceItem(sourceItem: SourceItem): Promise<void> {
 
 export async function deleteKnowledgeItemEmbeddings(knowledgeItemId: number): Promise<void> {
   await ensureKnowledgeEmbeddingsTable();
-  db.delete(embeddingsTable)
-    .where(
+  await execute(
+    db.delete(embeddingsTable).where(
       and(
         eq(embeddingsTable.itemType, "knowledge_item"),
         eq(embeddingsTable.knowledgeItemId, knowledgeItemId)
       )
     )
-    .run();
+  );
 }
 
 export async function indexKnowledgeItem(

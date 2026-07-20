@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { runLlmJob } from "@/lib/llm/router";
@@ -7,9 +8,16 @@ import {
   todayBriefingContentSchema,
   type StoredTodayBriefing,
 } from "@/lib/llm/prompts/todayBriefing";
-import { fetchJiraPendingSnapshot, jiraPendingFromSourceItems } from "@/lib/connectors/jiraPending";
+import {
+  fetchJiraPendingSnapshot,
+  jiraPendingFromSourceItems,
+  type JiraPendingSnapshot,
+} from "@/lib/connectors/jiraPending";
 import { getConnectionByProvider, getConnections } from "@/services/connections";
-import { getKnowledgeItems } from "@/services/knowledgeItems";
+import {
+  getKnowledgeItemsWithContext,
+  type KnowledgeItemView,
+} from "@/services/knowledgeItems";
 import { getActiveProjects, getProjects } from "@/services/projects";
 import { getSourceItems } from "@/services/sourceItems";
 import { getTodayQueue } from "@/services/workTasks";
@@ -30,15 +38,40 @@ import {
   enrichFocusItemsWithActionPlans,
 } from "@/lib/tasks/focusActionPlanner";
 import { DAILY_FOCUS_TASK_LIMIT } from "@/lib/tasks/dailyFocus";
+import { buildGranolaWorkContext, granolaSourceBodyMatchesMe } from "@/lib/granola/personalKnowledge";
+import { filterKnowledgeForMe } from "@/lib/filters/knowledgeFilter";
 
 const BRIEFING_PATH = path.join(process.cwd(), "data", "today-briefing.json");
 const RECENT_SOURCE_LIMIT = 12;
 const KNOWLEDGE_LIMIT = 15;
+const KNOWLEDGE_PER_SOURCE_LIMIT = 3;
+const BRIEFING_OPEN_TASK_LIMIT = 50;
 const SOURCE_EXCERPT = 320;
+const BRIEFING_PROMPT_VERSION = 7;
 
 function excerpt(text: string): string {
   const trimmed = text.trim().replace(/\s+/g, " ");
   return trimmed.length > SOURCE_EXCERPT ? `${trimmed.slice(0, SOURCE_EXCERPT)}...` : trimmed;
+}
+
+function diverseKnowledgeForBriefing(items: KnowledgeItemView[]): KnowledgeItemView[] {
+  const countBySource = new Map<string, number>();
+  const selected: KnowledgeItemView[] = [];
+
+  for (const item of items) {
+    const sourceKey =
+      item.sourceItemId != null
+        ? `source:${item.sourceItemId}`
+        : `project:${item.projectId ?? "global"}:${item.type}`;
+    const sourceCount = countBySource.get(sourceKey) ?? 0;
+    if (sourceCount >= KNOWLEDGE_PER_SOURCE_LIMIT) continue;
+
+    selected.push(item);
+    countBySource.set(sourceKey, sourceCount + 1);
+    if (selected.length >= KNOWLEDGE_LIMIT) break;
+  }
+
+  return selected;
 }
 
 function readBriefingFile(): StoredTodayBriefing | null {
@@ -81,6 +114,7 @@ function extractJiraKeyFromSource(source: SourceItem | undefined): string | null
 function toWorkTaskForRanking(task: WorkTaskWithEvidence): WorkTaskForRanking {
   return {
     id: task.id,
+    projectId: task.projectId,
     title: task.title,
     status: task.status,
     reason: task.reason,
@@ -114,6 +148,7 @@ export interface BuildTodayBriefingResult {
 
 export async function buildTodayBriefing(options?: {
   today?: string;
+  jiraPending?: JiraPendingSnapshot[];
 }): Promise<BuildTodayBriefingResult> {
   const today = options?.today ?? localDateString();
 
@@ -122,7 +157,7 @@ export async function buildTodayBriefing(options?: {
       getActiveProjects(),
       getProjects(),
       getSourceItems(),
-      getKnowledgeItems(),
+      getKnowledgeItemsWithContext(),
       getTodayQueue(),
       getConnections(),
       getConnectionByProvider("jira"),
@@ -145,7 +180,7 @@ export async function buildTodayBriefing(options?: {
   const projectNameById = new Map(projects.map((project) => [project.id, project.name]));
   const sourceById = new Map(sourceItems.map((item) => [item.id, item]));
 
-  let jiraPending = await fetchJiraPendingSnapshot();
+  let jiraPending = options?.jiraPending ?? await fetchJiraPendingSnapshot();
   if (jiraPending.length === 0 && jiraConnection?.status === "connected") {
     jiraPending = jiraPendingFromSourceItems(sourceItems, activeJiraKeys);
   }
@@ -163,7 +198,33 @@ export async function buildTodayBriefing(options?: {
   const eligibleSources = sourceItems.filter(
     (item) => item.projectId == null || !inactiveProjectIds.has(item.projectId)
   );
-  const sourcesForBriefing = todaySources.length > 0 ? todaySources : eligibleSources.slice(0, RECENT_SOURCE_LIMIT);
+  const granolaWorkContext = myName
+    ? buildGranolaWorkContext({
+        myName,
+        projects,
+        taskTitles: OPEN_QUEUE_STATUSES.flatMap((status) => queue[status]).map(
+          (task) => task.title
+        ),
+      })
+    : null;
+  const briefingEligibleSources = eligibleSources.filter((item) => {
+    if (item.sourceType !== "granola") return true;
+    if (!granolaWorkContext) return false;
+    return granolaSourceBodyMatchesMe(item.body, granolaWorkContext);
+  });
+  const sourcesForBriefing = (() => {
+    const base = todaySources.length > 0
+      ? todaySources.filter(
+          (item) =>
+            item.sourceType !== "granola" ||
+            (granolaWorkContext != null && granolaSourceBodyMatchesMe(item.body, granolaWorkContext))
+        )
+      : briefingEligibleSources;
+    const prioritized = [...base].sort(
+      (a, b) => new Date(b.sourceDate).getTime() - new Date(a.sourceDate).getTime()
+    );
+    return prioritized.slice(0, RECENT_SOURCE_LIMIT);
+  })();
   const recentSources = sourcesForBriefing.slice(0, RECENT_SOURCE_LIMIT).map((item) => ({
     id: item.id,
     sourceType: item.sourceType,
@@ -173,9 +234,17 @@ export async function buildTodayBriefing(options?: {
     projectName: item.projectId ? projectNameById.get(item.projectId) ?? null : null,
   }));
 
-  const knowledgeForBriefing = knowledge
-    .filter((item) => item.projectId == null || !inactiveProjectIds.has(item.projectId))
-    .slice(0, KNOWLEDGE_LIMIT)
+  const knowledgeForBriefing = diverseKnowledgeForBriefing(
+    filterKnowledgeForMe(
+      knowledge.filter((item) => item.projectId == null || !inactiveProjectIds.has(item.projectId)),
+      {
+        myName,
+        myEmail: profile?.email ?? null,
+        sourceBodyByItemId: new Map(sourceItems.map((item) => [item.id, item.body] as const)),
+        granolaWorkContext,
+      }
+    )
+  )
     .map((item) => ({
       id: item.id,
       type: item.type,
@@ -189,6 +258,7 @@ export async function buildTodayBriefing(options?: {
     (task) => task.projectId == null || !inactiveProjectIds.has(task.projectId)
   );
 
+  const attendance = { myName, myEmail: profile?.email ?? null };
   const rankingTasks = openTaskRows
     .filter((task) => taskMatchesOwner(task, ownerFilter, myName))
     .map(toWorkTaskForRanking);
@@ -198,7 +268,41 @@ export async function buildTodayBriefing(options?: {
     today,
     sourceById,
     maxItems: DAILY_FOCUS_TASK_LIMIT,
+    attendance,
   });
+
+  const inputHash = createHash("sha256")
+    .update(
+      JSON.stringify({
+        briefingPromptVersion: BRIEFING_PROMPT_VERSION,
+        today,
+        jiraPending,
+        recentSources,
+        knowledgeForBriefing,
+        openTasks: openTaskRows.map((task) => ({
+          id: task.id,
+          projectId: task.projectId,
+          title: task.title,
+          status: task.status,
+          reason: task.reason,
+          nextAction: task.nextAction,
+          doneCriteria: task.doneCriteria,
+          priorityScore: task.priorityScore,
+          dueDate: task.dueDate,
+          waitingOn: task.waitingOn,
+          evidence: task.evidence,
+        })),
+        focusItems,
+        projectNames: projects.map((project) => project.name),
+        connectedProviders,
+        previousDailyMemory,
+      })
+    )
+    .digest("hex");
+  const previousBriefing = readBriefingFile();
+  if (previousBriefing?.today === today && previousBriefing.inputHash === inputHash) {
+    return { ok: true, briefing: previousBriefing };
+  }
 
   const tasksById = new Map(rankingTasks.map((task) => [task.id, task]));
   focusItems = await enrichFocusItemsWithActionPlans({
@@ -209,34 +313,38 @@ export async function buildTodayBriefing(options?: {
     sourceItems: eligibleSources,
   });
 
-  const openTasks = openTaskRows.map((task) => {
-    const ranked = rankWorkTask(
-      toWorkTaskForRanking(task),
-      today,
-      sourceById,
-      new Map(jiraPending.map((issue) => [issue.key, issue]))
-    );
-    const jiraSource = task.evidence
-      .map((item) => sourceById.get(item.sourceItemId))
-      .find((source) => source?.sourceType === "jira");
+  const openTasks = openTaskRows
+    .map((task) => {
+      const ranked = rankWorkTask(
+        toWorkTaskForRanking(task),
+        today,
+        sourceById,
+        new Map(jiraPending.map((issue) => [issue.key, issue])),
+        attendance
+      );
+      const jiraSource = task.evidence
+        .map((item) => sourceById.get(item.sourceItemId))
+        .find((source) => source?.sourceType === "jira");
 
-    return {
-      id: task.id,
-      title: task.title,
-      status: task.status,
-      reason: task.reason,
-      nextAction: task.nextAction,
-      doneCriteria: task.doneCriteria,
-      projectName: task.projectId ? projectNameById.get(task.projectId) ?? null : null,
-      priorityScore: task.priorityScore,
-      dueDate: task.dueDate,
-      waitingOn: task.waitingOn,
-      jiraKey: ranked.jiraKey ?? extractJiraKeyFromSource(jiraSource),
-      jiraPriority: ranked.jiraPriority,
-      rankScore: ranked.score,
-      rankExplanation: ranked.explanation.join(" · "),
-    };
-  });
+      return {
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        reason: task.reason,
+        nextAction: task.nextAction,
+        doneCriteria: task.doneCriteria,
+        projectName: task.projectId ? projectNameById.get(task.projectId) ?? null : null,
+        priorityScore: task.priorityScore,
+        dueDate: task.dueDate,
+        waitingOn: task.waitingOn,
+        jiraKey: ranked.jiraKey ?? extractJiraKeyFromSource(jiraSource),
+        jiraPriority: ranked.jiraPriority,
+        rankScore: ranked.score,
+        rankExplanation: ranked.explanation.join(" · "),
+      };
+    })
+    .sort((a, b) => b.rankScore - a.rankScore)
+    .slice(0, BRIEFING_OPEN_TASK_LIMIT);
 
   const hasSignals =
     jiraPending.length > 0 ||
@@ -277,6 +385,7 @@ export async function buildTodayBriefing(options?: {
       risks: [],
       generatedAt: new Date().toISOString(),
       today,
+      inputHash,
       jiraIssueCount: jiraPending.length,
       sourceCount: recentSources.length,
       sourcesUsed: sourcesForBriefing.slice(0, RECENT_SOURCE_LIMIT).map((item) => ({
@@ -284,6 +393,7 @@ export async function buildTodayBriefing(options?: {
         sourceType: item.sourceType,
         title: item.title,
         sourceDate: item.sourceDate,
+        author: item.author ?? null,
         projectName: item.projectId ? projectNameById.get(item.projectId) ?? null : null,
         url: item.url ?? null,
       })),
@@ -302,6 +412,7 @@ export async function buildTodayBriefing(options?: {
     risks: result.data.risks,
     generatedAt: new Date().toISOString(),
     today,
+    inputHash,
     jiraIssueCount: jiraPending.length,
     sourceCount: recentSources.length,
     sourcesUsed: sourcesForBriefing.slice(0, RECENT_SOURCE_LIMIT).map((item) => ({
@@ -309,6 +420,7 @@ export async function buildTodayBriefing(options?: {
       sourceType: item.sourceType,
       title: item.title,
       sourceDate: item.sourceDate,
+      author: item.author ?? null,
       projectName: item.projectId ? projectNameById.get(item.projectId) ?? null : null,
       url: item.url ?? null,
     })),

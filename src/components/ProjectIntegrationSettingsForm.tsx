@@ -2,10 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
+import { Toast } from "@heroui/react/toast";
 import { GitHubRepoPicker } from "@/components/GitHubRepoPicker";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@heroui/react/button";
+import { TextArea } from "@heroui/react/textarea";
 
 interface ProjectIntegrationSettingsFormProps {
   projectId: number;
@@ -59,10 +59,10 @@ export function ProjectIntegrationSettingsForm({
         }),
       });
       if (!res.ok) throw new Error("Could not save integration settings.");
-      toast.success("Connector hints saved.");
+      Toast.toast.success("Connector hints saved.");
       router.refresh();
     } catch {
-      toast.error("Could not save connector hints.");
+      Toast.toast.danger("Could not save connector hints.");
     } finally {
       setSaving(false);
     }
@@ -77,7 +77,7 @@ export function ProjectIntegrationSettingsForm({
     return (
       <label className="block">
         <span className="text-xs font-medium text-foreground">{label}</span>
-        <Textarea
+        <TextArea
           value={value}
           onChange={(event) => onChange(event.target.value)}
           rows={2}
@@ -101,15 +101,17 @@ export function ProjectIntegrationSettingsForm({
           <div className="mt-1.5">
             <GitHubRepoPicker value={githubRepositories} onChange={setGithubRepositories} />
           </div>
-          <button
+          <Button
             type="button"
-            onClick={() => setShowManualGithub((value) => !value)}
-            className="mt-2 text-xs text-muted underline-offset-2 hover:text-foreground hover:underline"
+            variant="ghost"
+            size="sm"
+            onPress={() => setShowManualGithub((value) => !value)}
+            className="mt-2 px-0 text-xs text-muted hover:text-foreground"
           >
             {showManualGithub ? "Hide manual entry" : "Add repo manually"}
-          </button>
+          </Button>
           {showManualGithub ? (
-            <Textarea
+            <TextArea
               value={githubRepositories.join("\n")}
               onChange={(event) => setGithubRepositories(splitLines(event.target.value))}
               rows={2}
@@ -124,7 +126,7 @@ export function ProjectIntegrationSettingsForm({
         {textareaField("Figma file keys", figmaFileKeys, setFigmaFileKeys, "AbCdEfGh or full figma.com/design/... URL")}
       </div>
       <div className="mt-4">
-        <Button type="submit" size="sm" disabled={saving}>
+        <Button type="submit" size="sm" isDisabled={saving}>
           {saving ? "Saving…" : "Save connector hints"}
         </Button>
       </div>

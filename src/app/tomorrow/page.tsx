@@ -26,7 +26,7 @@ export default async function TomorrowPage() {
       </div>
 
       {memory?.firstTomorrow ? (
-        <section className="card p-6 sm:p-7">
+        <section className="app-card p-6 sm:p-7">
           <h2 className="eyebrow">Planned first task</h2>
           <p className="mt-3 text-[15px] leading-relaxed">{memory.firstTomorrow}</p>
           <p className="mt-3 text-xs text-muted-soft">

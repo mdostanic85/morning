@@ -16,9 +16,16 @@ import { replaceEvidenceForTaskSource } from "@/services/evidence";
 import { getActiveProjects } from "@/services/projects";
 import { matchAndAssignTaskToProject } from "@/lib/tasks/projectMatcher";
 import type { SourceItem } from "@/domain/sourceItem";
-import type { WorkTask, WorkTaskStatus } from "@/domain/workTask";
+import type {
+  TaskMeetingContextEntry,
+  WorkTask,
+  WorkTaskStatus,
+} from "@/domain/workTask";
 import type { Evidence } from "@/domain/evidence";
-import { isIncomingSourceAuthoritative } from "@/lib/tasks/sourceAuthority";
+import {
+  isIncomingSourceAuthoritative,
+  isTranscriptSource,
+} from "@/lib/tasks/sourceAuthority";
 import { getSourceItemsByIds } from "@/services/sourceItems";
 import {
   jiraKeyForTask,
@@ -103,6 +110,49 @@ function uniqueCriteria(groups: string[][]): string[] {
     }
   }
   return out;
+}
+
+function buildMeetingContextEntry(
+  sourceItem: SourceItem,
+  items: ExtractedTask[]
+): TaskMeetingContextEntry | null {
+  if (!isTranscriptSource(sourceItem)) return null;
+  const contexts = items
+    .map((item) => item.meetingContext)
+    .filter((context): context is NonNullable<typeof context> => context != null);
+  if (contexts.length === 0) return null;
+
+  return {
+    sourceItemId: sourceItem.id,
+    sourceTitle: sourceItem.title,
+    sourceType: sourceItem.sourceType,
+    sourceDate: sourceItem.sourceDate,
+    overview: contexts.map((context) => context.overview.trim()).filter(Boolean).join(" "),
+    keyPoints: uniqueCriteria(contexts.map((context) => context.keyPoints)),
+    decisions: uniqueCriteria(contexts.map((context) => context.decisions)),
+    requestedChanges: uniqueCriteria(
+      contexts.map((context) => context.requestedChanges)
+    ),
+    openQuestions: uniqueCriteria(contexts.map((context) => context.openQuestions)),
+    evidenceQuotes: uniqueCriteria(contexts.map((context) => context.evidenceQuotes)),
+    confidence: Math.min(...contexts.map((context) => context.confidence)),
+  };
+}
+
+function upsertMeetingContext(
+  existing: TaskMeetingContextEntry[],
+  incoming: TaskMeetingContextEntry | null
+): TaskMeetingContextEntry[] {
+  if (!incoming) return existing;
+  return [
+    incoming,
+    ...existing.filter((entry) => entry.sourceItemId !== incoming.sourceItemId),
+  ]
+    .sort(
+      (a, b) =>
+        new Date(b.sourceDate).getTime() - new Date(a.sourceDate).getTime()
+    )
+    .slice(0, 10);
 }
 
 /**
@@ -202,6 +252,7 @@ export async function extractTasksFromSourceItem(
         : primary.reason;
     const evidenceQuotes = uniqueQuotes(group.items.flatMap((item) => item.evidence));
     const doneCriteria = uniqueCriteria(group.items.map((item) => item.doneCriteria));
+    const meetingContextEntry = buildMeetingContextEntry(sourceItem, group.items);
     const evidenceInput = evidenceQuotes.map((item) => ({
       quote: item.quote,
       summary: primary.reason,
@@ -214,12 +265,20 @@ export async function extractTasksFromSourceItem(
       if (!existing) continue;
 
       if (group.mode === "evidence") {
+        const contextUpdated = meetingContextEntry
+          ? await updateWorkTask(existing.id, {
+              meetingContext: upsertMeetingContext(
+                existing.meetingContext,
+                meetingContextEntry
+              ),
+            })
+          : existing;
         const replacedEvidence = await replaceEvidenceForTaskSource(
           existing.id,
           sourceItem.id,
           evidenceInput
         );
-        savedTasks.push(existing);
+        savedTasks.push(contextUpdated ?? existing);
         savedEvidence.push(...replacedEvidence);
         continue;
       }
@@ -249,12 +308,23 @@ export async function extractTasksFromSourceItem(
             reason,
             nextAction: primary.nextAction,
             doneCriteria: doneCriteria.length > 0 ? doneCriteria : primary.doneCriteria,
+            meetingContext: upsertMeetingContext(
+              existing.meetingContext,
+              meetingContextEntry
+            ),
             confidence: primary.confidence,
             dueDate: primary.dueDate ?? existing.dueDate,
             owner: primary.owner ?? existing.owner,
             waitingOn: primary.status === "waiting" ? primary.waitingOn : null,
           })
-        : existing;
+        : meetingContextEntry
+          ? await updateWorkTask(existing.id, {
+              meetingContext: upsertMeetingContext(
+                existing.meetingContext,
+                meetingContextEntry
+              ),
+            })
+          : existing;
       const replacedEvidence = await replaceEvidenceForTaskSource(
         existing.id,
         sourceItem.id,
@@ -262,6 +332,18 @@ export async function extractTasksFromSourceItem(
       );
       savedTasks.push(updated ?? existing);
       savedEvidence.push(...replacedEvidence);
+      continue;
+    }
+
+    // Drop tasks the LLM explicitly attributed to someone else. If the source
+    // names a specific owner and we know who the user is, and the owner clearly
+    // isn't the user, there is nothing for the user to do — skip creation.
+    if (
+      primary.owner !== null &&
+      currentUserName !== null &&
+      !primary.owner.toLowerCase().includes(currentUserName.toLowerCase()) &&
+      !currentUserName.toLowerCase().includes(primary.owner.toLowerCase())
+    ) {
       continue;
     }
 
@@ -275,6 +357,7 @@ export async function extractTasksFromSourceItem(
         reason,
         nextAction: primary.nextAction,
         doneCriteria: doneCriteria.length > 0 ? doneCriteria : primary.doneCriteria,
+        meetingContext: meetingContextEntry ? [meetingContextEntry] : [],
         confidence: primary.confidence,
         dueDate: primary.dueDate,
         owner: primary.owner,

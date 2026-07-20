@@ -1,7 +1,12 @@
 import "server-only";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { knowledgeItems as knowledgeItemsTable } from "@/db/schema";
+import {
+  knowledgeEmbeddings as knowledgeEmbeddingsTable,
+  knowledgeItems as knowledgeItemsTable,
+} from "@/db/tables";
+import { fetchAll, fetchOne, fetchReturning, execute, withTransaction, syncRun } from "@/db/query";
+import { isPostgresDatabase } from "@/db/dialect";
 import type { KnowledgeItem, NewKnowledgeItem } from "@/domain/knowledgeItem";
 import type { SourceItem, SourceType } from "@/domain/sourceItem";
 import { getProjects } from "@/services/projects";
@@ -83,56 +88,48 @@ function toKnowledgeItem(row: typeof knowledgeItemsTable.$inferSelect): Knowledg
 }
 
 export async function createKnowledgeItem(input: NewKnowledgeItem): Promise<KnowledgeItem> {
-  const [row] = db
-    .insert(knowledgeItemsTable)
-    .values({
-      projectId: input.projectId ?? null,
-      type: input.type,
-      title: input.title,
-      content: input.content,
-      sourceItemId: input.sourceItemId ?? null,
-      confidence: input.confidence ?? null,
-      reviewStatus: input.reviewStatus ?? "approved",
-      evidenceQuotes: input.evidenceQuotes ?? [],
-    })
-    .returning()
-    .all();
+  const [row] = await fetchReturning(
+    db
+      .insert(knowledgeItemsTable)
+      .values({
+        projectId: input.projectId ?? null,
+        type: input.type,
+        title: input.title,
+        content: input.content,
+        sourceItemId: input.sourceItemId ?? null,
+        confidence: input.confidence ?? null,
+        reviewStatus: input.reviewStatus ?? "approved",
+        evidenceQuotes: input.evidenceQuotes ?? [],
+      })
+      .returning()
+  );
   return toKnowledgeItem(row);
 }
 
 export async function approveKnowledgeItem(id: number): Promise<KnowledgeItem | null> {
-  const [row] = db
-    .update(knowledgeItemsTable)
-    .set({ reviewStatus: "approved" })
-    .where(eq(knowledgeItemsTable.id, id))
-    .returning()
-    .all();
+  const [row] = await fetchReturning(
+    db.update(knowledgeItemsTable).set({ reviewStatus: "approved" }).where(eq(knowledgeItemsTable.id, id)).returning()
+  );
   return row ? toKnowledgeItem(row) : null;
 }
 
 /** Accepted knowledge only — pending items live in the Inbox review list. */
 export async function getKnowledgeItems(): Promise<KnowledgeItem[]> {
-  const rows = db
-    .select()
-    .from(knowledgeItemsTable)
-    .where(eq(knowledgeItemsTable.reviewStatus, "approved"))
-    .orderBy(desc(knowledgeItemsTable.createdAt))
-    .all();
+  const rows = await fetchAll(
+    db.select().from(knowledgeItemsTable).where(eq(knowledgeItemsTable.reviewStatus, "approved")).orderBy(desc(knowledgeItemsTable.createdAt))
+  );
   return rows.map(toKnowledgeItem);
 }
 
 export async function getPendingKnowledgeItems(): Promise<KnowledgeItem[]> {
-  const rows = db
-    .select()
-    .from(knowledgeItemsTable)
-    .where(eq(knowledgeItemsTable.reviewStatus, "pending"))
-    .orderBy(desc(knowledgeItemsTable.createdAt))
-    .all();
+  const rows = await fetchAll(
+    db.select().from(knowledgeItemsTable).where(eq(knowledgeItemsTable.reviewStatus, "pending")).orderBy(desc(knowledgeItemsTable.createdAt))
+  );
   return rows.map(toKnowledgeItem);
 }
 
 export async function getKnowledgeItemById(id: number): Promise<KnowledgeItem | null> {
-  const row = db.select().from(knowledgeItemsTable).where(eq(knowledgeItemsTable.id, id)).get();
+  const row = await fetchOne(db.select().from(knowledgeItemsTable).where(eq(knowledgeItemsTable.id, id)));
   return row ? toKnowledgeItem(row) : null;
 }
 
@@ -150,5 +147,39 @@ export async function getKnowledgeItemsForProject(projectId: number): Promise<Kn
 }
 
 export async function deleteKnowledgeItem(id: number): Promise<void> {
-  db.delete(knowledgeItemsTable).where(eq(knowledgeItemsTable.id, id)).run();
+  await execute(db.delete(knowledgeItemsTable).where(eq(knowledgeItemsTable.id, id)));
+}
+
+export async function deleteKnowledgeItemsForSource(sourceItemId: number): Promise<void> {
+  const rows = await fetchAll(
+    db.select({ id: knowledgeItemsTable.id }).from(knowledgeItemsTable).where(eq(knowledgeItemsTable.sourceItemId, sourceItemId))
+  );
+  const ids = rows.map((row) => row.id);
+
+  if (isPostgresDatabase()) {
+    await db.transaction(async (tx) => {
+      if (ids.length > 0) {
+        await tx
+          .delete(knowledgeEmbeddingsTable)
+          .where(
+            and(
+              eq(knowledgeEmbeddingsTable.itemType, "knowledge_item"),
+              inArray(knowledgeEmbeddingsTable.knowledgeItemId, ids)
+            )
+          );
+      }
+      await tx.delete(knowledgeItemsTable).where(eq(knowledgeItemsTable.sourceItemId, sourceItemId));
+    });
+    return;
+  }
+
+  await withTransaction((tx) => {
+    if (ids.length > 0) {
+      syncRun(
+        tx.delete(knowledgeEmbeddingsTable)
+        .where(and(eq(knowledgeEmbeddingsTable.itemType, "knowledge_item"), inArray(knowledgeEmbeddingsTable.knowledgeItemId, ids)))
+      );
+    }
+    syncRun(tx.delete(knowledgeItemsTable).where(eq(knowledgeItemsTable.sourceItemId, sourceItemId)));
+  });
 }

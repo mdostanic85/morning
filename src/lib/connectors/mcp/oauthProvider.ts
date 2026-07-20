@@ -60,7 +60,7 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
 
   get clientMetadata(): OAuthClientMetadata {
     return {
-      client_name: "Vantage",
+      client_name: "Worklight",
       redirect_uris: [this.redirectUrl.toString()],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],

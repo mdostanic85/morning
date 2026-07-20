@@ -16,7 +16,7 @@ export function JiraIssueList({
   return (
     <ul className="space-y-3">
       {issues.map((issue) => (
-        <li key={issue.key} className="card p-5">
+        <li key={issue.key} className="app-card p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div className="flex flex-wrap items-baseline gap-2">
               {issue.url ? (
@@ -24,25 +24,25 @@ export function JiraIssueList({
                   href={issue.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-mono text-[13px] text-accent hover:underline"
+                  className="font-mono text-[14px] text-accent hover:underline"
                 >
                   {issue.key}
                 </a>
               ) : (
-                <span className="font-mono text-[13px] text-muted">{issue.key}</span>
+                <span className="font-mono text-[14px] text-muted">{issue.key}</span>
               )}
               <span className="tag border-border bg-surface-soft text-muted">{issue.status}</span>
               {issue.priority ? (
-                <span className="text-[12px] text-muted-soft">{issue.priority}</span>
+                <span className="text-[14px] text-muted-soft">{issue.priority}</span>
               ) : null}
             </div>
-            <span className="text-[11px] text-muted-soft">
+            <span className="text-[14px] text-muted-soft">
               {new Date(issue.updatedAt).toLocaleDateString()}
             </span>
           </div>
           <h3 className="mt-2 text-[15px] font-medium leading-snug">{issue.title}</h3>
           {issue.excerpt ? (
-            <p className="mt-3 border-t border-border/60 pt-3 text-[13px] leading-relaxed text-muted">
+            <p className="mt-3 border-t border-border/60 pt-3 text-[14px] leading-relaxed text-muted">
               {issue.excerpt}
             </p>
           ) : null}

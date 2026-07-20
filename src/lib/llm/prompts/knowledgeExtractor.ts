@@ -2,6 +2,7 @@ import { z } from "zod";
 import { KNOWLEDGE_ITEM_TYPES } from "@/domain/knowledgeItem";
 import type { JobType } from "../types";
 import { buildStrictSystemPrompt, confidenceSchema, evidenceQuoteSchema, wrapUntrustedContent } from "./shared";
+import { buildGranolaExtractionInstructions, type GranolaWorkContext } from "@/lib/granola/personalKnowledge";
 
 export const JOB_TYPE: JobType = "knowledge_extraction";
 
@@ -16,6 +17,7 @@ export interface KnowledgeExtractorInput {
     keywords: string[];
     people: string[];
   } | null;
+  granolaWorkContext?: GranolaWorkContext | null;
 }
 
 export const KNOWLEDGE_EXTRACTOR_SYSTEM_PROMPT = buildStrictSystemPrompt({
@@ -48,7 +50,13 @@ export const KNOWLEDGE_EXTRACTOR_SYSTEM_PROMPT = buildStrictSystemPrompt({
 });
 
 export function buildKnowledgeExtractorUserPrompt(input: KnowledgeExtractorInput): string {
+  const granolaInstructions =
+    input.sourceType === "granola" && input.granolaWorkContext
+      ? [buildGranolaExtractionInstructions(input.granolaWorkContext), ""]
+      : [];
+
   return [
+    ...granolaInstructions,
     input.project
       ? [
           "Project context (terminology only — not a source of knowledge, not for ownership):",

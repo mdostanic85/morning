@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { consumeOAuthState, exchangeCodeForToken, getOAuthConfig } from "@/lib/connectors/oauth";
+import {
+  consumeOAuthState,
+  exchangeCodeForToken,
+  getOAuthConfig,
+  resolveOAuthCallbackProvider,
+  type OAuthProvider,
+} from "@/lib/connectors/oauth";
 import { testGitHubConnection } from "@/lib/connectors/github";
 import { isConnectionProvider, isOAuthProvider } from "@/lib/connectors/providers";
 import { upsertConnection } from "@/services/connections";
@@ -8,8 +14,8 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ provider: string }> }
 ) {
-  const { provider } = await context.params;
-  if (!isConnectionProvider(provider) || !isOAuthProvider(provider)) {
+  const { provider: urlProvider } = await context.params;
+  if (!isConnectionProvider(urlProvider) || !isOAuthProvider(urlProvider)) {
     return NextResponse.json({ error: "Unsupported OAuth provider." }, { status: 400 });
   }
 
@@ -18,6 +24,7 @@ export async function GET(
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error_description") ?? url.searchParams.get("error");
+  const provider: OAuthProvider = resolveOAuthCallbackProvider(urlProvider, state);
 
   if (oauthError) {
     return NextResponse.redirect(
@@ -33,7 +40,7 @@ export async function GET(
   try {
     await exchangeCodeForToken({ provider, code, origin });
     const config = getOAuthConfig(provider);
-    let metadata: Record<string, unknown> = {
+    const metadata: Record<string, unknown> = {
       connectedAt: new Date().toISOString(),
       transport: "api",
     };

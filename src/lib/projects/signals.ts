@@ -34,7 +34,7 @@ async function gatherJiraSignals(signals: ProjectDiscoverySignal[]): Promise<voi
   if (isMcpTransport(connection)) {
     try {
       const { withMcpClient, callMcpTool } = await import("@/lib/connectors/mcp/client");
-      const APP_ORIGIN = process.env.MORNING_APP_URL?.trim() || "http://localhost:3000";
+      const APP_ORIGIN = process.env.WORKLIGHT_APP_URL?.trim() || "http://localhost:3000";
       await withMcpClient("atlassian", APP_ORIGIN, async (client) => {
         const resourcesRaw = parseMcpToolPayload(
           await callMcpTool(client, "getAccessibleAtlassianResources", {})
@@ -74,7 +74,7 @@ async function gatherJiraSignals(signals: ProjectDiscoverySignal[]): Promise<voi
         const issuesRaw = parseMcpToolPayload(
           await callMcpTool(client, "searchJiraIssuesUsingJql", {
             cloudId,
-            jql: "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC",
+            jql: "(assignee = currentUser() OR reporter = currentUser()) AND statusCategory != Done ORDER BY updated DESC",
             maxResults: 15,
           })
         );
@@ -130,7 +130,7 @@ async function gatherConfluenceSignals(signals: ProjectDiscoverySignal[]): Promi
   if (isMcpTransport(connection)) {
     try {
       const { withMcpClient, callMcpTool } = await import("@/lib/connectors/mcp/client");
-      const APP_ORIGIN = process.env.MORNING_APP_URL?.trim() || "http://localhost:3000";
+      const APP_ORIGIN = process.env.WORKLIGHT_APP_URL?.trim() || "http://localhost:3000";
       await withMcpClient("atlassian", APP_ORIGIN, async (client) => {
         const resourcesRaw = await callMcpTool(client, "getAccessibleAtlassianResources", {});
         const resources = Array.isArray(resourcesRaw) ? resourcesRaw : [];
@@ -205,6 +205,7 @@ export async function gatherProjectSignals(
 
   const sourceItems = await getSourceItems();
   for (const item of sourceItems.slice(0, RECENT_SOURCE_LIMIT)) {
+    if (item.sourceType === "calendar") continue;
     pushSignal(signals, {
       source: item.sourceType,
       kind: "imported_source",

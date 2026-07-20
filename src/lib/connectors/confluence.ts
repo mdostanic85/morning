@@ -71,6 +71,59 @@ function pageIdFromUrl(url: string): string | null {
   return match?.[1] ?? null;
 }
 
+function confluenceDateFromIso(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+function isUpdatedSince(sourceDate: string, sinceIso: string | undefined): boolean {
+  if (!sinceIso) return true;
+  return Date.parse(sourceDate) >= Date.parse(sinceIso);
+}
+
+export async function fetchConfluencePageIfUpdated(
+  pageId: string,
+  updatedSinceIso?: string
+): Promise<ConnectorSourceCandidate[]> {
+  const page = await fetchPageById(pageId);
+  if (!isUpdatedSince(page.sourceDate, updatedSinceIso)) return [];
+  return [page];
+}
+
+export async function fetchConfluenceSpacePages(input: {
+  spaceKey: string;
+  updatedSinceIso?: string;
+  maxResults?: number;
+}): Promise<ConnectorSourceCandidate[]> {
+  const resource = await getDefaultAtlassianResource("confluence");
+  const candidates: ConnectorSourceCandidate[] = [];
+  let start = 0;
+  const limit = 25;
+  const maxResults = input.maxResults ?? 50;
+
+  while (candidates.length < maxResults) {
+    const url = new URL(
+      `https://api.atlassian.com/ex/confluence/${resource.id}/wiki/rest/api/content/search`
+    );
+    const cql = input.updatedSinceIso
+      ? `space = "${input.spaceKey}" AND type = page AND lastModified >= "${confluenceDateFromIso(input.updatedSinceIso)}"`
+      : `space = "${input.spaceKey}" AND type = page`;
+    url.searchParams.set("cql", cql);
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("start", String(start));
+    url.searchParams.set("expand", "body.storage,version,space");
+
+    const response = await bearerFetch("confluence", url.toString());
+    const body = (await response.json()) as ConfluenceContentResponse & { size?: number };
+    if (!response.ok) throw new Error(body.message ?? `Could not import space ${input.spaceKey}.`);
+    const batch = body.results ?? [];
+    candidates.push(...batch.map((page) => pageToCandidate(page, resource.url, resource.id)));
+    if (batch.length < limit) break;
+    start += batch.length;
+  }
+
+  return candidates.slice(0, maxResults);
+}
+
 export async function fetchConfluencePages(input: {
   spaceKeys?: string[];
   pageUrls?: string[];

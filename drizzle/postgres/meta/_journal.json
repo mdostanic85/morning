@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1784334308555,
+      "tag": "0000_safe_vance_astro",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784334679153,
+      "tag": "0001_sleepy_angel",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784335000000,
+      "tag": "0002_connection_cursors",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784335200000,
+      "tag": "0003_sync_run_whats_new",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784335600000,
+      "tag": "0004_task_progress_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784422500000,
+      "tag": "0005_task_meeting_context",
+      "breakpoints": true
+    }
+  ]
+}

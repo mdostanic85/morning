@@ -8,4 +8,5 @@ export interface EvidenceItem {
   sourceType?: SourceType;
   sourceUrl?: string | null;
   sourceDate?: string | null;
+  sourceAuthor?: string | null;
 }

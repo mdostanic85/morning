@@ -13,8 +13,11 @@ export const JOB_TYPES = [
   "delivery_verification",
   "daily_memory",
   "knowledge_qa",
+  "task_qa",
   "focus_action_plan",
+  "figma_frame_discovery",
   "delivery_sync_review",
+  "hydra_report",
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
@@ -40,11 +43,21 @@ export interface CompletionRequest {
   userPrompt: string;
   temperature?: number;
   maxTokens?: number;
+  /** JSON Schema sent to providers that support native Structured Outputs. */
+  responseJsonSchema?: Record<string, unknown>;
+  /** Visual evidence for providers that support multimodal input. */
+  imageUrls?: string[];
 }
 
 export interface CompletionResponse {
   /** Raw text content from the model — the router is responsible for parsing/validating it. */
   text: string;
+  /** Provider-reported usage, when available. */
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
   /** Unparsed provider response, kept for debugging/audit only. */
   raw: unknown;
 }
@@ -85,6 +98,8 @@ export interface RunJobParams<T> {
   schema: z.ZodType<T>;
   temperature?: number;
   maxTokens?: number;
+  /** Passed through only to multimodal-capable provider clients. */
+  imageUrls?: string[];
 }
 
 export type LlmJobResult<T> =

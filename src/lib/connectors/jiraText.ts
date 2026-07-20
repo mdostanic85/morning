@@ -41,18 +41,86 @@ function readHeaderField(body: string, label: string): string | null {
   return value;
 }
 
-/** Parse normalized Jira issue body headers (Key, Status, Priority, etc.). */
-export function parseJiraBodyFields(body: string): {
+export interface JiraInlineMetadata {
   status: string | null;
   priority: string | null;
-  dueDate: string | null;
   assignee: string | null;
+  reporter: string | null;
+  dueDate: string | null;
+}
+
+const JIRA_METADATA_LABELS = ["Status", "Priority", "Assignee", "Reporter", "Due date"] as const;
+const JIRA_METADATA_FIELD_PATTERN = /\b(Status|Priority|Assignee|Reporter|Due date):\s*/gi;
+
+function normalizeMetadataValue(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === "unknown" || trimmed === "none") return null;
+  return trimmed;
+}
+
+function parseMetadataFieldBlock(block: string): JiraInlineMetadata {
+  const fields: Partial<Record<(typeof JIRA_METADATA_LABELS)[number], string>> = {};
+  const parts = block.split(JIRA_METADATA_FIELD_PATTERN);
+
+  for (let index = 1; index < parts.length; index += 2) {
+    const label = parts[index] as (typeof JIRA_METADATA_LABELS)[number];
+    const value = normalizeMetadataValue(parts[index + 1]);
+    if (value) fields[label] = value;
+  }
+
+  return {
+    status: fields.Status ?? null,
+    priority: fields.Priority ?? null,
+    assignee: fields.Assignee ?? null,
+    reporter: fields.Reporter ?? null,
+    dueDate: fields["Due date"] ?? null,
+  };
+}
+
+function metadataFieldCount(metadata: JiraInlineMetadata): number {
+  return Object.values(metadata).filter(Boolean).length;
+}
+
+/** Split inline or trailing Jira field dumps from human prose (e.g. task reason). */
+export function splitJiraMetadataFromText(text: string): {
+  prose: string;
+  metadata: JiraInlineMetadata;
 } {
+  const empty: JiraInlineMetadata = {
+    status: null,
+    priority: null,
+    assignee: null,
+    reporter: null,
+    dueDate: null,
+  };
+
+  const firstField = /\b(Status|Priority|Assignee|Reporter|Due date):\s*/i.exec(text);
+  if (firstField?.index == null) {
+    return { prose: text, metadata: empty };
+  }
+
+  const metadata = parseMetadataFieldBlock(text.slice(firstField.index));
+  if (metadataFieldCount(metadata) < 2) {
+    return { prose: text, metadata: empty };
+  }
+
+  const prose = text
+    .slice(0, firstField.index)
+    .trimEnd()
+    .replace(/[\s.!?…–—-]+$/, "")
+    .trim();
+
+  return { prose, metadata };
+}
+
+/** Parse normalized Jira issue body headers (Key, Status, Priority, etc.). */
+export function parseJiraBodyFields(body: string): JiraInlineMetadata {
   return {
     status: readHeaderField(body, "Status"),
     priority: readHeaderField(body, "Priority"),
     dueDate: readHeaderField(body, "Due date"),
     assignee: readHeaderField(body, "Assignee"),
+    reporter: readHeaderField(body, "Reporter"),
   };
 }
 
@@ -64,16 +132,16 @@ export function jiraStatusFocusWeight(status: string | null | undefined): {
   const normalized = status.toLowerCase();
 
   if (/in progress|in development|in review|active|doing/i.test(normalized)) {
-    return { score: 1250, note: `Actively in progress in Jira (${status})` };
+    return { score: 160, note: `Actively in progress in Jira (${status})` };
   }
   if (/qa|ready for (dev|qa|review)|internal review|code review/i.test(normalized)) {
-    return { score: 650, note: `Needs your action in Jira (${status})` };
+    return { score: 130, note: `Needs your action in Jira (${status})` };
   }
   if (/to do|open|selected for development|backlog/i.test(normalized)) {
-    return { score: 250, note: null };
+    return { score: 35, note: null };
   }
   if (/block/i.test(normalized)) {
-    return { score: 80, note: `Blocked in Jira (${status})` };
+    return { score: -100, note: `Blocked in Jira (${status})` };
   }
 
   return { score: 0, note: null };

@@ -94,6 +94,7 @@ const focusItemSchema = z.object({
   reason: z.string().min(1),
   nextAction: z.string().min(1),
   actionSteps: z.array(z.string().min(1)).optional(),
+  todayWorkSummary: z.array(z.string().min(1)).optional(),
   referenceLinks: z.array(referenceLinkSchema).optional(),
   doneCriteria: z.array(z.string().min(1)).min(1),
   evidenceQuotes: z.array(evidenceQuoteSchema).min(1),
@@ -112,7 +113,9 @@ export const TODAY_BRIEFING_SYSTEM_PROMPT = buildStrictSystemPrompt({
 - Write for one person starting their workday. Be direct and short — a briefing, not a dashboard essay.
 - "summary" is 2–4 sentences about the single focus task for today. The ranked focus order is already decided — describe only that one priority, do not list a backlog.
 - "jiraPending" must always be an empty array — Jira context is input only; the app surfaces one focus card, not a Jira dashboard.
-- "knowledgeHighlights" picks the most actionable approved knowledge items (deadlines, risks, decisions, requirements) — max 5.
+- "knowledgeHighlights" is the user's personal news feed: pick the most important approved developments for them (deadlines, risks, decisions, requirements, direct feedback, or changes affecting their work) — max 5.
+- Include important developments for the user even when they are unrelated to today's focus project or have no project assigned.
+- Prefer distinct developments across sources/topics. Do not spend multiple highlights restating the same project update.
 - Do not output focusItems — the app assigns focus order deterministically from Jira priority, due dates, queue status, and evidence recency.
 - Do not invent Jira keys, task ids, or facts not in the inputs.
 - "waitingOn" and "risks" are short bullet strings from evidenced signals only; empty arrays if none.
@@ -178,6 +181,7 @@ export interface BriefingSourceUsed {
   sourceType: string;
   title: string;
   sourceDate: string;
+  author?: string | null;
   projectName: string | null;
   url: string | null;
 }
@@ -201,6 +205,7 @@ export interface StoredTodayBriefing extends Omit<TodayBriefingOutput, "jiraPend
   jiraPending: StoredTodayBriefingJiraItem[];
   generatedAt: string;
   today: string;
+  inputHash?: string;
   jiraIssueCount: number;
   sourceCount: number;
   sourcesUsed: BriefingSourceUsed[];

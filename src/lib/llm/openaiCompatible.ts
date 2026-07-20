@@ -12,6 +12,11 @@ const MAX_RATE_LIMIT_WAIT_MS = 30_000;
 
 interface OpenAiChatCompletion {
   choices?: { message?: { content?: string | null } }[];
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
   error?: { message?: string };
 }
 
@@ -59,6 +64,8 @@ export interface OpenAiCompatibleConfig {
 export function createOpenAiCompatibleClient(config: OpenAiCompatibleConfig): ProviderClient {
   async function complete(request: CompletionRequest): Promise<CompletionResponse> {
     const maxRateLimitAttempts = 3;
+    const usesModernOpenAiTokenParams =
+      config.provider === "openai" && /^gpt-5(?:\.|-|$)/i.test(request.model);
 
     for (let rateLimitAttempt = 0; rateLimitAttempt < maxRateLimitAttempts; rateLimitAttempt++) {
       let response: Response;
@@ -75,8 +82,12 @@ export function createOpenAiCompatibleClient(config: OpenAiCompatibleConfig): Pr
               { role: "system", content: request.systemPrompt },
               { role: "user", content: request.userPrompt },
             ],
-            temperature: request.temperature ?? 0.2,
-            max_tokens: request.maxTokens ?? 4096,
+            ...(!usesModernOpenAiTokenParams
+              ? { temperature: request.temperature ?? 0.2 }
+              : {}),
+            ...(usesModernOpenAiTokenParams
+              ? { max_completion_tokens: request.maxTokens ?? 4096 }
+              : { max_tokens: request.maxTokens ?? 4096 }),
             ...(config.jsonMode !== false ? { response_format: { type: "json_object" } } : {}),
           }),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -119,7 +130,20 @@ export function createOpenAiCompatibleClient(config: OpenAiCompatibleConfig): Pr
         );
       }
 
-      return { text, raw: body };
+      const inputTokens = body.usage?.prompt_tokens;
+      const outputTokens = body.usage?.completion_tokens;
+      return {
+        text,
+        usage:
+          typeof inputTokens === "number" && typeof outputTokens === "number"
+            ? {
+                inputTokens,
+                outputTokens,
+                totalTokens: body.usage?.total_tokens ?? inputTokens + outputTokens,
+              }
+            : undefined,
+        raw: body,
+      };
     }
 
     throw new LlmError("provider_error", `${config.label} request did not complete.`);

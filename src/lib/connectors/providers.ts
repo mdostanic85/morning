@@ -1,5 +1,7 @@
 export const CONNECTION_PROVIDERS = [
   "gmail",
+  "calendar",
+  "drive",
   "jira",
   "confluence",
   "granola",
@@ -19,9 +21,11 @@ export function isConnectionProvider(value: unknown): value is ConnectionProvide
 
 export function isOAuthProvider(
   value: ConnectionProvider
-): value is "gmail" | "jira" | "confluence" | "discord" | "github" {
+): value is "gmail" | "calendar" | "drive" | "jira" | "confluence" | "discord" | "github" {
   return (
     value === "gmail" ||
+    value === "calendar" ||
+    value === "drive" ||
     value === "jira" ||
     value === "confluence" ||
     value === "discord" ||

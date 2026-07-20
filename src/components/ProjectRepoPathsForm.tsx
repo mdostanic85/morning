@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Toast } from "@heroui/react/toast";
+import { Button } from "@heroui/react/button";
+import { TextArea } from "@heroui/react/textarea";
 
 export function ProjectRepoPathsForm({
   projectId,
@@ -31,10 +31,10 @@ export function ProjectRepoPathsForm({
         body: JSON.stringify({ repoPaths }),
       });
       if (!res.ok) throw new Error("Could not save repo paths.");
-      toast.success("Repo paths saved.");
+      Toast.toast.success("Repo paths saved.");
       router.refresh();
     } catch {
-      toast.error("Could not save repo paths.");
+      Toast.toast.danger("Could not save repo paths.");
     } finally {
       setSaving(false);
     }
@@ -51,7 +51,7 @@ export function ProjectRepoPathsForm({
       <p className="mt-0.5 text-xs text-muted">
         One path per line — used to gather git evidence during verification.
       </p>
-      <Textarea
+      <TextArea
         id="repo-paths"
         value={value}
         onChange={(event) => setValue(event.target.value)}
@@ -60,7 +60,7 @@ export function ProjectRepoPathsForm({
         className="mt-2 text-sm"
       />
       <div className="mt-3">
-        <Button type="submit" size="sm" disabled={saving}>
+        <Button type="submit" size="sm" isDisabled={saving}>
           {saving ? "Saving…" : "Save repo paths"}
         </Button>
       </div>

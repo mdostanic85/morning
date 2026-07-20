@@ -1,15 +1,10 @@
 import "server-only";
-import { createOpenAiCompatibleClient, openAiCompatibleEmbed } from "./openaiCompatible";
+import { openAiCompatibleEmbed } from "./openaiCompatible";
+import { openaiResponsesClient } from "./openaiResponses";
 
-const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings";
 
-export const openaiClient = createOpenAiCompatibleClient({
-  provider: "openai",
-  chatCompletionsUrl: OPENAI_CHAT_COMPLETIONS_URL,
-  embeddingsUrl: OPENAI_EMBEDDINGS_URL,
-  label: "OpenAI",
-});
+export const openaiClient = openaiResponsesClient;
 
 export async function openaiEmbed(request: {
   apiKey: string;

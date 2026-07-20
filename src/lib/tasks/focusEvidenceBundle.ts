@@ -3,6 +3,7 @@ import type { JiraPendingSnapshot } from "@/lib/connectors/jiraPending";
 import { cleanJiraText, extractJiraDescription } from "@/lib/connectors/jiraText";
 import type { BriefingFocusItemDraft } from "@/lib/tasks/priorityRank";
 import type { WorkTaskForRanking } from "@/lib/tasks/priorityRank";
+import { relevantContextSources } from "@/lib/tasks/granolaRelevance";
 
 const SOURCE_EXCERPT_MAX = 2200;
 const MAX_SOURCES_PER_ITEM = 8;
@@ -10,6 +11,7 @@ const MAX_SOURCES_PER_ITEM = 8;
 export interface FocusEvidenceSource {
   sourceType: string;
   title: string;
+  sourceDate: string;
   url: string | null;
   excerpt: string;
 }
@@ -95,6 +97,19 @@ export function buildFocusEvidenceBundle(input: {
   ];
 
   const jiraKey = focusItem.linkedJiraKey ?? jiraIssue?.key ?? null;
+
+  for (const evidence of task?.evidence ?? []) {
+    const source = sourceItems.find((item) => item.id === evidence.sourceItemId);
+    if (!source) continue;
+    pushSource(bundle, seen, {
+      sourceType: source.sourceType,
+      title: source.title,
+      sourceDate: source.sourceDate,
+      url: source.url,
+      excerpt: excerpt(cleanJiraText(source.body)),
+    });
+  }
+
   if (jiraKey) {
     const jiraSource = findJiraSource(jiraKey, sourceItems);
     if (jiraSource) {
@@ -102,6 +117,7 @@ export function buildFocusEvidenceBundle(input: {
       pushSource(bundle, seen, {
         sourceType: "jira",
         title: jiraSource.title,
+        sourceDate: jiraSource.sourceDate,
         url: jiraSource.url,
         excerpt: excerpt(
           [jiraSource.body.split("\nDescription:")[0], description].filter(Boolean).join("\n\n")
@@ -112,6 +128,7 @@ export function buildFocusEvidenceBundle(input: {
       pushSource(bundle, seen, {
         sourceType: "jira",
         title: `${jiraKey}: ${jiraIssue.title}`,
+        sourceDate: jiraIssue.updatedAt,
         url: jiraIssue.url,
         excerpt: excerpt(jiraIssue.excerpt || jiraIssue.title),
       });
@@ -126,6 +143,7 @@ export function buildFocusEvidenceBundle(input: {
       pushSource(bundle, seen, {
         sourceType: "confluence",
         title: match?.title ?? `Confluence page ${pageId}`,
+        sourceDate: match?.sourceDate ?? "unknown",
         url: match?.url ?? url,
         excerpt: excerpt(match?.body ? cleanJiraText(match.body) : `Linked PRD/doc: ${url}`),
       });
@@ -139,32 +157,33 @@ export function buildFocusEvidenceBundle(input: {
       pushSource(bundle, seen, {
         sourceType: "figma",
         title: match?.title ?? `Figma file ${figmaKey}`,
+        sourceDate: match?.sourceDate ?? "unknown",
         url: match?.url ?? url,
         excerpt: excerpt(
           match?.body
             ? cleanJiraText(match.body)
-            : `Figma design linked${node ? ` — focus node ${node}` : ""}. Open the file to inspect the referenced screen or flow.`
+            : `Figma design linked${node ? ` — focus node ${node}` : ""}, but no readable canvas content was imported.`
         ),
       });
     }
   }
 
-  for (const item of sourceItems) {
+  const projectContextSources = task?.projectId != null
+    ? sourceItems.filter((item) => item.projectId === task.projectId)
+    : sourceItems;
+  for (const item of relevantContextSources(projectContextSources, focusItem.title, jiraKey, {
+    types: ["gmail", "drive", "granola", "confluence"],
+    limit: 4,
+    minScore: task?.projectId != null ? 0 : undefined,
+  })) {
     if (bundle.length >= MAX_SOURCES_PER_ITEM) break;
-    if (item.sourceType !== "confluence" && item.sourceType !== "granola") continue;
-    const haystack = `${focusItem.title} ${jiraKey ?? ""}`.toLowerCase();
-    const titleMatch = item.title.toLowerCase();
-    if (
-      haystack.includes("prototype") &&
-      (titleMatch.includes("prd") || titleMatch.includes("cross-module") || titleMatch.includes("guidance"))
-    ) {
-      pushSource(bundle, seen, {
-        sourceType: item.sourceType,
-        title: item.title,
-        url: item.url,
-        excerpt: excerpt(cleanJiraText(item.body)),
-      });
-    }
+    pushSource(bundle, seen, {
+      sourceType: item.sourceType,
+      title: item.title,
+      sourceDate: item.sourceDate,
+      url: item.url,
+      excerpt: excerpt(cleanJiraText(item.body)),
+    });
   }
 
   return bundle.slice(0, MAX_SOURCES_PER_ITEM);

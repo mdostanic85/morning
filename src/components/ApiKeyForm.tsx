@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Toast } from "@heroui/react/toast";
+import { Button } from "@heroui/react/button";
+import { Input } from "@heroui/react/input";
+import { Switch } from "@heroui/react/switch";
 import type { LlmProvider, ProviderKeyStatus } from "@/services/settings";
 
 const PROVIDER_LABEL: Record<LlmProvider, string> = {
@@ -50,9 +51,9 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
       if (updated) setStatus(updated);
       setKey("");
       setEditing(false);
-      toast.success("Key saved.");
+      Toast.toast.success("Key saved.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save the key.");
+      Toast.toast.danger(err instanceof Error ? err.message : "Could not save the key.");
     } finally {
       setSaving(false);
     }
@@ -74,9 +75,9 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
         (s: ProviderKeyStatus) => s.provider === status.provider
       );
       if (updated) setStatus(updated);
-      toast.success(enabled ? "Provider enabled." : "Provider paused.");
+      Toast.toast.success(enabled ? "Provider enabled." : "Provider paused.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not update provider.");
+      Toast.toast.danger(err instanceof Error ? err.message : "Could not update provider.");
     } finally {
       setSaving(false);
     }
@@ -98,9 +99,9 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
         (s: ProviderKeyStatus) => s.provider === status.provider
       );
       if (updated) setStatus(updated);
-      toast.success("Key removed.");
+      Toast.toast.success("Key removed.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not remove the key.");
+      Toast.toast.danger(err instanceof Error ? err.message : "Could not remove the key.");
     } finally {
       setSaving(false);
     }
@@ -134,15 +135,19 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {status.configured ? (
-            <Button
-              type="button"
-              variant={status.enabled ? "default" : "outline"}
+            <Switch
               size="sm"
-              onClick={() => handleToggle(!status.enabled)}
-              disabled={saving}
+              isSelected={status.enabled}
+              onChange={handleToggle}
+              isDisabled={saving}
+              aria-label={`${PROVIDER_LABEL[status.provider]} ${status.enabled ? "enabled" : "paused"}`}
             >
-              {status.enabled ? "On" : "Off"}
-            </Button>
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+              </Switch.Content>
+            </Switch>
           ) : null}
           {status.source === "settings" ? (
             <Button
@@ -150,7 +155,7 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
               variant="ghost"
               size="sm"
               onClick={handleClear}
-              disabled={saving}
+              isDisabled={saving}
             >
               Remove
             </Button>
@@ -177,7 +182,7 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
             autoComplete="off"
             autoFocus
           />
-          <Button type="submit" size="sm" disabled={saving || !key.trim()}>
+          <Button type="submit" size="sm" isDisabled={saving || !key.trim()}>
             {saving ? "Saving…" : "Save"}
           </Button>
         </form>

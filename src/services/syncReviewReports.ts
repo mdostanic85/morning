@@ -1,7 +1,8 @@
 import "server-only";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { syncReviewReports as syncReviewReportsTable } from "@/db/schema";
+import { syncReviewReports as syncReviewReportsTable } from "@/db/tables";
+import { fetchOne, fetchReturning } from "@/db/query";
 import type { NewSyncReviewReport, SyncReviewReport } from "@/domain/syncReviewReport";
 
 function toSyncReviewReport(row: typeof syncReviewReportsTable.$inferSelect): SyncReviewReport {
@@ -21,30 +22,28 @@ function toSyncReviewReport(row: typeof syncReviewReportsTable.$inferSelect): Sy
 }
 
 export async function createSyncReviewReport(input: NewSyncReviewReport): Promise<SyncReviewReport> {
-  const [row] = db
-    .insert(syncReviewReportsTable)
-    .values({
-      taskId: input.taskId,
-      summary: input.summary,
-      ok: input.ok ?? [],
-      notOk: input.notOk ?? [],
-      conflicts: input.conflicts ?? [],
-      githubBranch: input.githubBranch ?? null,
-      figmaUrl: input.figmaUrl ?? null,
-      recommendedNextAction: input.recommendedNextAction,
-      confidence: input.confidence ?? null,
-    })
-    .returning()
-    .all();
+  const [row] = await fetchReturning(
+    db
+      .insert(syncReviewReportsTable)
+      .values({
+        taskId: input.taskId,
+        summary: input.summary,
+        ok: input.ok ?? [],
+        notOk: input.notOk ?? [],
+        conflicts: input.conflicts ?? [],
+        githubBranch: input.githubBranch ?? null,
+        figmaUrl: input.figmaUrl ?? null,
+        recommendedNextAction: input.recommendedNextAction,
+        confidence: input.confidence ?? null,
+      })
+      .returning()
+  );
   return toSyncReviewReport(row);
 }
 
 export async function getLatestSyncReviewReport(taskId: number): Promise<SyncReviewReport | null> {
-  const row = db
-    .select()
-    .from(syncReviewReportsTable)
-    .where(eq(syncReviewReportsTable.taskId, taskId))
-    .orderBy(desc(syncReviewReportsTable.createdAt))
-    .get();
+  const row = await fetchOne(
+    db.select().from(syncReviewReportsTable).where(eq(syncReviewReportsTable.taskId, taskId)).orderBy(desc(syncReviewReportsTable.createdAt))
+  );
   return row ? toSyncReviewReport(row) : null;
 }

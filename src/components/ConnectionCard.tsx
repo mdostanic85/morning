@@ -2,10 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
-import { toast } from "sonner";
+import { Toast } from "@heroui/react/toast";
 import { cn } from "@/lib/utils";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@heroui/react/button";
+import { Input } from "@heroui/react/input";
 
 interface ConnectionCardProps {
   provider: string;
@@ -75,9 +75,9 @@ export function ConnectionCard({
     setSecret("");
     setPending(null);
     if (res.ok) {
-      toast.success("Connected.");
+      Toast.toast.success("Connected.");
     } else {
-      toast.error(data.error ?? "Connection failed.");
+      Toast.toast.danger(data.error ?? "Connection failed.");
     }
     router.refresh();
   }
@@ -121,18 +121,19 @@ export function ConnectionCard({
   const errorText = typeof metadata?.error === "string" ? metadata.error : null;
 
   return (
-    <section className="card px-5 py-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
+    <section className="app-card px-4 py-3">
+      {/* Header row: label + status + actions */}
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 pt-0.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-medium">{label}</h3>
+            <h3 className="text-sm font-semibold">{label}</h3>
             <span className={cn("tag", statusStyle)}>{statusLabel}</span>
             {usingMcp ? (
               <span className="tag border-border bg-surface-soft text-muted">MCP</span>
             ) : null}
           </div>
           {!connected ? (
-            <p className="mt-1 text-sm leading-snug text-muted line-clamp-1">{description}</p>
+            <p className="mt-1 text-xs leading-snug text-muted line-clamp-2">{description}</p>
           ) : lastSync ? (
             <p className="mt-1 text-xs text-muted-soft">
               Last sync {new Date(lastSync).toLocaleString()}
@@ -145,17 +146,14 @@ export function ConnectionCard({
               {metadata.workRepository} @ {metadata.workBranch}
             </p>
           ) : null}
-          {errorText ? <p className="mt-1 text-sm text-danger">{errorText}</p> : null}
+          {errorText ? <p className="mt-1.5 text-xs text-danger">{errorText}</p> : null}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           {mcpHref ? (
             <a
               href={mcpHref}
-              className={
-                usingMcp
-                  ? buttonVariants({ variant: "outline", size: "sm" })
-                  : buttonVariants({ size: "sm" })
-              }
+              className={usingMcp ? "link-btn-outline motion-btn" : "link-btn-primary motion-btn"}
             >
               {mcpButtonLabel}
             </a>
@@ -163,17 +161,14 @@ export function ConnectionCard({
           {showApiConnect && !supportsMcp ? (
             setupHint ? (
               <span
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "sm" }),
-                  "cursor-not-allowed opacity-45"
-                )}
+                className="link-btn-primary disabled"
                 aria-disabled="true"
                 title="OAuth app credentials are missing — see details below."
               >
                 {connected ? "Reconnect" : "Connect"}
               </span>
             ) : (
-              <a href={apiConnectHref} className={buttonVariants({ size: "sm" })}>
+              <a href={apiConnectHref} className="link-btn-primary motion-btn">
                 {connected ? "Reconnect" : "Connect"}
               </a>
             )
@@ -183,8 +178,8 @@ export function ConnectionCard({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={disconnect}
-              disabled={pending !== null}
+              onPress={disconnect}
+              isDisabled={pending !== null}
             >
               Disconnect
             </Button>
@@ -194,7 +189,7 @@ export function ConnectionCard({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setExpanded((v) => !v)}
+              onPress={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
             >
               {expanded ? "Hide" : hasTokenForm && !connected ? "Add token" : "Manage"}
@@ -204,41 +199,30 @@ export function ConnectionCard({
       </div>
 
       {connected && connectedExtra ? (
-        <div className="mt-4 border-t border-border pt-4">{connectedExtra}</div>
+        <div className="mt-3 border-t border-border pt-3">{connectedExtra}</div>
       ) : null}
 
       {expanded ? (
-        <div className="mt-4 space-y-3 border-t border-border pt-4">
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
           {connected ? (
             <p className="text-sm leading-relaxed text-muted">{description}</p>
           ) : null}
 
           {setupHint ? (
-            <p className="rounded-lg border border-warm/25 bg-warm/8 px-3 py-2 text-sm leading-relaxed text-warm">
+            <p className="rounded-[var(--radius-md)] border border-warm/25 bg-warm/8 px-3 py-2.5 text-xs leading-relaxed text-warm">
               {setupHint}
             </p>
           ) : null}
 
           {supportsMcp && !usingMcp && showApiConnect ? (
-            <div>
-              <p className="mb-2 text-xs font-medium text-muted-soft">
-                Direct API setup (optional)
-              </p>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-soft">Direct API setup (optional)</p>
               {setupHint ? (
-                <span
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "sm" }),
-                    "cursor-not-allowed opacity-45"
-                  )}
-                  aria-disabled="true"
-                >
+                <span className="link-btn-outline disabled" aria-disabled="true">
                   {connected ? "Reconnect (API)" : "Connect (API)"}
                 </span>
               ) : (
-                <a
-                  href={apiConnectHref}
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                >
+                <a href={apiConnectHref} className="link-btn-outline motion-btn">
                   {connected ? "Reconnect (API)" : "Connect (API)"}
                 </a>
               )}
@@ -246,29 +230,31 @@ export function ConnectionCard({
           ) : null}
 
           {hasTokenForm ? (
-            <div className={showPatFallback ? "space-y-2" : undefined}>
+            <div className={showPatFallback ? "space-y-1.5" : undefined}>
               {showPatFallback ? (
                 <p className="text-xs font-medium text-muted-soft">
                   Personal access token (optional fallback)
                 </p>
               ) : null}
               <form onSubmit={saveSecret} className="form-inline">
-              <Input
-                type="password"
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-                placeholder={secretPlaceholder}
-                aria-label={`${label} token`}
-              />
-              <Button
-                type="submit"
-                variant="outline"
-                size="sm"
-                disabled={pending !== null || !secret.trim()}
-              >
-                {pending === "secret" ? "Testing…" : connected ? "Replace" : "Connect"}
-              </Button>
-            </form>
+                <Input
+                  fullWidth
+                  type="password"
+                  value={secret}
+                  onChange={(event) => setSecret(event.target.value)}
+                  placeholder={secretPlaceholder}
+                  aria-label={`${label} token`}
+                  className="h-10 border border-border bg-background/70 text-sm shadow-none"
+                />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  isDisabled={pending !== null || !secret.trim()}
+                >
+                  {pending === "secret" ? "Testing…" : connected ? "Replace" : "Connect"}
+                </Button>
+              </form>
             </div>
           ) : null}
         </div>

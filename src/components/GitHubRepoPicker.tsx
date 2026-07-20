@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Input } from "@/components/ui/input";
+import { Input } from "@heroui/react/input";
 import { cn } from "@/lib/utils";
 
 interface GitHubRepositoryOption {
@@ -88,11 +88,12 @@ export function GitHubRepoPicker({ value, onChange }: GitHubRepoPickerProps) {
   return (
     <div className="space-y-3">
       <Input
+        fullWidth
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
         placeholder="Filter repositories…"
         aria-label="Filter GitHub repositories"
-        className="text-sm"
+        className={cn("h-11 border border-border bg-background/70 text-sm shadow-none")}
       />
       <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background">
         {filtered.length === 0 ? (

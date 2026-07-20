@@ -1,7 +1,8 @@
 import "server-only";
 import { desc } from "drizzle-orm";
 import { db } from "@/db/client";
-import { knowledgeEmbeddings as embeddingsTable } from "@/db/schema";
+import { knowledgeEmbeddings as embeddingsTable } from "@/db/tables";
+import { fetchAll } from "@/db/query";
 import { getActiveProviders } from "@/services/settings";
 import { getKnowledgeItems } from "@/services/knowledgeItems";
 import { getProjects } from "@/services/projects";
@@ -40,6 +41,8 @@ interface SearchCandidate {
   knowledgeItemId: number | null;
   knowledgeItemTitle: string | null;
 }
+
+type EmbeddingRow = typeof embeddingsTable.$inferSelect;
 
 function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0;
@@ -94,7 +97,7 @@ async function embeddingSearch(
 ): Promise<KnowledgeSearchResult[]> {
   const [queryEmbedding] = await embedTexts([query]);
   const [embeddingRows, sourceItems, projects, knowledgeItems] = await Promise.all([
-    db.select().from(embeddingsTable).orderBy(desc(embeddingsTable.createdAt)).all(),
+    fetchAll<EmbeddingRow>(db.select().from(embeddingsTable).orderBy(desc(embeddingsTable.createdAt))),
     getSourceItems(),
     getProjects(),
     getKnowledgeItems(),
@@ -130,7 +133,7 @@ async function keywordSearch(query: string, limit: number): Promise<KnowledgeSea
   const terms = queryTerms(query);
   const phrase = query.toLowerCase();
   const [embeddingRows, sourceItems, projects, knowledgeItems] = await Promise.all([
-    db.select().from(embeddingsTable).orderBy(desc(embeddingsTable.createdAt)).all(),
+    fetchAll<EmbeddingRow>(db.select().from(embeddingsTable).orderBy(desc(embeddingsTable.createdAt))),
     getSourceItems(),
     getProjects(),
     getKnowledgeItems(),

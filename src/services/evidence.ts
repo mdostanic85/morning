@@ -1,7 +1,9 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { evidence as evidenceTable } from "@/db/schema";
+import { evidence as evidenceTable } from "@/db/tables";
+import { isPostgresDatabase } from "@/db/dialect";
+import { fetchAll, fetchReturning, execute, withTransaction, syncRun, syncAll } from "@/db/query";
 import type { Evidence, NewEvidence } from "@/domain/evidence";
 
 export function toEvidence(row: typeof evidenceTable.$inferSelect): Evidence {
@@ -17,26 +19,82 @@ export function toEvidence(row: typeof evidenceTable.$inferSelect): Evidence {
 }
 
 export async function createEvidence(input: NewEvidence): Promise<Evidence> {
-  const [row] = db
-    .insert(evidenceTable)
-    .values({
-      taskId: input.taskId,
-      sourceItemId: input.sourceItemId,
-      quote: input.quote ?? null,
-      summary: input.summary,
-      sourceDate: input.sourceDate,
-      url: input.url ?? null,
-    })
-    .returning()
-    .all();
+  const [row] = await fetchReturning(
+    db
+      .insert(evidenceTable)
+      .values({
+        taskId: input.taskId,
+        sourceItemId: input.sourceItemId,
+        quote: input.quote ?? null,
+        summary: input.summary,
+        sourceDate: input.sourceDate,
+        url: input.url ?? null,
+      })
+      .returning()
+  );
   return toEvidence(row);
 }
 
 export async function getEvidenceForTask(taskId: number): Promise<Evidence[]> {
-  const rows = db.select().from(evidenceTable).where(eq(evidenceTable.taskId, taskId)).all();
+  const rows = await fetchAll(db.select().from(evidenceTable).where(eq(evidenceTable.taskId, taskId)));
   return rows.map(toEvidence);
 }
 
 export async function deleteEvidence(id: number): Promise<void> {
-  db.delete(evidenceTable).where(eq(evidenceTable.id, id)).run();
+  await execute(db.delete(evidenceTable).where(eq(evidenceTable.id, id)));
+}
+
+export async function replaceEvidenceForTaskSource(
+  taskId: number,
+  sourceItemId: number,
+  items: Omit<NewEvidence, "taskId" | "sourceItemId">[]
+): Promise<Evidence[]> {
+  if (isPostgresDatabase()) {
+    return db.transaction(async (tx) => {
+      await tx
+        .delete(evidenceTable)
+        .where(and(eq(evidenceTable.taskId, taskId), eq(evidenceTable.sourceItemId, sourceItemId)));
+
+      const rows = await Promise.all(
+        items.map((item) =>
+          tx
+            .insert(evidenceTable)
+            .values({
+              taskId,
+              sourceItemId,
+              quote: item.quote ?? null,
+              summary: item.summary,
+              sourceDate: item.sourceDate,
+              url: item.url ?? null,
+            })
+            .returning()
+        )
+      );
+      return rows.map(([row]) => toEvidence(row));
+    });
+  }
+
+  return withTransaction((tx) => {
+    syncRun(
+      tx.delete(evidenceTable)
+      .where(and(eq(evidenceTable.taskId, taskId), eq(evidenceTable.sourceItemId, sourceItemId)))
+    );
+
+    return items.map((item) => {
+      const [row] = syncAll(
+        tx
+        .insert(evidenceTable)
+        .values({
+          taskId,
+          sourceItemId,
+          quote: item.quote ?? null,
+          summary: item.summary,
+          sourceDate: item.sourceDate,
+          url: item.url ?? null,
+        })
+        .returning()
+      );
+      return toEvidence(row);
+    });
+  });
 }

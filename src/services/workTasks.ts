@@ -6,7 +6,9 @@ import {
   evidence as evidenceTable,
   verificationReports as verificationReportsTable,
   syncReviewReports as syncReviewReportsTable,
-} from "@/db/schema";
+} from "@/db/tables";
+import { fetchAll, fetchOne, execute, fetchReturning, withTransaction, syncRun, syncAll } from "@/db/query";
+import { isPostgresDatabase } from "@/db/dialect";
 import type { NewWorkTask, WorkTask, WorkTaskPatch, WorkTaskStatus } from "@/domain/workTask";
 import { OPEN_QUEUE_STATUSES, hasRequiredPillars } from "@/domain/workTask";
 import type { Evidence, NewEvidence } from "@/domain/evidence";
@@ -29,6 +31,7 @@ function toWorkTask(row: typeof workTasksTable.$inferSelect): WorkTask {
     reason: row.reason,
     nextAction: row.nextAction,
     doneCriteria: row.doneCriteria ?? [],
+    meetingContext: row.meetingContext ?? [],
     dueDate: row.dueDate,
     owner: row.owner,
     waitingOn: row.waitingOn,
@@ -79,19 +82,15 @@ function toSyncReviewReport(row: typeof syncReviewReportsTable.$inferSelect): Sy
   };
 }
 
-function attachContext(tasks: WorkTask[]): WorkTaskWithEvidence[] {
+async function attachContext(tasks: WorkTask[]): Promise<WorkTaskWithEvidence[]> {
   if (tasks.length === 0) return [];
-  const allEvidence = db.select().from(evidenceTable).all();
-  const allReports = db
-    .select()
-    .from(verificationReportsTable)
-    .orderBy(desc(verificationReportsTable.createdAt))
-    .all();
-  const allSyncReports = db
-    .select()
-    .from(syncReviewReportsTable)
-    .orderBy(desc(syncReviewReportsTable.createdAt))
-    .all();
+  const allEvidence = await fetchAll(db.select().from(evidenceTable));
+  const allReports = await fetchAll(
+    db.select().from(verificationReportsTable).orderBy(desc(verificationReportsTable.createdAt))
+  );
+  const allSyncReports = await fetchAll(
+    db.select().from(syncReviewReportsTable).orderBy(desc(syncReviewReportsTable.createdAt))
+  );
   const byTask = new Map<number, Evidence[]>();
   for (const e of allEvidence) {
     const list = byTask.get(e.taskId) ?? [];
@@ -122,25 +121,24 @@ function attachContext(tasks: WorkTask[]): WorkTaskWithEvidence[] {
 type DbOrTransaction = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function insertWorkTaskRow(tx: DbOrTransaction, input: NewWorkTask): WorkTask {
-  const [row] = tx
-    .insert(workTasksTable)
-    .values({
-      projectId: input.projectId ?? null,
-      title: input.title,
-      status: input.status,
-      priorityScore: input.priorityScore ?? null,
-      confidence: input.confidence ?? null,
-      reason: input.reason,
-      nextAction: input.nextAction,
-      doneCriteria: input.doneCriteria,
-      dueDate: input.dueDate ?? null,
-      owner: input.owner ?? null,
-      waitingOn: input.waitingOn ?? null,
-      reviewStatus: input.reviewStatus ?? "approved",
-      statusManuallySet: input.statusManuallySet ?? false,
-    })
-    .returning()
-    .all();
+  const returning = tx.insert(workTasksTable).values({
+    projectId: input.projectId ?? null,
+    title: input.title,
+    status: input.status,
+    priorityScore: input.priorityScore ?? null,
+    confidence: input.confidence ?? null,
+    reason: input.reason,
+    nextAction: input.nextAction,
+    doneCriteria: input.doneCriteria,
+    meetingContext: input.meetingContext ?? [],
+    dueDate: input.dueDate ?? null,
+    owner: input.owner ?? null,
+    waitingOn: input.waitingOn ?? null,
+    reviewStatus: input.reviewStatus ?? "approved",
+    statusManuallySet: input.statusManuallySet ?? false,
+  }).returning();
+  const rows = syncAll(returning);
+  const [row] = rows;
   return toWorkTask(row);
 }
 
@@ -150,7 +148,28 @@ export async function createWorkTask(input: NewWorkTask): Promise<WorkTask> {
       `Refusing to create task "${input.title}": every task must have a next action and at least one done criterion.`
     );
   }
-  return insertWorkTaskRow(db, input);
+  const [row] = await fetchReturning(
+    db
+      .insert(workTasksTable)
+      .values({
+        projectId: input.projectId ?? null,
+        title: input.title,
+        status: input.status,
+        priorityScore: input.priorityScore ?? null,
+        confidence: input.confidence ?? null,
+        reason: input.reason,
+        nextAction: input.nextAction,
+        doneCriteria: input.doneCriteria,
+        meetingContext: input.meetingContext ?? [],
+        dueDate: input.dueDate ?? null,
+        owner: input.owner ?? null,
+        waitingOn: input.waitingOn ?? null,
+        reviewStatus: input.reviewStatus ?? "approved",
+        statusManuallySet: input.statusManuallySet ?? false,
+      })
+      .returning()
+  );
+  return toWorkTask(row);
 }
 
 /**
@@ -179,10 +198,47 @@ export async function createWorkTaskWithEvidence(
         }
       : input;
 
-  return db.transaction((tx) => {
+  if (isPostgresDatabase()) {
+    return db.transaction(async (tx) => {
+      const [taskRow] = await tx.insert(workTasksTable).values({
+        projectId: effectiveInput.projectId ?? null,
+        title: effectiveInput.title,
+        status: effectiveInput.status,
+        priorityScore: effectiveInput.priorityScore ?? null,
+        confidence: effectiveInput.confidence ?? null,
+        reason: effectiveInput.reason,
+        nextAction: effectiveInput.nextAction,
+        doneCriteria: effectiveInput.doneCriteria,
+        meetingContext: effectiveInput.meetingContext ?? [],
+        dueDate: effectiveInput.dueDate ?? null,
+        owner: effectiveInput.owner ?? null,
+        waitingOn: effectiveInput.waitingOn ?? null,
+        reviewStatus: effectiveInput.reviewStatus ?? "approved",
+        statusManuallySet: effectiveInput.statusManuallySet ?? false,
+      }).returning();
+      const task = toWorkTask(taskRow);
+      const evidenceRows = await Promise.all(
+        evidenceItems.map(async (item) => {
+          const [row] = await tx.insert(evidenceTable).values({
+            taskId: task.id,
+            sourceItemId: item.sourceItemId,
+            quote: item.quote ?? null,
+            summary: item.summary,
+            sourceDate: item.sourceDate,
+            url: item.url ?? null,
+          }).returning();
+          return toEvidence(row);
+        })
+      );
+      return { task, evidence: evidenceRows };
+    });
+  }
+
+  return withTransaction((tx) => {
     const task = insertWorkTaskRow(tx, effectiveInput);
     const evidenceRows = evidenceItems.map((item) => {
-      const [row] = tx
+      const [row] = syncAll(
+        tx
         .insert(evidenceTable)
         .values({
           taskId: task.id,
@@ -193,7 +249,7 @@ export async function createWorkTaskWithEvidence(
           url: item.url ?? null,
         })
         .returning()
-        .all();
+      );
       return toEvidence(row);
     });
     return { task, evidence: evidenceRows };
@@ -202,14 +258,15 @@ export async function createWorkTaskWithEvidence(
 
 /** All non-done, user-approved tasks, grouped by status, in the fixed queue order. Each status is sorted by priorityScore desc. */
 export async function getTodayQueue(): Promise<Record<WorkTaskStatus, WorkTaskWithEvidence[]>> {
-  const rows = db
-    .select()
-    .from(workTasksTable)
-    .where(and(ne(workTasksTable.status, "done"), eq(workTasksTable.reviewStatus, "approved")))
-    .orderBy(desc(workTasksTable.priorityScore))
-    .all();
+  const rows = await fetchAll(
+    db
+      .select()
+      .from(workTasksTable)
+      .where(and(ne(workTasksTable.status, "done"), eq(workTasksTable.reviewStatus, "approved")))
+      .orderBy(desc(workTasksTable.priorityScore))
+  );
 
-  const withEvidence = attachContext(rows.map(toWorkTask));
+  const withEvidence = await attachContext(rows.map(toWorkTask));
 
   const grouped = Object.fromEntries(
     OPEN_QUEUE_STATUSES.map((s) => [s, [] as WorkTaskWithEvidence[]])
@@ -223,12 +280,13 @@ export async function getTodayQueue(): Promise<Record<WorkTaskStatus, WorkTaskWi
   return grouped;
 }
 
-export function getDistinctOwners(): string[] {
-  const rows = db
-    .selectDistinct({ owner: workTasksTable.owner })
-    .from(workTasksTable)
-    .where(and(isNotNull(workTasksTable.owner), ne(workTasksTable.status, "done")))
-    .all();
+export async function getDistinctOwners(): Promise<string[]> {
+  const rows = await fetchAll(
+    db
+      .selectDistinct({ owner: workTasksTable.owner })
+      .from(workTasksTable)
+      .where(and(isNotNull(workTasksTable.owner), ne(workTasksTable.status, "done")))
+  );
   return rows
     .map((r) => r.owner)
     .filter((o): o is string => o !== null)
@@ -236,19 +294,16 @@ export function getDistinctOwners(): string[] {
 }
 
 export async function getWorkTaskById(id: number): Promise<WorkTaskWithEvidence | null> {
-  const row = db.select().from(workTasksTable).where(eq(workTasksTable.id, id)).get();
+  const row = await fetchOne(db.select().from(workTasksTable).where(eq(workTasksTable.id, id)));
   if (!row) return null;
-  return attachContext([toWorkTask(row)])[0];
+  const arr = await attachContext([toWorkTask(row)]);
+  return arr[0];
 }
 
 export async function getWorkTaskByJiraKey(
   issueKey: string
 ): Promise<WorkTaskWithEvidence | null> {
-  const rows = db
-    .select()
-    .from(workTasksTable)
-    .where(eq(workTasksTable.reviewStatus, "approved"))
-    .all();
+  const rows = await fetchAll(db.select().from(workTasksTable).where(eq(workTasksTable.reviewStatus, "approved")));
   const tasks = rows.map(toWorkTask);
   const taskId = findTaskIdByJiraKey(tasks, issueKey);
   if (taskId == null) return null;
@@ -271,7 +326,7 @@ export async function ensureWorkTaskForJiraIssue(
   const existing = await getWorkTaskByJiraKey(key);
   if (existing) return existing;
 
-  let sourceItem =
+  const sourceItem =
     (await getSourceItemByExternalId({ sourceType: "jira", sourceExternalId: key })) ??
     (await searchSourceItems(key)).find((item) => item.title.toUpperCase().startsWith(`${key}:`)) ??
     null;
@@ -309,36 +364,30 @@ export async function ensureWorkTaskForJiraIssue(
 
 /** All user-approved tasks (any status) — pending review items are excluded. */
 export async function getWorkTasks(): Promise<WorkTaskWithEvidence[]> {
-  const rows = db
-    .select()
-    .from(workTasksTable)
-    .where(eq(workTasksTable.reviewStatus, "approved"))
-    .orderBy(desc(workTasksTable.updatedAt))
-    .all();
-  return attachContext(rows.map(toWorkTask));
+  const rows = await fetchAll(
+    db.select().from(workTasksTable).where(eq(workTasksTable.reviewStatus, "approved")).orderBy(desc(workTasksTable.updatedAt))
+  );
+  return await attachContext(rows.map(toWorkTask));
 }
 
 export async function getOpenTasksForProject(projectId: number): Promise<WorkTaskWithEvidence[]> {
-  const rows = db
-    .select()
-    .from(workTasksTable)
-    .where(and(eq(workTasksTable.projectId, projectId), eq(workTasksTable.reviewStatus, "approved")))
-    .orderBy(desc(workTasksTable.priorityScore))
-    .all()
-    .filter((r) => r.status !== "done");
-
-  return attachContext(rows.map(toWorkTask));
+  const rows = await fetchAll(
+    db
+      .select()
+      .from(workTasksTable)
+      .where(and(eq(workTasksTable.projectId, projectId), eq(workTasksTable.reviewStatus, "approved")))
+      .orderBy(desc(workTasksTable.priorityScore))
+  );
+  const filtered = rows.filter((r) => r.status !== "done");
+  return await attachContext(filtered.map(toWorkTask));
 }
 
 /** Extracted tasks awaiting user approval, newest first. */
 export async function getPendingTasks(): Promise<WorkTaskWithEvidence[]> {
-  const rows = db
-    .select()
-    .from(workTasksTable)
-    .where(eq(workTasksTable.reviewStatus, "pending"))
-    .orderBy(desc(workTasksTable.createdAt))
-    .all();
-  return attachContext(rows.map(toWorkTask));
+  const rows = await fetchAll(
+    db.select().from(workTasksTable).where(eq(workTasksTable.reviewStatus, "pending")).orderBy(desc(workTasksTable.createdAt))
+  );
+  return await attachContext(rows.map(toWorkTask));
 }
 
 /**
@@ -359,38 +408,80 @@ export async function applyPlannerDecisions(
 ): Promise<{ updated: number; preserved: number }> {
   if (decisions.length === 0) return { updated: 0, preserved: 0 };
 
-  const rows = db
-    .select()
-    .from(workTasksTable)
-    .where(
-      inArray(
-        workTasksTable.id,
-        decisions.map((d) => d.taskId)
-      )
-    )
-    .all();
+  const rows = await fetchAll(
+    db.select().from(workTasksTable).where(inArray(workTasksTable.id, decisions.map((d) => d.taskId)))
+  );
   const currentById = new Map(rows.map((row) => [row.id, row]));
   const now = new Date().toISOString();
 
   let updated = 0;
   let preserved = 0;
 
-  db.transaction((tx) => {
+  if (isPostgresDatabase()) {
+    await db.transaction(async (tx) => {
+      for (const decision of decisions) {
+        const current = currentById.get(decision.taskId);
+        if (!current) continue;
+
+        const statusIsProtected = current.statusManuallySet || current.status === "unclear";
+        if (statusIsProtected) {
+          await tx
+            .update(workTasksTable)
+            .set({ priorityScore: decision.priorityScore, updatedAt: now })
+            .where(eq(workTasksTable.id, decision.taskId));
+          preserved += 1;
+          continue;
+        }
+
+        await tx
+          .update(workTasksTable)
+          .set({
+            status: decision.status,
+            priorityScore: decision.priorityScore,
+            reason: decision.reason,
+            waitingOn: decision.waitingOn,
+            confidence: decision.confidence,
+            updatedAt: now,
+          })
+          .where(eq(workTasksTable.id, decision.taskId));
+        updated += 1;
+      }
+
+      const nowRows = await tx
+        .select()
+        .from(workTasksTable)
+        .where(and(eq(workTasksTable.status, "now"), eq(workTasksTable.reviewStatus, "approved")))
+        .orderBy(desc(workTasksTable.statusManuallySet), desc(workTasksTable.priorityScore));
+
+      for (const row of nowRows.slice(1)) {
+        if (row.statusManuallySet) continue;
+        await tx
+          .update(workTasksTable)
+          .set({ status: "next", updatedAt: now })
+          .where(eq(workTasksTable.id, row.id));
+      }
+    });
+    return { updated, preserved };
+  }
+
+  await withTransaction((tx) => {
     for (const decision of decisions) {
       const current = currentById.get(decision.taskId);
       if (!current) continue;
 
       const statusIsProtected = current.statusManuallySet || current.status === "unclear";
       if (statusIsProtected) {
-        tx.update(workTasksTable)
+        syncRun(
+          tx.update(workTasksTable)
           .set({ priorityScore: decision.priorityScore, updatedAt: now })
           .where(eq(workTasksTable.id, decision.taskId))
-          .run();
+        );
         preserved += 1;
         continue;
       }
 
-      tx.update(workTasksTable)
+      syncRun(
+        tx.update(workTasksTable)
         .set({
           status: decision.status,
           priorityScore: decision.priorityScore,
@@ -400,26 +491,24 @@ export async function applyPlannerDecisions(
           updatedAt: now,
         })
         .where(eq(workTasksTable.id, decision.taskId))
-        .run();
+      );
       updated += 1;
     }
 
-    // Keep exactly one task in "now" so the morning view always has a single
-    // primary focus. A user-started task always wins; among planner-set tasks
-    // the highest-scored one stays and the rest move to "next". Tasks the
-    // user explicitly started are never demoted here.
-    const nowRows = tx
+    const nowRows = syncAll(
+      tx
       .select()
       .from(workTasksTable)
       .where(and(eq(workTasksTable.status, "now"), eq(workTasksTable.reviewStatus, "approved")))
       .orderBy(desc(workTasksTable.statusManuallySet), desc(workTasksTable.priorityScore))
-      .all();
+    );
     for (const row of nowRows.slice(1)) {
       if (row.statusManuallySet) continue;
-      tx.update(workTasksTable)
+      syncRun(
+        tx.update(workTasksTable)
         .set({ status: "next", updatedAt: now })
         .where(eq(workTasksTable.id, row.id))
-        .run();
+      );
     }
   });
 
@@ -427,29 +516,32 @@ export async function applyPlannerDecisions(
 }
 
 export async function updateWorkTask(id: number, patch: WorkTaskPatch): Promise<WorkTask | null> {
-  const [row] = db
-    .update(workTasksTable)
-    .set({ ...patch, updatedAt: new Date().toISOString() })
-    .where(eq(workTasksTable.id, id))
-    .returning()
-    .all();
+  const [row] = await fetchReturning(
+    db.update(workTasksTable).set({ ...patch, updatedAt: new Date().toISOString() }).where(eq(workTasksTable.id, id)).returning()
+  );
   return row ? toWorkTask(row) : null;
 }
 
 export async function approveWorkTask(id: number): Promise<WorkTask | null> {
-  const [row] = db
-    .update(workTasksTable)
-    .set({ reviewStatus: "approved", updatedAt: new Date().toISOString() })
-    .where(eq(workTasksTable.id, id))
-    .returning()
-    .all();
+  const [row] = await fetchReturning(
+    db.update(workTasksTable).set({ reviewStatus: "approved", updatedAt: new Date().toISOString() }).where(eq(workTasksTable.id, id)).returning()
+  );
   return row ? toWorkTask(row) : null;
 }
 
 export async function deleteWorkTask(id: number): Promise<void> {
-  db.transaction((tx) => {
-    tx.delete(evidenceTable).where(eq(evidenceTable.taskId, id)).run();
-    tx.delete(verificationReportsTable).where(eq(verificationReportsTable.taskId, id)).run();
-    tx.delete(workTasksTable).where(eq(workTasksTable.id, id)).run();
+  if (isPostgresDatabase()) {
+    await db.transaction(async (tx) => {
+      await tx.delete(evidenceTable).where(eq(evidenceTable.taskId, id));
+      await tx.delete(verificationReportsTable).where(eq(verificationReportsTable.taskId, id));
+      await tx.delete(workTasksTable).where(eq(workTasksTable.id, id));
+    });
+    return;
+  }
+
+  await withTransaction((tx) => {
+    syncRun(tx.delete(evidenceTable).where(eq(evidenceTable.taskId, id)));
+    syncRun(tx.delete(verificationReportsTable).where(eq(verificationReportsTable.taskId, id)));
+    syncRun(tx.delete(workTasksTable).where(eq(workTasksTable.id, id)));
   });
 }

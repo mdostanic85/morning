@@ -8,5 +8,5 @@ export const DAILY_FOCUS_TASK_LIMIT = 1;
  * Tasks from meetings only when the user pastes or asks in chat (manual transcript).
  */
 export function shouldAutoExtractTasksFromSource(sourceType: SourceType | string): boolean {
-  return sourceType !== "granola";
+  return sourceType !== "calendar";
 }

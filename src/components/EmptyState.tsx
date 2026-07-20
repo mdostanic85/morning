@@ -18,7 +18,7 @@ export function EmptyState({ title, description, action, compact = false }: Empt
     >
       <p className={cn("text-foreground/80", compact ? "" : "font-medium")}>{title}</p>
       {description ? (
-        <p className={cn("mt-1.5 text-[13px] leading-relaxed text-muted", !compact && "mx-auto max-w-sm")}>
+        <p className={cn("mt-1.5 text-[14px] leading-relaxed text-muted", !compact && "mx-auto max-w-sm")}>
           {description}
         </p>
       ) : null}

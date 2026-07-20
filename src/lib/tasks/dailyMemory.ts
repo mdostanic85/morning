@@ -24,8 +24,12 @@ function recentEnough(value: string, today: string): boolean {
   return value.slice(0, 10) === today;
 }
 
-export async function generateEndOfDayMemory(input?: { today?: string }): Promise<EndDayResult> {
+export async function generateEndOfDayMemory(input?: {
+  today?: string;
+  userNotes?: string | null;
+}): Promise<EndDayResult> {
   const today = input?.today ?? localDateString();
+  const userNotes = input?.userNotes?.trim() || null;
   const [tasks, projects, sourceItems, verificationReports] = await Promise.all([
     getWorkTasks(),
     getProjects(),
@@ -53,6 +57,7 @@ export async function generateEndOfDayMemory(input?: { today?: string }): Promis
 
   const dailyInput: DailyMemoryInput = {
     today,
+    userNotes,
     completedTasks: tasks
       .filter((task) => task.status === "done" && recentEnough(task.updatedAt, today))
       .map((task) => ({

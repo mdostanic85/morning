@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hydra / ASC — Jutarnji izveštaj</title>
+  <meta name="description" content="Operativni Hydra / ASC jutarnji izveštaj za 18. jul 2026." />
+  <style>
+    :root{
+      --bg:#f6f8fb;
+      --surface:#ffffff;
+      --surface-2:#f0f4f8;
+      --text:#152033;
+      --muted:#667085;
+      --border:#dfe5ec;
+      --accent:#315efb;
+      --accent-2:#e8eeff;
+      --success:#1f9d67;
+      --success-bg:#e9f8f1;
+      --warning:#d97706;
+      --warning-bg:#fff4df;
+      --danger:#d92d20;
+      --danger-bg:#fff0ee;
+      --info:#0f6cbd;
+      --info-bg:#eaf4ff;
+      --shadow:0 14px 40px rgba(22, 34, 51, .08);
+      --radius:18px;
+      --radius-sm:12px;
+      --max:1440px;
+    }
+
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      font-family:Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:linear-gradient(180deg,#f9fbfd 0%,var(--bg) 100%);
+      color:var(--text);
+      line-height:1.55;
+    }
+
+    a{color:var(--accent);text-decoration:none}
+    a:hover{text-decoration:underline}
+
+    .shell{
+      display:grid;
+      grid-template-columns:280px minmax(0,1fr);
+      min-height:100vh;
+      max-width:var(--max);
+      margin:0 auto;
+    }
+
+    aside{
+      position:sticky;
+      top:0;
+      height:100vh;
+      padding:28px 20px;
+      border-right:1px solid var(--border);
+      background:rgba(255,255,255,.92);
+      backdrop-filter:blur(14px);
+    }
+
+    .brand{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      margin-bottom:28px;
+    }
+
+    .brand-mark{
+      width:42px;
+      height:42px;
+      border-radius:14px;
+      display:grid;
+      place-items:center;
+      background:linear-gradient(135deg,var(--accent),#6e8bff);
+      color:#fff;
+      font-weight:800;
+      box-shadow:0 8px 24px rgba(49,94,251,.25);
+    }
+
+    .brand h1{
+      margin:0;
+      font-size:16px;
+      line-height:1.2;
+    }
+
+    .brand small{
+      display:block;
+      margin-top:4px;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    nav{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+
+    nav a{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border-radius:10px;
+      color:#344054;
+      font-size:14px;
+      font-weight:650;
+    }
+
+    nav a:hover{
+      background:var(--surface-2);
+      text-decoration:none;
+    }
+
+    .sidebar-note{
+      position:absolute;
+      left:20px;
+      right:20px;
+      bottom:24px;
+      padding:14px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:#fafcff;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    main{
+      padding:36px;
+      min-width:0;
+    }
+
+    .hero{
+      position:relative;
+      overflow:hidden;
+      padding:34px;
+      border-radius:24px;
+      background:linear-gradient(135deg,#172554 0%,#263b87 55%,#315efb 100%);
+      color:#fff;
+      box-shadow:var(--shadow);
+    }
+
+    .hero::after{
+      content:"";
+      position:absolute;
+      right:-120px;
+      top:-120px;
+      width:320px;
+      height:320px;
+      border-radius:50%;
+      background:rgba(255,255,255,.10);
+    }
+
+    .eyebrow{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-bottom:12px;
+      font-size:13px;
+      font-weight:750;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      opacity:.82;
+    }
+
+    .hero h2{
+      max-width:900px;
+      margin:0;
+      font-size:clamp(28px,4vw,46px);
+      line-height:1.06;
+      letter-spacing:-.035em;
+    }
+
+    .hero p{
+      max-width:850px;
+      margin:18px 0 0;
+      color:rgba(255,255,255,.84);
+      font-size:17px;
+    }
+
+    .hero-meta{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:24px;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 11px;
+      border-radius:999px;
+      font-size:13px;
+      font-weight:700;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.10);
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(12,minmax(0,1fr));
+      gap:18px;
+      margin-top:18px;
+    }
+
+    .card{
+      grid-column:span 12;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:0 8px 30px rgba(22,34,51,.05);
+    }
+
+    .card-inner{padding:24px}
+
+    .span-7{grid-column:span 7}
+    .span-5{grid-column:span 5}
+    .span-6{grid-column:span 6}
+
+    .section-heading{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:18px;
+    }
+
+    .section-heading h3{
+      margin:0;
+      font-size:21px;
+      letter-spacing:-.02em;
+    }
+
+    .section-heading p{
+      margin:4px 0 0;
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    .status{
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      white-space:nowrap;
+    }
+
+    .status.danger{color:var(--danger);background:var(--danger-bg)}
+    .status.warning{color:var(--warning);background:var(--warning-bg)}
+    .status.success{color:var(--success);background:var(--success-bg)}
+    .status.info{color:var(--info);background:var(--info-bg)}
+    .status.neutral{color:#475467;background:#eef2f6}
+
+    .priority-card{
+      border-color:#ffd0cc;
+      background:linear-gradient(180deg,#fff 0%,#fff8f7 100%);
+    }
+
+    .callout{
+      padding:16px;
+      border-radius:14px;
+      background:var(--danger-bg);
+      border:1px solid #ffd3cf;
+      color:#7a271a;
+      font-weight:650;
+    }
+
+    .steps{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .step{
+      display:grid;
+      grid-template-columns:36px minmax(0,1fr);
+      gap:12px;
+      padding:16px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:#fff;
+    }
+
+    .step-number{
+      width:36px;
+      height:36px;
+      border-radius:12px;
+      display:grid;
+      place-items:center;
+      background:var(--accent-2);
+      color:var(--accent);
+      font-weight:850;
+    }
+
+    .step h4{
+      margin:1px 0 4px;
+      font-size:16px;
+    }
+
+    .step p{
+      margin:0;
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    .checklist{
+      display:grid;
+      gap:10px;
+    }
+
+    .check-item{
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      padding:12px 14px;
+      border-radius:12px;
+      background:#fafbfc;
+      border:1px solid var(--border);
+    }
+
+    .check-item input{
+      margin-top:3px;
+      width:17px;
+      height:17px;
+      accent-color:var(--accent);
+    }
+
+    .conflict{
+      padding:16px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:#fff;
+    }
+
+    .conflict + .conflict{margin-top:12px}
+
+    .conflict h4{
+      margin:0 0 7px;
+      font-size:15px;
+    }
+
+    .conflict p{
+      margin:0 0 8px;
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    .resolution{
+      margin-top:10px;
+      padding:11px 12px;
+      border-left:4px solid var(--accent);
+      background:var(--accent-2);
+      border-radius:0 10px 10px 0;
+      color:#243b7a;
+      font-weight:700;
+      font-size:14px;
+    }
+
+    .mini-list{
+      display:grid;
+      gap:10px;
+      margin:0;
+      padding:0;
+      list-style:none;
+    }
+
+    .mini-list li{
+      padding:12px 14px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:#fafbfc;
+    }
+
+    .mini-list strong{display:block;margin-bottom:3px}
+    .mini-list span{color:var(--muted);font-size:14px}
+
+    .ticket{
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+
+    .ticket-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    .ticket-code{
+      font-weight:850;
+      color:var(--accent);
+    }
+
+    .ticket h4{
+      margin:0;
+      font-size:18px;
+    }
+
+    .ticket p{
+      margin:0;
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    .ticket a.button,
+    .button{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      width:max-content;
+      padding:10px 14px;
+      border-radius:11px;
+      background:var(--accent);
+      color:#fff;
+      font-weight:750;
+      font-size:14px;
+      box-shadow:0 8px 20px rgba(49,94,251,.18);
+    }
+
+    .ticket a.button:hover,.button:hover{
+      text-decoration:none;
+      filter:brightness(.98);
+    }
+
+    details{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:#fff;
+      overflow:hidden;
+    }
+
+    details + details{margin-top:10px}
+
+    summary{
+      cursor:pointer;
+      list-style:none;
+      padding:15px 16px;
+      font-weight:800;
+    }
+
+    summary::-webkit-details-marker{display:none}
+
+    details[open] summary{
+      border-bottom:1px solid var(--border);
+      background:#fafbfc;
+    }
+
+    .details-body{
+      padding:16px;
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    .calendar-empty{
+      display:grid;
+      place-items:center;
+      text-align:center;
+      min-height:220px;
+      padding:24px;
+      border:1px dashed #b9c5d2;
+      border-radius:16px;
+      background:#fafcff;
+    }
+
+    .calendar-empty .icon{
+      width:52px;
+      height:52px;
+      border-radius:16px;
+      display:grid;
+      place-items:center;
+      background:var(--success-bg);
+      color:var(--success);
+      font-size:24px;
+      margin-bottom:12px;
+    }
+
+    .sources{
+      display:grid;
+      gap:10px;
+    }
+
+    .source{
+      padding:13px 14px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fafbfc;
+      word-break:break-word;
+    }
+
+    .source strong{display:block;margin-bottom:2px}
+    .source span{color:var(--muted);font-size:13px}
+
+    footer{
+      display:flex;
+      justify-content:space-between;
+      gap:16px;
+      padding:28px 4px 4px;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    .floating-top{
+      position:fixed;
+      right:22px;
+      bottom:22px;
+      width:42px;
+      height:42px;
+      border-radius:13px;
+      display:grid;
+      place-items:center;
+      background:#172554;
+      color:#fff;
+      box-shadow:var(--shadow);
+      font-weight:850;
+    }
+
+    @media (max-width:1100px){
+      .shell{grid-template-columns:1fr}
+      aside{display:none}
+      main{padding:20px}
+      .span-7,.span-5,.span-6{grid-column:span 12}
+    }
+
+    @media (max-width:640px){
+      main{padding:12px}
+      .hero{padding:24px 20px;border-radius:18px}
+      .card-inner{padding:18px}
+      .section-heading{flex-direction:column}
+      footer{flex-direction:column}
+    }
+
+    @media print{
+      body{background:#fff}
+      aside,.floating-top{display:none}
+      .shell{display:block;max-width:none}
+      main{padding:0}
+      .hero,.card{box-shadow:none}
+      .card{break-inside:avoid}
+    }
+  </style>
+</head>
+<body>
+  <div id="top" class="shell">
+    <aside>
+      <div class="brand">
+        <div class="brand-mark">H</div>
+        <div>
+          <h1>Hydra / ASC</h1>
+          <small>Operativni izveštaj</small>
+        </div>
+      </div>
+
+      <nav aria-label="Sekcije">
+        <a href="#prioritet">🔥 Najvažnije</a>
+        <a href="#redosled">🧭 Redosled rada</a>
+        <a href="#done">✅ Definition of Done</a>
+        <a href="#konflikti">⚠️ Konflikti</a>
+        <a href="#blokade">⛔ Blokeri</a>
+        <a href="#ostalo">📌 Ostali tiketi</a>
+        <a href="#calendar">📅 Sastanci</a>
+        <a href="#sources">🔗 Izvori</a>
+      </nav>
+
+      <div class="sidebar-note">
+        Fokus dana: završiti CFM delta izmene, bez otvaranja novog modula.
+      </div>
+    </aside>
+
+    <main>
+      <section class="hero">
+        <div class="eyebrow">Hydra / ASC · Jutarnji izveštaj</div>
+        <h2>UATL-367 još nije spreman za finalni sign-off</h2>
+        <p>
+          Petkov Product/Design review dodao je obavezne Content File Manager zahteve nakon što je tiket već označen kao spreman za review.
+        </p>
+        <div class="hero-meta">
+          <span class="pill">📅 Subota, 18. jul 2026.</span>
+          <span class="pill">🟠 Prioritet: UATL-367</span>
+          <span class="pill">🧑‍💻 Assignee: Miloš Dostanić</span>
+        </div>
+      </section>
+
+      <div class="grid">
+        <section id="prioritet" class="card priority-card span-7">
+          <div class="card-inner">
+            <div class="section-heading">
+              <div>
+                <h3>Najvažnije</h3>
+                <p>Jedan fokus, bez širenja scope-a.</p>
+              </div>
+              <span class="status danger">Potrebna dorada</span>
+            </div>
+
+            <div class="callout">
+              Jira status je “In Review”, ali najnoviji sastanak je uveo nove obavezne slučajeve. Petkov Product/Design Weekly ima prednost nad starijim statusom i komentarom.
+            </div>
+          </div>
+        </section>
+
+        <section class="card span-5">
+          <div class="card-inner">
+            <div class="section-heading">
+              <div>
+                <h3>Trenutno stanje</h3>
+                <p>Sažetak za brzi pregled.</p>
+              </div>
+            </div>
+            <ul class="mini-list">
+              <li><strong>Jira</strong><span>UATL-367 · In Review · Medium priority</span></li>
+              <li><strong>Figma</strong><span>Potrebna provera large-volume i Manage varijanti</span></li>
+              <li><strong>Review</strong><span>Čeka Mattovu i Sofijinu finalnu potvrdu</span></li>
+            </ul>
+          </div>
+        </section>
+
+        <section id="redosled" class="card">
+          <div class="card-inner">
+            <div class="section-heading">
+              <div>
+                <h3>Redosled rada</h3>
+                <p>Radi odozgo nadole. Ne prelazi na sledeći korak dok prethodni nije čist.</p>
+              </div>
+              <span class="status warning">5 koraka</span>
+            </div>
+
+            <div class="steps">
+              <article class="step">
+                <div class="step-number">1</div>
+                <div>
+                  <h4>Large-volume scenario</h4>
+                  <p>Dodaj prikaz za SKU sa 86 fajlova, sa jasnom pagination logikom ili drugim skalabilnim obrascem.</p>
+                </div>
+              </article>
+
+              <article class="step">
+                <div class="step-number">2</div>
+                <div>
+                  <h4>Upload na oba nivoa</h4>
+                  <p>Upload mora postojati na Figure Number i SKU nivou, čak i kada fajlovi već postoje.</p>
+                </div>
+              </article>
+
+              <article class="step">
+                <div class="step-number">3</div>
+                <div>
+                  <h4>Ujednači Manage akcije</h4>
+                  <p>Svaki meni mora imati: Replace target, Replace everywhere, Remove target i Remove everywhere.</p>
+                </div>
+              </article>
+
+              <article class="step">
+                <div class="step-number">4</div>
+                <div>
+                  <h4>Očisti stare obrasce</h4>
+                  <p>Ukloni ili arhiviraj “Stop inheriting” i sve skrivenе scenarije koji koriste zastareli mentalni model.</p>
+                </div>
+              </article>
+
+              <article class="step">
+                <div class="step-number">5</div>
+                <div>
+                  <h4>Vrati na finalni review</h4>
+                  <p>Ažuriraj Jira komentar checklistom petkovih izmena i taguj Matta i Sofiju. Ne pomeraj tiket samostalno u Done.</p>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section id="done" class="card span-7">
+          <div class="card-inner">
+            <div class="section-heading">
+              <div>
+                <h3>Definition of Done</h3>
+                <p>Interaktivna checklistа za završnu proveru.</p>
+              </div>
+              <span class="status success">Finalni kriterijumi</span>
+            </div>
+
+            <div class="checklist">
+              <label class="check-item"><input type="checkbox"> <span>Postoji jasan prikaz SKU-a sa velikim brojem fajlova i paginationom.</span></label>
+              <label class="check-item"><input type="checkbox"> <span>Upload postoji na Figure i SKU nivou, čak i kada postoje fajlovi.</span></label>
+              <label class="check-item"><input type="checkbox"> <span>Svi Manage meniji imaju iste četiri akcije.</span></label>
+              <label class="check-item"><input type="checkbox"> <span>Slike su levo poravnate u tabelama.</span></label>
+              <label class="check-item"><input type="checkbox"> <span>Nema aktivnih review screenova sa starim inheritance wordingom.</span></label>
+              <label class="check-item"><input type="checkbox"> <span>Cross-figure association je označen kao out of scope.</span></label>
+              <label class="check-item"><input type="checkbox"> <span>Receipts i rollback prate poslednju odluku sa sastanka.</span></label>
+              <label class="check-item"><input type="checkbox"> <span>Matt i Sofija su dali finalni sign-off.</span></label>
+            </div>
+          </div>
+        </section>
+
+        <section id="blokade" class="card span-5">
+          <div class="card-inner">
+            <div class="section-heading">
+              <div>
+                <h3>Blokeri i čekanja</h3>
+                <p>Šta je stvarno blokada, a šta nije.</p>
+              </div>
+            </div>
+
+            <ul class="mini-list">
+              <li><strong>Finalni sign-off</strong><span>Čeka se potvrda Matta i Sofije.</span></li>
+              <li><strong>PRD/Jira delta</strong><span>Dokumentacija nije potpuno usklađena sa petkom.</span></li>
+              <li><strong>Lista SKU-ova &gt;10 fajlova</strong><span>Nije dostupna, ali ne blokira dizajn pagination obrasca.</span></li>
+              <li><strong>Figma komentari</strong><span>Direktan broj nije moguće pouzdano proveriti kroz trenutni konektor.</span></li>
+            </ul>
+          </div>
+        </section>
+
+        <section id="konflikti" class="card">
+          <div class="card-inner">
+            <div class="section-heading">
+              <div>
+                <h3>Konflikti između izvora</h3>
+                <p>Ovo su tačke na kojima starija dokumentacija više nije dovoljna.</p>
+              </div>
+              <span class="status danger">3 konflikta</span>
+            </div>
+
+            <div class="conflict">
+              <h4>Jira status vs. petkov review</h4>
+              <p>Jira kaže “In Review”, ali je sastanak dodao nove zahteve nakon što je dizajn prijavljen kao završen.</p>
+              <div class="resolution">Pratiti petkov Product/Design Weekly.</div>
+            </div>
+
+            <div class="conflict">
+              <h4>Multi-figure association</h4>
+              <p>Stariji acceptance criteria dozvoljavaju povezivanje fajla sa više figure brojeva, dok je Matt rekao da je to van trenutne iteracije.</p>
+              <div class="resolution">Out of scope za ovu iteraciju.</div>
+            </div>
+
+            <div class="conflict">
+              <h4>Rollback nakon brisanja</h4>
+              <p>Stariji PRD kaže da global delete nema rollback, dok je petkov sastanak tražio čuvanje prethodne revizije i undo.</p>
+              <div class="resolution">Pratiti najnoviju Mattovu instrukciju i evidentirati PRD/Jira delta.</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="ostalo" class="card span-6">
+          <div class="card-inner">
+            <div class="section-heading">
+              <div>
+                <h3>Ostali aktivni tiket</h3>
+                <p>Ne trošiti fokus dok UATL-367 nije zatvoren.</p>
+              </div>
+            </div>
+
+            <div class="ticket">
+              <div class="ticket-top">
+                <span class="ticket-code">UATL-233</span>
+                <span class="status neutral">In Progress</span>
+              </div>
+              <h4>Design Debt</h4>
+              <p>Nema konkretan scope, subtasks ni jasno definisan rezultat. Čeka Mattovu odluku da se razbije na konkretne tikete ili zatvori.</p>
+              <a class="button" href="https://ooden.atlassian.net/browse/UATL-233" target="_blank" rel="noopener">Otvori tiket</a>
+            </div>
+          </div>
+        </section>
+
+        <section id="calendar" class="card span-6">
+          <div class="card-inner">
+            <div class="section-heading">
+              <div>
+                <h3>Današnji sastanci</h3>
+                <p>Subota, 18. jul 2026.</p>
+              </div>
+            </div>
+
+            <div class="calendar-empty">
+              <div class="icon">✓</div>
+              <strong>Nema Hydra/ASC sastanaka</strong>
+              <p style="margin:8px 0 0;color:var(--muted)">Radi samo CFM delta izmene i pripremi čist review paket za ponedeljak.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-inner">
+            <div class="section-heading">
+              <div>
+                <h3>Dodatne napomene</h3>
+                <p>Kontekst koji nije važniji od UATL-367, ali ne treba da se izgubi.</p>
+              </div>
+            </div>
+
+            <details open>
+              <summary>AI/Cursor troškovi</summary>
+              <div class="details-body">
+                Matt je rekao da za company work koristiš kompanijski proces za dodatne troškove i da privatne naloge ne treba da trošiš da bi ostao odblokiran.
+              </div>
+            </details>
+
+            <details>
+              <summary>Figma plugin i developerska pomoć</summary>
+              <div class="details-body">
+                Nakon CFM-a sledeća mala operativna akcija je da kroz postojeći engineering proces zatražiš pomoć developera za Figma plugin.
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section id="sources" class="card">
+          <div class="card-inner">
+            <div class="section-heading">
+              <div>
+                <h3>Izvori</h3>
+                <p>Direktni linkovi ka radnim izvorima.</p>
+              </div>
+            </div>
+
+            <div class="sources">
+              <div class="source"><strong>Granola</strong><span>Hydra Daily · 17. jul 2026.</span></div>
+              <a class="source" href="https://docs.google.com/document/d/1uZYu7Ks7gctO3ZmNKJ-aTUXNua41tv7_kPaCvGtQq8w" target="_blank" rel="noopener">
+                <strong>Gemini Notes</strong><span>Product/Design Weekly · 17. jul 2026.</span>
+              </a>
+              <a class="source" href="https://ooden.atlassian.net/browse/UATL-367" target="_blank" rel="noopener">
+                <strong>Jira</strong><span>UATL-367 · Content File Manager</span>
+              </a>
+              <a class="source" href="https://www.figma.com/design/rONB8aMPanOjS3GC1uN16d/Admin---ASC-Connected?node-id=2009-5319" target="_blank" rel="noopener">
+                <strong>Figma</strong><span>Admin / ASC Connected</span>
+              </a>
+              <a class="source" href="https://ooden.atlassian.net/wiki/spaces/Hydra/pages/2030207002/PRD+-+Content+File+Manager" target="_blank" rel="noopener">
+                <strong>PRD</strong><span>Content File Manager</span>
+              </a>
+              <a class="source" href="https://ooden.atlassian.net/wiki/spaces/Hydra/pages/2029912066/Intake+-+Content+File+Manager+-+Additional+Acceptance+Criteria" target="_blank" rel="noopener">
+                <strong>Acceptance Criteria</strong><span>Dodatni CFM kriterijumi</span>
+              </a>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer>
+        <span>Hydra / ASC operativni dashboard</span>
+        <span>Pripremljeno za Miloša Dostanića · 18. jul 2026.</span>
+      </footer>
+    </main>
+  </div>
+
+  <a class="floating-top" href="#top" aria-label="Nazad na vrh">↑</a>
+
+  <script>
+    const storageKey = "hydra-report-checklist";
+    const checkboxes = [...document.querySelectorAll('.check-item input[type="checkbox"]')];
+
+    const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    checkboxes.forEach((checkbox, index) => {
+      checkbox.checked = Boolean(saved[index]);
+      checkbox.addEventListener("change", () => {
+        const state = checkboxes.map(item => item.checked);
+        localStorage.setItem(storageKey, JSON.stringify(state));
+      });
+    });
+
+    const navLinks = [...document.querySelectorAll("nav a")];
+    const sections = navLinks
+      .map(link => document.querySelector(link.getAttribute("href")))
+      .filter(Boolean);
+
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        navLinks.forEach(link => {
+          const active = link.getAttribute("href") === `#${entry.target.id}`;
+          link.style.background = active ? "var(--surface-2)" : "";
+          link.style.color = active ? "var(--accent)" : "";
+        });
+      });
+    }, { rootMargin: "-30% 0px -60% 0px", threshold: 0 });
+
+    sections.forEach(section => observer.observe(section));
+  </script>
+</body>
+</html>

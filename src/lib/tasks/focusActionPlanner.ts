@@ -11,6 +11,8 @@ import type { BriefingFocusItemDraft } from "@/lib/tasks/priorityRank";
 import type { WorkTaskForRanking } from "@/lib/tasks/priorityRank";
 import { buildFocusEvidenceBundle } from "@/lib/tasks/focusEvidenceBundle";
 import type { StoredTodayBriefingJiraItem } from "@/lib/llm/prompts/todayBriefing";
+import { priorityExplanationForDisplay } from "@/lib/tasks/priorityExplanation";
+import { updateWorkTask } from "@/services/workTasks";
 
 export interface EnrichFocusActionsInput {
   today: string;
@@ -24,8 +26,10 @@ function mergePlanIntoFocusItem(
   item: BriefingFocusItemDraft,
   plan: {
     reason: string;
+    priorityExplanation: string;
     nextAction: string;
     actionSteps: string[];
+    todayWorkSummary?: string[];
     doneCriteria: string[];
     evidenceQuotes: { quote: string }[];
     referenceLinks: { label: string; url: string }[];
@@ -34,8 +38,10 @@ function mergePlanIntoFocusItem(
   return {
     ...item,
     reason: plan.reason,
+    priorityExplanation: priorityExplanationForDisplay(plan.priorityExplanation),
     nextAction: plan.nextAction,
     actionSteps: plan.actionSteps,
+    todayWorkSummary: plan.todayWorkSummary,
     referenceLinks: plan.referenceLinks,
     doneCriteria: plan.doneCriteria,
     evidenceQuotes: plan.evidenceQuotes,
@@ -66,6 +72,7 @@ export async function enrichFocusItemsWithActionPlans(
       jiraStatus: jiraIssue?.status ?? null,
       currentNextAction: item.nextAction,
       currentReason: item.reason,
+      currentPriorityExplanation: item.priorityExplanation,
       sources,
     };
   });
@@ -83,11 +90,27 @@ export async function enrichFocusItemsWithActionPlans(
 
   const planById = new Map(result.data.items.map((entry) => [entry.id, entry]));
 
-  return input.focusItems.map((item, index) => {
+  const enrichedItems = input.focusItems.map((item, index) => {
     const plan = planById.get(`focus-${index}`);
     if (!plan) return item;
     return mergePlanIntoFocusItem(item, plan);
   });
+
+  // Persist the source-grounded pillars so task detail, Tomorrow, and project
+  // cards show the same concrete plan as the Today briefing.
+  await Promise.all(
+    enrichedItems.map((item, index) => {
+      const plan = planById.get(`focus-${index}`);
+      if (!plan || item.linkedTaskId == null) return Promise.resolve(null);
+      return updateWorkTask(item.linkedTaskId, {
+        reason: plan.reason,
+        nextAction: plan.nextAction,
+        doneCriteria: plan.doneCriteria,
+      });
+    })
+  );
+
+  return enrichedItems;
 }
 
 export async function enrichJiraPendingWithActionPlans(input: {
@@ -125,6 +148,7 @@ export async function enrichJiraPendingWithActionPlans(input: {
       jiraStatus: item.status,
       currentNextAction: item.nextAction,
       currentReason: item.reason,
+      currentPriorityExplanation: item.priorityExplanation ?? "",
       sources,
     };
   });
@@ -148,6 +172,7 @@ export async function enrichJiraPendingWithActionPlans(input: {
     return {
       ...item,
       reason: plan.reason,
+      priorityExplanation: priorityExplanationForDisplay(plan.priorityExplanation),
       nextAction: plan.nextAction,
       doneCriteria: plan.doneCriteria,
       evidenceQuotes: plan.evidenceQuotes,

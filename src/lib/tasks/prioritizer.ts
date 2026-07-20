@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { runLlmJob } from "@/lib/llm/router";
@@ -19,13 +20,20 @@ import {
 } from "@/lib/tasks/priorityRank";
 import { filterActiveProjects, getProjects } from "@/services/projects";
 import { getSourceItems } from "@/services/sourceItems";
+import { getUserProfile } from "@/services/userProfile";
+import type { AttendanceContext } from "@/lib/tasks/sourceAuthority";
 import {
   applyPlannerDecisions,
   getTodayQueue,
   type WorkTaskWithEvidence,
 } from "@/services/workTasks";
 import { getLatestDailyMemory } from "@/services/dailyMemories";
-import { fetchJiraPendingSnapshot } from "@/lib/connectors/jiraPending";
+import { planJiraAnchorEvidenceAdoption } from "@/lib/tasks/jiraAnchorEvidence";
+import { createEvidence } from "@/services/evidence";
+import {
+  fetchJiraPendingSnapshot,
+  type JiraPendingSnapshot,
+} from "@/lib/connectors/jiraPending";
 import { OPEN_QUEUE_STATUSES, type WorkTaskStatus } from "@/domain/workTask";
 import { localDateString } from "@/lib/dates";
 import type { Project } from "@/domain/project";
@@ -33,6 +41,8 @@ import type { SourceItem } from "@/domain/sourceItem";
 
 const RECENT_SOURCE_LIMIT = 8;
 const SOURCE_EXCERPT_LENGTH = 360;
+const LLM_PLANNER_TASK_LIMIT = 40;
+const PRIORITY_PLANNER_PROMPT_VERSION = 2;
 const SUMMARY_PATH = path.join(process.cwd(), "data", "today-queue-summary.json");
 
 export interface PriorityPlanSummary {
@@ -40,6 +50,7 @@ export interface PriorityPlanSummary {
   plannedAt: string;
   today: string;
   updatedTaskCount: number;
+  inputHash?: string;
 }
 
 export interface RebuildTodayQueueResult {
@@ -143,6 +154,7 @@ function buildRecentSources(
 function toWorkTaskForRanking(task: WorkTaskWithEvidence): WorkTaskForRanking {
   return {
     id: task.id,
+    projectId: task.projectId,
     title: task.title,
     status: task.status,
     reason: task.reason,
@@ -165,7 +177,8 @@ function buildTasksForPlanning(
   projectNameById: Map<number, string>,
   sourceById: Map<number, SourceItem>,
   jiraPending: Awaited<ReturnType<typeof fetchJiraPendingSnapshot>>,
-  today: string
+  today: string,
+  attendance?: AttendanceContext
 ): TaskForPlanning[] {
   const jiraByKey = new Map(jiraPending.map((issue) => [issue.key, issue]));
 
@@ -173,7 +186,7 @@ function buildTasksForPlanning(
     const sources = task.evidence
       .map((item) => sourceById.get(item.sourceItemId))
       .filter((source): source is SourceItem => source != null);
-    const ranked = rankWorkTask(toWorkTaskForRanking(task), today, sourceById, jiraByKey);
+    const ranked = rankWorkTask(toWorkTaskForRanking(task), today, sourceById, jiraByKey, attendance);
 
     return {
       id: task.id,
@@ -216,14 +229,20 @@ function buildTasksForPlanning(
 
 export async function rebuildTodayQueue(options?: {
   today?: string;
+  jiraPending?: JiraPendingSnapshot[];
 }): Promise<RebuildTodayQueueResult> {
   const today = options?.today ?? localDateString();
-  const [queue, allProjects, sourceItems, previousDailyMemory] = await Promise.all([
+  const [queue, allProjects, sourceItems, previousDailyMemory, profile] = await Promise.all([
     getTodayQueue(),
     getProjects(),
     getSourceItems(),
     getPreviousDailyMemory(),
+    getUserProfile(),
   ]);
+  const attendance: AttendanceContext = {
+    myName: profile?.name ?? null,
+    myEmail: profile?.email ?? null,
+  };
   const projects = filterActiveProjects(allProjects);
   const inactiveProjectIds = new Set(
     allProjects.filter((project) => project.status === "inactive").map((project) => project.id)
@@ -257,20 +276,74 @@ export async function rebuildTodayQueue(options?: {
     return !inactiveProjectIds.has(sourceItem.projectId);
   });
 
-  const jiraPending = await fetchJiraPendingSnapshot();
+  // Retroactive consolidation: Jira anchor tasks adopt transcript evidence
+  // from open fragment tasks about the same topic, so the real ticket gets
+  // the meeting freshness/attendance boosts instead of only the fragments.
+  const adoptions = planJiraAnchorEvidenceAdoption({
+    tasks: allOpen,
+    sourceById: new Map(
+      sourceItems.map((sourceItem) => [sourceItem.id, sourceItem])
+    ),
+  });
+  const taskById = new Map(allOpen.map((task) => [task.id, task]));
+  for (const adoption of adoptions) {
+    const saved = await createEvidence({
+      taskId: adoption.anchorTaskId,
+      sourceItemId: adoption.sourceItemId,
+      quote: adoption.quote,
+      summary: adoption.summary,
+      sourceDate: adoption.sourceDate,
+      url: adoption.url,
+    });
+    taskById.get(adoption.anchorTaskId)?.evidence.push(saved);
+  }
+
+  const jiraPending = options?.jiraPending ?? await fetchJiraPendingSnapshot();
   const rankingTasks = tasks.map(toWorkTaskForRanking);
-  const ranked = rankWorkTasks(rankingTasks, today, sourceById, jiraPending);
+  const ranked = rankWorkTasks(rankingTasks, today, sourceById, jiraPending, attendance);
   const deterministicDecisions = buildQueueDecisionsFromRanking(ranked, rankingTasks);
+  const plannerTaskIds = new Set(
+    ranked.slice(0, LLM_PLANNER_TASK_LIMIT).map((entry) => entry.taskId)
+  );
+  const plannerTasks = tasks.filter((task) => plannerTaskIds.has(task.id));
 
   let summaryText = buildPlannerSummaryFromRanking(ranked, rankingTasks);
 
   const input: PriorityPlannerInput = {
     today,
-    tasks: buildTasksForPlanning(tasks, projectNameById, sourceById, jiraPending, today),
+    tasks: buildTasksForPlanning(
+      plannerTasks,
+      projectNameById,
+      sourceById,
+      jiraPending,
+      today,
+      attendance
+    ),
     projects: buildProjectContext(projects),
     recentlyImportedSources: buildRecentSources(activeSources, projectNameById),
     previousDailyMemory,
   };
+  const stablePlannerInput = {
+    ...input,
+    tasks: input.tasks.map((task) => ({ ...task, updatedAt: undefined })),
+  };
+  const inputHash = createHash("sha256")
+    .update(
+      JSON.stringify({
+        priorityPlannerPromptVersion: PRIORITY_PLANNER_PROMPT_VERSION,
+        input: stablePlannerInput,
+        deterministicDecisions,
+      })
+    )
+    .digest("hex");
+  const previousSummary = await getTodayQueueSummary();
+  if (previousSummary?.today === today && previousSummary.inputHash === inputHash) {
+    return {
+      ok: true,
+      summary: previousSummary,
+      updatedTaskCount: 0,
+    };
+  }
 
   const llmResult = await runLlmJob({
     jobType: "priority_planning",
@@ -282,14 +355,44 @@ export async function rebuildTodayQueue(options?: {
     summaryText = llmResult.data.summary.trim();
   }
 
+  const semanticDecisionByTaskId = new Map(
+    llmResult.ok
+      ? llmResult.data.decisions.map((decision) => [decision.taskId, decision] as const)
+      : []
+  );
+
+  // Tasks committed in a meeting the user attended in the last 4 days must stay
+  // active — the LLM may not defer them to waiting/tomorrow/unclear.
+  const forcedTaskIds = new Set(
+    ranked.filter((entry) => entry.forceInclude).map((entry) => entry.taskId)
+  );
+
   const { updated } = await applyPlannerDecisions(
     deterministicDecisions.map((decision) => ({
+      ...(() => {
+        const semantic = semanticDecisionByTaskId.get(decision.taskId);
+        const isForced = forcedTaskIds.has(decision.taskId);
+        const semanticDeferredStatus =
+          !isForced &&
+          (semantic?.status === "waiting" ||
+            semantic?.status === "tomorrow" ||
+            semantic?.status === "unclear")
+            ? semantic.status
+            : null;
+        return {
+          status: semanticDeferredStatus ?? decision.status,
+          reason: semantic?.reason?.trim() || decision.reason,
+          waitingOn:
+            semanticDeferredStatus === "waiting"
+              ? semantic?.waitingOn ??
+                rankingTasks.find((task) => task.id === decision.taskId)?.waitingOn ??
+                null
+              : null,
+          confidence: semantic?.confidence ?? decision.priorityScore,
+        };
+      })(),
       taskId: decision.taskId,
-      status: decision.status,
       priorityScore: decision.priorityScore,
-      reason: decision.reason,
-      waitingOn: rankingTasks.find((task) => task.id === decision.taskId)?.waitingOn ?? null,
-      confidence: decision.priorityScore,
     }))
   );
 
@@ -298,6 +401,7 @@ export async function rebuildTodayQueue(options?: {
     plannedAt: new Date().toISOString(),
     today,
     updatedTaskCount: updated,
+    inputHash,
   };
   writeSummary(summary);
 

@@ -1,5 +1,19 @@
 import type { TaskWorkContextSnapshot } from "./taskWorkContext";
 
+export interface TaskMeetingContextEntry {
+  sourceItemId: number;
+  sourceTitle: string;
+  sourceType: string;
+  sourceDate: string;
+  overview: string;
+  keyPoints: string[];
+  decisions: string[];
+  requestedChanges: string[];
+  openQuestions: string[];
+  evidenceQuotes: string[];
+  confidence: number;
+}
+
 export const WORK_TASK_STATUSES = [
   "now",
   "next",
@@ -34,6 +48,8 @@ export interface WorkTask {
   reason: string;
   nextAction: string;
   doneCriteria: string[];
+  /** Detailed, source-grounded meeting context, newest source first. */
+  meetingContext: TaskMeetingContextEntry[];
   dueDate: string | null;
   owner: string | null;
   waitingOn: string | null;
@@ -58,6 +74,7 @@ export type NewWorkTask = Pick<
       | "dueDate"
       | "owner"
       | "waitingOn"
+      | "meetingContext"
       | "figmaFrameUrl"
       | "localRepoPath"
       | "githubRepo"
