@@ -9,7 +9,7 @@ import { fetchCalendarEventsIncremental } from "./calendar";
 import { clearCalendarSyncToken } from "@/lib/imports/calendarConnectionCursor";
 import { fetchGitHubPrSignals, githubRepositoriesForSync } from "./github";
 import { fetchGranolaNotes } from "./granola";
-import { buildPersonalJiraJql, fetchAssignedJiraIssues } from "./jira";
+import { buildAssigneeJiraJql, buildMentionedJiraJql, fetchAssignedJiraIssues } from "./jira";
 import { loadDriveIncrementalSinceIso } from "@/lib/imports/driveConnectionCursor";
 import {
   fetchConfluencePagesViaMcp,
@@ -131,22 +131,50 @@ const jiraConnector: Connector = {
     const connection = await getConnectionByProvider("jira");
     const projectJiraKeys = unique(projects.flatMap((project) => project.jiraKeys));
     const profile = await getUserProfile();
-    const jql = buildPersonalJiraJql(profile?.name);
-    if (isMcpTransport(connection)) {
-      return fetchJiraIssuesViaMcp({
+    const projectKeys = projectJiraKeys.length > 0 ? projectJiraKeys : undefined;
+    const assigneeJql = buildAssigneeJiraJql();
+    const mentionJql = buildMentionedJiraJql(profile?.name);
+
+    async function fetchWithJql(jql: string): Promise<ConnectorSourceCandidate[]> {
+      if (isMcpTransport(connection)) {
+        return fetchJiraIssuesViaMcp({
+          jql,
+          projectJiraKeys: projectKeys,
+          // Include Done assignees for awareness without starving open work.
+          maxResults: 50,
+        });
+      }
+      const updatedSinceIso = connection
+        ? (await loadJiraIncrementalWindow(connection.id)).updatedSinceIso
+        : undefined;
+      return fetchAssignedJiraIssues({
         jql,
-        projectJiraKeys: projectJiraKeys.length > 0 ? projectJiraKeys : undefined,
+        projectJiraKeys: projectKeys,
+        updatedSinceIso,
+        maxResults: 50,
+        shouldCancel,
       });
     }
-    const updatedSinceIso = connection
-      ? (await loadJiraIncrementalWindow(connection.id)).updatedSinceIso
-      : undefined;
-    return fetchAssignedJiraIssues({
-      jql,
-      projectJiraKeys: projectJiraKeys.length > 0 ? projectJiraKeys : undefined,
-      updatedSinceIso,
-      shouldCancel,
-    });
+
+    const assigned = await fetchWithJql(assigneeJql);
+    for (const item of assigned) {
+      item.metadata = { ...(item.metadata ?? {}), involvement: "assignee" };
+    }
+
+    const mentioned = mentionJql ? await fetchWithJql(mentionJql) : [];
+    for (const item of mentioned) {
+      item.metadata = { ...(item.metadata ?? {}), involvement: "mentioned" };
+    }
+
+    // Assignee wins when the same key appears in both pulls.
+    const byKey = new Map<string, ConnectorSourceCandidate>();
+    for (const item of mentioned) {
+      if (item.sourceExternalId) byKey.set(item.sourceExternalId, item);
+    }
+    for (const item of assigned) {
+      if (item.sourceExternalId) byKey.set(item.sourceExternalId, item);
+    }
+    return Array.from(byKey.values());
   },
 };
 

@@ -48,10 +48,22 @@ export default async function SettingsPage({
  ),
  },
  {
+ provider: "calendar",
+ label: "Google Calendar",
+ description:
+ "Read-only sync for today’s meetings on your primary calendar. Powers the Today meetings panel.",
+ authType: "oauth" as const,
+ setupHint: oauthSetupHint(
+ hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"),
+ "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET",
+ "console.cloud.google.com"
+ ),
+ },
+ {
  provider: "jira",
  label: "Jira",
  description:
- "Read-only sync for assigned, non-done issues. Connect via MCP (recommended) or direct API.",
+ "Read-only sync for issues assigned to you (any column) plus recent issues where you’re mentioned.",
  authType: "oauth" as const,
  supportsMcp: true,
  mcpConnectUrl: "/api/mcp/atlassian/connect",

@@ -74,7 +74,7 @@ async function gatherJiraSignals(signals: ProjectDiscoverySignal[]): Promise<voi
         const issuesRaw = parseMcpToolPayload(
           await callMcpTool(client, "searchJiraIssuesUsingJql", {
             cloudId,
-            jql: "(assignee = currentUser() OR reporter = currentUser()) AND statusCategory != Done ORDER BY updated DESC",
+            jql: "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC",
             maxResults: 15,
           })
         );

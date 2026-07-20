@@ -6,7 +6,9 @@ import { SyncMyDayButton } from "@/components/SyncMyDayButton";
 import { FigmaValidateButton } from "@/components/FigmaValidateButton";
 import { WhyThisButton } from "@/components/WhyThisButton";
 import { TodayMeetingsCard } from "@/components/TodayMeetingsCard";
+import { TodaySignalsCard } from "@/components/TodaySignalsCard";
 import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
+import type { PersonalMentionSignal } from "@/lib/signals/personalMentions";
 import { priorityExplanationForDisplay } from "@/lib/tasks/priorityExplanation";
 
 interface MinimalTask {
@@ -51,6 +53,8 @@ interface MinimalTodayViewProps {
   primarySubtasks: { label: string; agreed: string | null }[];
   meetings: TodayMeeting[];
   calendarConnected: boolean;
+  meetingMentions: PersonalMentionSignal[];
+  jiraMentions: PersonalMentionSignal[];
 }
 
 function relativeTime(value: string): string {
@@ -207,6 +211,8 @@ export function MinimalTodayView({
   primarySubtasks,
   meetings,
   calendarConnected,
+  meetingMentions,
+  jiraMentions,
 }: MinimalTodayViewProps) {
   const primary = tasks[0] ?? null;
   const otherTasks = tasks.slice(1);
@@ -395,6 +401,8 @@ export function MinimalTodayView({
             </div>
           </div>
         ) : null}
+
+        <TodaySignalsCard meetings={meetingMentions} jiraTagged={jiraMentions} />
       </section>
 
       <p className="minimal-foot">

@@ -1,9 +1,8 @@
 import "server-only";
 import { jiraBodyExcerpt, parseJiraBodyFields } from "@/lib/connectors/jiraText";
-import { buildPersonalJiraJql } from "@/lib/connectors/jira";
+import { buildOpenAssigneeJiraJql } from "@/lib/connectors/jira";
 import { getConnectionByProvider } from "@/services/connections";
 import { getActiveProjects } from "@/services/projects";
-import { getUserProfile } from "@/services/userProfile";
 import { isMcpTransport } from "@/lib/connectors/transport";
 
 export interface JiraPendingSnapshot {
@@ -27,8 +26,7 @@ export async function fetchJiraPendingSnapshot(maxResults = 20): Promise<JiraPen
     new Set(activeProjects.flatMap((project) => project.jiraKeys).filter(Boolean))
   );
   try {
-    const profile = await getUserProfile();
-    const jql = buildPersonalJiraJql(profile?.name);
+    const jql = buildOpenAssigneeJiraJql();
 
     if (isMcpTransport(connection)) {
       const { fetchJiraIssuesViaMcp } = await import("@/lib/connectors/mcp/adapters/atlassian");

@@ -10,3 +10,26 @@ export const DAILY_FOCUS_TASK_LIMIT = 1;
 export function shouldAutoExtractTasksFromSource(sourceType: SourceType | string): boolean {
   return sourceType !== "calendar";
 }
+
+/** Jira Done / tagged-only issues stay as evidence signals — not Today focus tasks. */
+export function shouldSkipJiraTaskExtraction(
+  metadata: Record<string, unknown> | null | undefined
+): boolean {
+  if (!metadata) return false;
+  if (metadata.statusCategoryKey === "done") return true;
+  if (metadata.involvement === "mentioned") return true;
+  const status = typeof metadata.status === "string" ? metadata.status.toLowerCase() : "";
+  if (status === "done" || status === "closed" || status === "resolved") return true;
+  return false;
+}
+
+export function shouldExtractTasksFromSourceItem(input: {
+  sourceType: SourceType | string;
+  metadata?: Record<string, unknown> | null;
+}): boolean {
+  if (!shouldAutoExtractTasksFromSource(input.sourceType)) return false;
+  if (input.sourceType === "jira" && shouldSkipJiraTaskExtraction(input.metadata)) {
+    return false;
+  }
+  return true;
+}

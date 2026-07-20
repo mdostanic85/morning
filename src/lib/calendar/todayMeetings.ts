@@ -76,10 +76,29 @@ function isTimedMeeting(meeting: TodayMeeting): boolean {
 
 async function meetingsFromLiveCalendar(): Promise<TodayMeeting[] | null> {
   const connection = await getConnectionByProvider("calendar");
-  if (!connection || connection.status !== "connected") return null;
+  if (!connection) return null;
+  if (connection.status !== "connected" && connection.status !== "error") return null;
 
   try {
     const candidates = await fetchTodayCalendarEvents();
+    if (connection.status === "error") {
+      try {
+        const { upsertConnection } = await import("@/services/connections");
+        const metadata = { ...(connection.metadata ?? {}) };
+        delete metadata.error;
+        delete metadata.lastErrorAt;
+        metadata.recoveredAt = new Date().toISOString();
+        await upsertConnection({
+          provider: "calendar",
+          authType: connection.authType,
+          status: "connected",
+          scopes: connection.scopes,
+          metadata,
+        });
+      } catch {
+        // Live calendar still works; status heal is best-effort.
+      }
+    }
     return candidates
       .map((item) => {
         const startsAt =
@@ -136,8 +155,6 @@ export async function getTodayMeetings(): Promise<{
   source: "live" | "synced" | "none";
 }> {
   const connection = await getConnectionByProvider("calendar");
-  const calendarConnected = connection?.status === "connected";
-
   const live = await meetingsFromLiveCalendar();
   if (live) {
     return {
@@ -147,10 +164,12 @@ export async function getTodayMeetings(): Promise<{
     };
   }
 
+  const calendarConnected =
+    connection?.status === "connected" || connection?.status === "error";
   const synced = await meetingsFromSyncedSources();
   return {
     meetings: synced.sort(sortMeetings),
-    calendarConnected,
+    calendarConnected: Boolean(calendarConnected && connection?.status === "connected"),
     source: synced.length > 0 ? "synced" : "none",
   };
 }

@@ -34,7 +34,7 @@ const PROVIDER_SYNC_DESCRIPTION: Record<ConnectionProvider, string> = {
  gmail: "Gemini meeting-note emails from the last 30 days",
  calendar: "Recent and upcoming calendar events",
  drive: "New or changed Gemini meeting notes in Drive",
- jira: "Issues assigned to you in configured projects",
+ jira: "Issues assigned to you (any status) plus recent mentions",
  confluence: "Pages from configured spaces and page links",
  granola: "New meeting notes and transcripts",
  github: "Pull-request activity in configured repositories",
@@ -465,37 +465,35 @@ function resultSummaryLine(result: SyncResult): string {
 }
 
 function StatusDot({ status }: { status: ProviderUiStatus | FinalizeUiStatus }) {
- return (
- <span
- aria-hidden
- className={cn(
- "flex size-7 shrink-0 items-center justify-center rounded-full border transition-all duration-300",
- status === "completed"
- ? "border-good/20 bg-good/10 text-good"
- : status === "failed"
- ? "border-danger/20 bg-danger/10 text-danger"
- : status === "cancelled"
- ? "border-border bg-surface text-muted"
- : status === "running"
- ? "border-accent/20 bg-accent/10"
- : "border-border bg-surface"
- )}
- >
- {status === "completed" ? (
- <svg viewBox="0 0 10 10" className="size-3 fill-none stroke-current" strokeWidth="1.8">
- <path d="M1.5 5.5 4 8l4.5-6" strokeLinecap="round" strokeLinejoin="round" />
- </svg>
- ) : status === "running" ? (
- <span className="size-3.5 animate-spin rounded-full border-2 border-accent/20 border-t-accent motion-reduce:animate-none" />
- ) : status === "failed" ? (
- <span className="text-xs font-bold leading-none">!</span>
- ) : status === "cancelled" ? (
- <span className="size-1.5 rounded-full bg-muted-soft" />
- ) : (
- <span className="size-1.5 rounded-full bg-border-strong" />
- )}
- </span>
- );
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "flex size-5 shrink-0 items-center justify-center rounded-full transition-all duration-300",
+        status === "completed"
+          ? "bg-good/10 text-good"
+          : status === "failed"
+            ? "bg-danger/10 text-danger"
+            : status === "cancelled"
+              ? "text-muted"
+              : status === "running"
+                ? "text-accent"
+                : "text-muted-soft"
+      )}
+    >
+      {status === "completed" ? (
+        <svg viewBox="0 0 10 10" className="size-2.5 fill-none stroke-current" strokeWidth="1.8">
+          <path d="M1.5 5.5 4 8l4.5-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : status === "running" ? (
+        <span className="size-3 animate-spin rounded-full border-2 border-accent/25 border-t-accent motion-reduce:animate-none" />
+      ) : status === "failed" ? (
+        <span className="text-[10px] font-bold leading-none">!</span>
+      ) : (
+        <span className="size-1.5 rounded-full bg-current opacity-50" />
+      )}
+    </span>
+  );
 }
 
 function ProgressRow({
@@ -507,55 +505,57 @@ function ProgressRow({
  status: ProviderUiStatus | FinalizeUiStatus;
  detail: string;
 }) {
- const failed = status === "failed";
- const active = status === "running";
- const done = status === "completed";
+  const failed = status === "failed";
+  const active = status === "running";
+  const done = status === "completed";
 
- return (
- <li
- className={cn(
- "flex items-start gap-3 border-b border-border/70 px-3.5 py-3.5 transition-colors duration-300 last:border-b-0",
- active && "bg-accent/[0.045]"
- )}
- >
- <StatusDot status={status} />
- <div className="min-w-0 flex-1">
- <div className="flex items-center justify-between gap-3">
- <p
- className={cn(
- "text-[14px] font-semibold leading-snug tracking-[-0.01em] transition-colors duration-300",
- failed ? "text-danger" : done || active ? "text-foreground" : "text-muted-soft"
- )}
- >
- {label}
- </p>
- <span
- className={cn(
- "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em]",
- failed
- ? "bg-danger/8 text-danger"
- : active
- ? "bg-accent/10 text-accent"
- : done
- ? "bg-good/8 text-good"
- : "bg-surface text-muted-soft"
- )}
- >
- {statusLabel(status)}
- </span>
- </div>
- <p
- className={cn(
- "mt-0.5 text-xs leading-relaxed",
- failed ? "text-danger/90" : active ? "text-muted" : "text-muted-soft"
- )}
- title={detail}
- >
- {detail}
- </p>
- </div>
- </li>
- );
+  return (
+    <li
+      className={cn(
+        "flex items-center gap-2.5 px-3 py-2 transition-colors duration-300",
+        active && "bg-accent/[0.045]"
+      )}
+    >
+      <StatusDot status={status} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className={cn(
+              "truncate text-[13px] font-semibold leading-snug tracking-[-0.01em] transition-colors duration-300",
+              failed ? "text-danger" : done || active ? "text-foreground" : "text-muted-soft"
+            )}
+          >
+            {label}
+          </p>
+          <span
+            className={cn(
+              "shrink-0 text-[10px] font-bold uppercase tracking-[0.08em]",
+              failed
+                ? "text-danger"
+                : active
+                  ? "text-accent"
+                  : done
+                    ? "text-good"
+                    : "text-muted-soft"
+            )}
+          >
+            {statusLabel(status)}
+          </span>
+        </div>
+        {(active || failed) && detail ? (
+          <p
+            className={cn(
+              "mt-0.5 truncate text-[11px] leading-snug",
+              failed ? "text-danger/90" : "text-muted"
+            )}
+            title={detail}
+          >
+            {detail}
+          </p>
+        ) : null}
+      </div>
+    </li>
+  );
 }
 
 function SyncResultView({
@@ -774,16 +774,13 @@ function SyncOverlay({
  </div>
  </div>
 
- <section className="mx-3 mb-3 overflow-hidden rounded-[1.15rem] border border-border/80 bg-surface-soft/70 sm:mx-4 sm:mb-4">
- <div className="flex items-center justify-between border-b border-border/70 bg-surface/60 px-3.5 py-3">
- <p className="text-xs font-semibold tracking-[-0.01em] text-foreground">
- What Worklight is checking
- </p>
- <p className="text-[11px] text-muted">
- {providerItems.length} connected source{providerItems.length === 1 ? "" : "s"}
+ <section className="mx-3 mb-3 rounded-[1.15rem] border border-border/80 bg-surface-soft/70 sm:mx-4 sm:mb-4">
+ <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
+ <p className="text-[11px] font-semibold tracking-[-0.01em] text-muted">
+ Checking {providerItems.length} source{providerItems.length === 1 ? "" : "s"}
  </p>
  </div>
- <ul className="max-h-[min(46vh,330px)] overflow-y-auto">
+ <ul className="pb-1.5">
  {providerItems.map((item) => (
  <ProgressRow key={item.id} label={item.label} status={item.status} detail={item.detail} />
  ))}

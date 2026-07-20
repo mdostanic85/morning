@@ -8,24 +8,41 @@ import { buildJiraUpdatedClause } from "@/lib/imports/providerCursorUtils";
 
 const JIRA_PAGE_SIZE = 50;
 
-/** Assigned, reported, watched, or text-matching the current user — open issues only. */
-export const DEFAULT_JIRA_JQL =
-  "(assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) AND statusCategory != Done ORDER BY updated DESC";
+/** Issues assigned to the current user in any column/status. */
+export const DEFAULT_JIRA_JQL = "assignee = currentUser() ORDER BY updated DESC";
+
+function escapeJqlString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+/** All issues where you are the assignee — Done included (queue still skips Done). */
+export function buildAssigneeJiraJql(): string {
+  return DEFAULT_JIRA_JQL;
+}
+
+/** Open assignee issues only — used for pending/status snapshots. */
+export function buildOpenAssigneeJiraJql(): string {
+  return "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC";
+}
 
 /**
- * Prefer this when the user's display name is known so mention/text hits are included.
- * Falls back to assignee/reporter/watcher when no usable name is provided.
+ * Issues that mention you in text/comments but are not assigned to you.
+ * Requires a display name for JQL text search.
  */
-export function buildPersonalJiraJql(displayName?: string | null): string {
+export function buildMentionedJiraJql(displayName?: string | null): string | null {
   const name = displayName?.trim();
-  if (!name) return DEFAULT_JIRA_JQL;
-  // Escape quotes for JQL string literals.
-  const safe = name.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  if (!name) return null;
+  const safe = escapeJqlString(name);
   return (
-    `(assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()` +
-    ` OR text ~ "${safe}" OR comment ~ "${safe}")` +
-    ` AND statusCategory != Done ORDER BY updated DESC`
+    `(assignee != currentUser() OR assignee is EMPTY)` +
+    ` AND (text ~ "${safe}" OR comment ~ "${safe}")` +
+    ` AND updated >= -21d ORDER BY updated DESC`
   );
+}
+
+/** @deprecated Prefer buildAssigneeJiraJql / buildMentionedJiraJql. */
+export function buildPersonalJiraJql(_displayName?: string | null): string {
+  return buildAssigneeJiraJql();
 }
 
 interface JiraIssue {
@@ -34,7 +51,7 @@ interface JiraIssue {
   fields: {
     summary?: string;
     description?: unknown;
-    status?: { name?: string };
+    status?: { name?: string; statusCategory?: { key?: string; name?: string } };
     priority?: { name?: string };
     assignee?: { displayName?: string; emailAddress?: string };
     reporter?: { displayName?: string; emailAddress?: string };
@@ -227,12 +244,14 @@ export async function fetchAssignedJiraIssues(input?: {
         siteName: resource.name,
         key: issue.key,
         status: issue.fields.status?.name ?? null,
+        statusCategoryKey: issue.fields.status?.statusCategory?.key ?? null,
         priority: issue.fields.priority?.name ?? null,
         assignee: issue.fields.assignee?.displayName ?? null,
         reporter: issue.fields.reporter?.displayName ?? null,
         dueDate: issue.fields.duedate ?? null,
         updated: issue.fields.updated ?? null,
         commentUpdatedAts,
+        involvement: "assignee",
       },
     };
   });

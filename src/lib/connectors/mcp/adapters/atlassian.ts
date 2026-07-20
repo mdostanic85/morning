@@ -132,8 +132,13 @@ function jiraIssueToCandidate(
       siteName: cloud.name ?? null,
       key,
       status: typeof status?.name === "string" ? status.name : "unknown",
+      statusCategoryKey:
+        typeof asRecord(status?.statusCategory)?.key === "string"
+          ? (asRecord(status?.statusCategory)?.key as string)
+          : null,
       priority: typeof priority?.name === "string" ? priority.name : null,
       transport: "mcp",
+      involvement: "assignee",
     },
   };
 }
@@ -203,7 +208,7 @@ export async function fetchJiraIssuesViaMcp(input?: {
     const raw = await callMcpTool(client, "searchJiraIssuesUsingJql", {
       cloudId: cloud.id,
       jql,
-      maxResults: input?.maxResults ?? 25,
+      maxResults: input?.maxResults ?? 50,
     });
     const payload = parseToolPayload(raw);
     const record = asRecord(payload);

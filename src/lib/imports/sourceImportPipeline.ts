@@ -6,7 +6,7 @@ import {
 } from "@/services/sourceItems";
 import { getActiveProjects } from "@/services/projects";
 import { extractTasksFromSourceItem } from "@/lib/tasks/extractor";
-import { shouldAutoExtractTasksFromSource } from "@/lib/tasks/dailyFocus";
+import { shouldExtractTasksFromSourceItem } from "@/lib/tasks/dailyFocus";
 import { matchAndAssignSourceItemToProject } from "@/lib/tasks/projectMatcher";
 import { extractKnowledgeFromSourceItem } from "@/lib/knowledge/extractor";
 import { indexSourceItem } from "@/lib/knowledge/embeddings";
@@ -152,7 +152,10 @@ export async function importConnectorSources(
           granolaSourceBodyMatchesMe(sourceItem.body, granolaWorkContext));
       let taskStatus: ProcessingStatus = "skipped";
       if (
-        shouldAutoExtractTasksFromSource(sourceItem.sourceType) &&
+        shouldExtractTasksFromSourceItem({
+          sourceType: sourceItem.sourceType,
+          metadata: sourceItem.metadata,
+        }) &&
         sourceIsPersonalGranolaSignal
       ) {
         if (options.shouldCancel && (await options.shouldCancel())) {

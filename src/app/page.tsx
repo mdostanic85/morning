@@ -8,6 +8,7 @@ import type { ConnectionProvider } from "@/lib/connectors/providers";
 import { getLatestFinishedSyncRun } from "@/services/syncRuns";
 import { resolveFocusLinkedTaskId } from "@/lib/tasks/resolveFocusTask";
 import { getTodayMeetings } from "@/lib/calendar/todayMeetings";
+import { getPersonalMentionSignals } from "@/lib/signals/personalMentions";
 import { MinimalTodayView } from "@/components/MinimalTodayView";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ const CONNECTED_PROVIDER_LABEL: Record<ConnectionProvider, string> = {
 };
 
 export default async function TodayPage() {
-  const [queue, sourceItems, connections, profile, todayBriefing, latestSync, todayMeetings] =
+  const [queue, sourceItems, connections, profile, todayBriefing, latestSync, todayMeetings, mentions] =
     await Promise.all([
       getTodayQueue(),
       getSourceItems(),
@@ -34,6 +35,7 @@ export default async function TodayPage() {
       getTodayBriefing(),
       getLatestFinishedSyncRun(),
       getTodayMeetings(),
+      getPersonalMentionSignals(),
     ]);
 
   const connectedProviderLabels = connections
@@ -150,6 +152,8 @@ export default async function TodayPage() {
       primarySubtasks={primarySubtasks}
       meetings={todayMeetings.meetings}
       calendarConnected={todayMeetings.calendarConnected}
+      meetingMentions={mentions.meetings}
+      jiraMentions={mentions.jiraTagged}
     />
   );
 }

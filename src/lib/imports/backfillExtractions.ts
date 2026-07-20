@@ -3,7 +3,7 @@ import { db } from "@/db/client";
 import { evidence as evidenceTable, knowledgeItems as knowledgeItemsTable } from "@/db/tables";
 import { fetchAll } from "@/db/query";
 import { extractTasksFromSourceItem } from "@/lib/tasks/extractor";
-import { shouldAutoExtractTasksFromSource } from "@/lib/tasks/dailyFocus";
+import { shouldExtractTasksFromSourceItem } from "@/lib/tasks/dailyFocus";
 import { extractKnowledgeFromSourceItem } from "@/lib/knowledge/extractor";
 import { matchAndAssignSourceItemToProject } from "@/lib/tasks/projectMatcher";
 import { indexSourceItem } from "@/lib/knowledge/embeddings";
@@ -161,7 +161,10 @@ async function extractFromSource(
     (granolaWorkContext != null &&
       granolaSourceBodyMatchesMe(item.body, granolaWorkContext));
   const taskExtractionEligible =
-    shouldAutoExtractTasksFromSource(item.sourceType) && sourceIsPersonalGranolaSignal;
+    shouldExtractTasksFromSourceItem({
+      sourceType: item.sourceType,
+      metadata: item.metadata,
+    }) && sourceIsPersonalGranolaSignal;
   const shouldRunTaskExtraction =
     taskExtractionEligible &&
     (!processingMatchesCurrentContent || previousProcessing?.taskStatus === "failed");
