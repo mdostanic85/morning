@@ -171,9 +171,11 @@ export function buildFocusEvidenceBundle(input: {
   const projectContextSources = task?.projectId != null
     ? sourceItems.filter((item) => item.projectId === task.projectId)
     : sourceItems;
+
+  // Meeting transcripts first — they carry the concrete unfinished asks.
   for (const item of relevantContextSources(projectContextSources, focusItem.title, jiraKey, {
-    types: ["gmail", "drive", "granola", "confluence"],
-    limit: 4,
+    types: ["granola", "drive", "gmail", "calendar"],
+    limit: 5,
     minScore: task?.projectId != null ? 0 : undefined,
   })) {
     if (bundle.length >= MAX_SOURCES_PER_ITEM) break;
@@ -186,5 +188,26 @@ export function buildFocusEvidenceBundle(input: {
     });
   }
 
-  return bundle.slice(0, MAX_SOURCES_PER_ITEM);
+  for (const item of relevantContextSources(projectContextSources, focusItem.title, jiraKey, {
+    types: ["confluence"],
+    limit: 2,
+    minScore: task?.projectId != null ? 0 : undefined,
+  })) {
+    if (bundle.length >= MAX_SOURCES_PER_ITEM) break;
+    pushSource(bundle, seen, {
+      sourceType: item.sourceType,
+      title: item.title,
+      sourceDate: item.sourceDate,
+      url: item.url,
+      excerpt: excerpt(cleanJiraText(item.body)),
+    });
+  }
+
+  // Prefer transcript/meeting excerpts at the front of the prompt payload.
+  const meetingTypes = new Set(["granola", "drive", "gmail", "calendar", "manual_transcript"]);
+  const ranked = [
+    ...bundle.filter((item) => meetingTypes.has(item.sourceType)),
+    ...bundle.filter((item) => !meetingTypes.has(item.sourceType)),
+  ];
+  return ranked.slice(0, MAX_SOURCES_PER_ITEM);
 }

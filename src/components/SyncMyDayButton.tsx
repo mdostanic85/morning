@@ -1079,6 +1079,7 @@ export function SyncMyDayButton({
  </span>
  <Button
  type="button"
+ size="lg"
  className={cn(
  status === "syncing"
  ? "sync-sweeping border border-border-strong text-foreground"

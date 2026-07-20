@@ -413,8 +413,7 @@
 
 .minimal-urgent-card {
   position: relative;
-  min-height: 31rem;
-  padding: 2.125rem 4.625rem 2.125rem 2.25rem;
+  padding: 1.5rem 3.75rem 1.5rem 1.5rem;
   overflow: hidden;
   color: inherit;
   text-decoration: none;
@@ -431,8 +430,8 @@
 .minimal-urgent-card::before {
   content: "";
   position: absolute;
-  top: 1.75rem;
-  bottom: 1.75rem;
+  top: 1.25rem;
+  bottom: 1.25rem;
   left: 0;
   width: 4px;
   border-radius: 0 999px 999px 0;
@@ -450,18 +449,18 @@
   box-shadow: var(--panel-hover-shadow);
 }
 
-.minimal-urgent-card:focus-visible {
+.minimal-urgent-card:focus-within {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
 
 .minimal-card-arrow {
   position: absolute;
-  top: 2rem;
-  right: 1.875rem;
+  top: 1.25rem;
+  right: 1.25rem;
   display: grid;
-  width: 2.875rem;
-  height: 2.875rem;
+  width: 2.5rem;
+  height: 2.5rem;
   place-items: center;
   color: var(--danger);
   border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent);
@@ -471,12 +470,12 @@
 }
 
 .minimal-urgent-card:hover .minimal-card-arrow {
-  transform: translateX(5px);
+  transform: translateX(4px);
 }
 
 .minimal-urgent-content {
   position: relative;
-  margin-top: 2.125rem;
+  margin-top: 1rem;
 }
 
 .minimal-urgent-content h2 {
@@ -487,11 +486,40 @@
 .minimal-urgent-description {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 6;
   max-width: 47.5rem;
-  margin-top: 1.0625rem;
+  margin-top: 0.75rem;
   overflow: hidden;
   color: var(--muted);
+}
+
+.minimal-steps {
+  display: grid;
+  gap: 0.625rem;
+  max-width: 47.5rem;
+  margin-top: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.minimal-steps > li {
+  position: relative;
+  padding-left: 1.125rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--foreground);
+}
+
+.minimal-steps > li::before {
+  content: "";
+  position: absolute;
+  top: 0.45rem;
+  left: 0;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger) 72%, var(--pink));
 }
 
 .minimal-why-first {
@@ -573,7 +601,7 @@
   padding: 0 0.5625rem;
   border-radius: 999px;
   font-size: 14px;
-  font-weight: 850;
+  font-weight: 500;
   line-height: 1;
   white-space: nowrap;
 }
@@ -630,24 +658,22 @@
   .minimal-today { padding-top: 1.125rem; }
   .minimal-urgent-card {
     min-height: 0;
-    padding: 1.375rem 3rem 1.375rem 1.375rem;
+    padding: 1.25rem 3rem 1.25rem 1.25rem;
     border-radius: var(--radius);
   }
   .minimal-urgent-card::before {
-    top: 1.125rem;
-    bottom: 1.125rem;
+    top: 1rem;
+    bottom: 1rem;
   }
   .minimal-card-arrow {
-    top: 1.125rem;
+    top: 1rem;
     right: 0.875rem;
-    width: 2.375rem;
-    height: 2.375rem;
+    width: 2.25rem;
+    height: 2.25rem;
     border-radius: var(--radius-md);
   }
-  .minimal-urgent-content { margin-top: 1.75rem; }
-  .minimal-why-first { grid-template-columns: 1fr; gap: 0.5rem; }
-  .minimal-why-first strong { justify-self: start; }
-  .minimal-outcomes { gap: 0.8125rem; margin-top: 1.25rem; }
+  .minimal-urgent-content { margin-top: 0.875rem; }
+  .minimal-steps { gap: 0.5rem; margin-top: 0.625rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

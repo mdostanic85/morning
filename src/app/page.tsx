@@ -88,6 +88,7 @@ export default async function TodayPage() {
       updatedAt: task.updatedAt,
       evidence: task.evidence.map((item) => ({
         summary: item.summary,
+        quote: item.quote,
         sourceDate: item.sourceDate,
         url: item.url,
         sourceTitle: sourceById.get(item.sourceItemId)?.title ?? "Source",
@@ -102,24 +103,22 @@ export default async function TodayPage() {
     /^\s*(open|read|review|check|inspect|compare|consult|look at|go through)\b/i.test(
       value
     );
+  const isGenericOutcome = (value: string) =>
+    /\b(has been reviewed|necessary actions? (or updates )?have been taken|work is complete|feedback (is )?addressed|updates? have been (made|taken))\b/i.test(
+      value
+    ) ||
+    /^\s*(the jira issue|any necessary)\b/i.test(value);
   const workSummary = (briefingFocus?.todayWorkSummary ?? []).filter(
-    (item) => !isResearchInstruction(item)
+    (item) => !isResearchInstruction(item) && !isGenericOutcome(item)
   );
   const executionSteps = (briefingFocus?.actionSteps ?? []).filter(
-    (item) => !isResearchInstruction(item)
+    (item) => !isResearchInstruction(item) && !isGenericOutcome(item)
   );
-  const outcomeFallback =
-    (briefingFocus?.doneCriteria?.length
-      ? briefingFocus.doneCriteria
-      : primaryTask?.doneCriteria) ?? [];
+  // Never fall back to doneCriteria here — those are outcomes, not today's work.
   const bulletSource =
-    workSummary.length > 0
-      ? workSummary
-      : executionSteps.length > 0
-        ? executionSteps
-        : outcomeFallback;
+    workSummary.length > 0 ? workSummary : executionSteps.length > 0 ? executionSteps : [];
   const primarySubtasks = bulletSource
-    .slice(0, 4)
+    .slice(0, 5)
     .map((label) => ({ label, agreed: null }));
 
   const normalizedTitle = (title: string) => title.trim().toLowerCase();

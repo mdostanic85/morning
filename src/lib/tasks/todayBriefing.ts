@@ -47,7 +47,7 @@ const KNOWLEDGE_LIMIT = 15;
 const KNOWLEDGE_PER_SOURCE_LIMIT = 3;
 const BRIEFING_OPEN_TASK_LIMIT = 50;
 const SOURCE_EXCERPT = 320;
-const BRIEFING_PROMPT_VERSION = 7;
+const BRIEFING_PROMPT_VERSION = 9;
 
 function excerpt(text: string): string {
   const trimmed = text.trim().replace(/\s+/g, " ");
