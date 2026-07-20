@@ -4,6 +4,7 @@ import { getUserProfile } from "@/services/userProfile";
 import { EmptyState } from "@/components/EmptyState";
 import { KnowledgeHashScroll } from "@/components/KnowledgeHashScroll";
 import { KnowledgeFilteredView } from "@/components/KnowledgeFilteredView";
+import { SettingsBackLink } from "@/components/SettingsBackLink";
 import { filterKnowledgeForMe } from "@/lib/filters/knowledgeFilter";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,8 @@ export default async function KnowledgePage() {
     <div className="space-y-8">
       <KnowledgeHashScroll />
       <div>
-        <h1 className="font-display text-4xl font-semibold tracking-tight">Knowledge</h1>
+        <SettingsBackLink section="Knowledge" />
+        <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight">Knowledge</h1>
         <p className="mt-3 text-[15px] leading-relaxed text-muted">
           Recent learnings relevant to you — each with its evidence.
         </p>

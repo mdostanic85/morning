@@ -2,6 +2,7 @@ import { getProjects } from "@/services/projects";
 import { ProjectCard } from "@/components/ProjectCard";
 import { EmptyState } from "@/components/EmptyState";
 import { ProjectsFilterSelect, type ProjectsFilter } from "@/components/ProjectsFilterSelect";
+import { SettingsBackLink } from "@/components/SettingsBackLink";
 import { countIssuesForProjectKeys, countJiraIssuesByProjectKey } from "@/lib/projects/jiraIssues";
 import { getConnectionByProvider } from "@/services/connections";
 import { isMcpTransport } from "@/lib/connectors/transport";
@@ -41,7 +42,8 @@ export default async function ProjectsPage({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-4xl font-semibold tracking-tight">Projects</h1>
+        <SettingsBackLink section="Work contexts" />
+        <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight">Projects</h1>
         <p className="mt-3 text-[15px] leading-relaxed text-muted">
           Jira boards and work contexts from your connected sources. Sync my day keeps these up to
           date.

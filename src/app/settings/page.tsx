@@ -6,8 +6,9 @@ import { getConnections } from "@/services/connections";
 import { getUserProfile } from "@/services/userProfile";
 import { ConnectionCard } from "@/components/ConnectionCard";
 import { GitHubConnectionSettings } from "@/components/GitHubConnectionSettings";
+import { SettingsHubLinks } from "@/components/SettingsHubLinks";
 import type { ConnectionTransport } from "@/domain/connection";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@heroui/react/tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,29 @@ export default async function SettingsPage({
       provider: "gmail",
       label: "Gmail",
       description: "Read-only Gmail sync for Gemini, Google Meet, meeting notes, and transcripts.",
+      authType: "oauth" as const,
+      setupHint: oauthSetupHint(
+        hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"),
+        "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET",
+        "console.cloud.google.com"
+      ),
+    },
+    {
+      provider: "calendar",
+      label: "Google Calendar",
+      description: "Read-only sync for today's meetings, attendees, times, and Meet links.",
+      authType: "oauth" as const,
+      setupHint: oauthSetupHint(
+        hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"),
+        "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET",
+        "console.cloud.google.com"
+      ),
+    },
+    {
+      provider: "drive",
+      label: "Google Drive",
+      description:
+        "Read-only sync for Gemini meeting notes and Google Docs transcripts saved to Drive.",
       authType: "oauth" as const,
       setupHint: oauthSetupHint(
         hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"),
@@ -130,7 +154,8 @@ export default async function SettingsPage({
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
-          Local credentials for models and read-only source imports. Raw secrets never go to the browser.
+          Connect sources, model keys, and automation. Today stays the daily screen — everything
+          here is setup. Raw secrets never go to the browser.
         </p>
       </div>
 
@@ -147,25 +172,50 @@ export default async function SettingsPage({
         </div>
       ) : null}
 
-      <Tabs defaultValue="connections" className="gap-5">
-        <TabsList className="w-full sm:w-fit">
-          <TabsTrigger value="connections">
-            Connections
-            <span className="ml-0.5 inline-flex items-center rounded-full bg-foreground/8 px-1.5 py-0.5 text-xs leading-none text-muted-soft">
-              {connectedCount}/{connectionCards.length}
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="transcript">Manual transcript</TabsTrigger>
-          <TabsTrigger value="model-keys">
-            Model keys
-            <span className="ml-0.5 inline-flex items-center rounded-full bg-foreground/8 px-1.5 py-0.5 text-xs leading-none text-muted-soft">
-              {activeKeyCount}/{statuses.length}
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-        </TabsList>
+      <Tabs defaultSelectedKey="connections" className="flex flex-col gap-5">
+        <Tabs.ListContainer className="w-fit max-w-full rounded-xl border border-border bg-background p-1">
+          <Tabs.List
+            aria-label="Settings sections"
+            className="flex w-fit max-w-full items-center gap-1"
+          >
+            <Tabs.Tab
+              id="connections"
+              className="relative min-h-9 flex-1 rounded-lg px-4 text-[13.5px] font-medium whitespace-nowrap text-muted hover:text-foreground selected:text-foreground"
+            >
+              Connections
+              <span className="ml-0.5 inline-flex items-center rounded-full bg-foreground/8 px-1.5 py-0.5 text-xs leading-none text-muted-soft">
+                {connectedCount}/{connectionCards.length}
+              </span>
+              <Tabs.Indicator className="bg-surface-raised shadow-sm ring-1 ring-border-strong" />
+            </Tabs.Tab>
+            <Tabs.Tab
+              id="transcript"
+              className="relative min-h-9 flex-1 rounded-lg px-4 text-[13.5px] font-medium whitespace-nowrap text-muted hover:text-foreground selected:text-foreground"
+            >
+              Manual transcript
+              <Tabs.Indicator className="bg-surface-raised shadow-sm ring-1 ring-border-strong" />
+            </Tabs.Tab>
+            <Tabs.Tab
+              id="model-keys"
+              className="relative min-h-9 flex-1 rounded-lg px-4 text-[13.5px] font-medium whitespace-nowrap text-muted hover:text-foreground selected:text-foreground"
+            >
+              Model keys
+              <span className="ml-0.5 inline-flex items-center rounded-full bg-foreground/8 px-1.5 py-0.5 text-xs leading-none text-muted-soft">
+                {activeKeyCount}/{statuses.length}
+              </span>
+              <Tabs.Indicator className="bg-surface-raised shadow-sm ring-1 ring-border-strong" />
+            </Tabs.Tab>
+            <Tabs.Tab
+              id="profile"
+              className="relative min-h-9 flex-1 rounded-lg px-4 text-[13.5px] font-medium whitespace-nowrap text-muted hover:text-foreground selected:text-foreground"
+            >
+              Profile
+              <Tabs.Indicator className="bg-surface-raised shadow-sm ring-1 ring-border-strong" />
+            </Tabs.Tab>
+          </Tabs.List>
+        </Tabs.ListContainer>
 
-        <TabsContent value="connections" className="space-y-3">
+        <Tabs.Panel id="connections" className="flex-1 space-y-3 text-sm outline-none">
           <p className="text-sm leading-relaxed text-muted">
             Connect read-only sources here. Pull new data with{" "}
             <span className="text-foreground">Sync my day</span> on Today.
@@ -244,35 +294,37 @@ export default async function SettingsPage({
               );
             })}
           </div>
-        </TabsContent>
+        </Tabs.Panel>
 
-        <TabsContent value="transcript" className="space-y-3">
+        <Tabs.Panel id="transcript" className="flex-1 space-y-3 text-sm outline-none">
           <p className="text-sm leading-relaxed text-muted">
             Paste meeting notes or a transcript — tasks and knowledge go straight into Today.
           </p>
           <IngestForm />
-        </TabsContent>
+        </Tabs.Panel>
 
-        <TabsContent value="model-keys" className="space-y-3">
+        <Tabs.Panel id="model-keys" className="flex-1 space-y-3 text-sm outline-none">
           <p className="text-sm leading-relaxed text-muted">
             Groq runs almost everything (free). OpenAI is only needed for knowledge search
             embeddings. Inactive providers are never called — Groq-only mode uses Groq for all
             text jobs; turn OpenAI on separately if you want search.
           </p>
-          <div className="card divide-y divide-border">
+          <div className="app-card divide-y divide-border">
             {statuses.map((status) => (
               <ApiKeyForm key={status.provider} initialStatus={status} />
             ))}
           </div>
-        </TabsContent>
+        </Tabs.Panel>
 
-        <TabsContent value="profile" className="space-y-3">
+        <Tabs.Panel id="profile" className="flex-1 space-y-3 text-sm outline-none">
           <p className="text-sm leading-relaxed text-muted">
             Work email for OAuth context when connecting sources.
           </p>
           <ProfileForm initialEmail={profile?.email ?? null} initialName={profile?.name ?? null} />
-        </TabsContent>
+        </Tabs.Panel>
       </Tabs>
+
+      <SettingsHubLinks />
     </div>
   );
 }
