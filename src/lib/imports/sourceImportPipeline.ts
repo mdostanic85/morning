@@ -17,9 +17,12 @@ import { deleteKnowledgeItemsForSource } from "@/services/knowledgeItems";
 import type { ConnectorSourceCandidate, ConnectorSyncResult } from "@/lib/connectors/types";
 import {
   markSourceProcessed,
+  sourceProcessingIsCurrent,
   type ProcessingStatus,
 } from "@/lib/imports/sourceProcessing";
 import type { ShouldCancelSync } from "@/lib/imports/syncCancellation";
+import { computeSourceContentHash } from "@/lib/imports/sourceContentHash";
+import { recordSourceRevision } from "@/lib/imports/sourceRevision";
 
 const VOLATILE_CONNECTOR_METADATA_KEYS = new Set(["query"]);
 
@@ -46,6 +49,7 @@ export async function importConnectorSources(
     itemsUpdated: 0,
     itemsUnchanged: 0,
     itemsFailed: 0,
+    itemsExtractionFailed: 0,
     tasksExtracted: 0,
     errors: [],
     importedItems: [],
@@ -69,18 +73,49 @@ export async function importConnectorSources(
         sourceType: candidate.sourceType,
         sourceExternalId: candidate.sourceExternalId,
       });
+      const newContentHash = computeSourceContentHash({
+        title: candidate.title,
+        body: candidate.body,
+        author: candidate.author ?? null,
+        sourceDate: candidate.sourceDate,
+        url: candidate.url ?? null,
+      });
+      // Real-content change, independent of the metadata-only comparison
+      // below — this is what decides whether a revision snapshot is worth
+      // recording (WL-03). Computed from the existing row's own fields
+      // rather than its stored contentHash, so pre-backfill rows still work.
+      const contentChanged =
+        existing != null &&
+        newContentHash !==
+          computeSourceContentHash({
+            title: existing.title,
+            body: existing.body,
+            author: existing.author,
+            sourceDate: existing.sourceDate,
+            url: existing.url,
+          });
       const unchanged =
-        existing &&
-        existing.title === candidate.title &&
-        existing.body === candidate.body &&
-        existing.author === (candidate.author ?? null) &&
-        existing.sourceDate === candidate.sourceDate &&
-        existing.url === (candidate.url ?? null) &&
+        existing != null &&
+        !contentChanged &&
         connectorMetadataMatches(existing.metadata, candidate.metadata);
-      if (unchanged) {
+      // A prior extraction failure must force a retry even when the source
+      // content itself is byte-for-byte unchanged — otherwise the item is
+      // skipped here on every later sync and never gets another attempt.
+      const priorExtractionFailed = existing != null && !sourceProcessingIsCurrent(existing);
+      if (unchanged && !priorExtractionFailed) {
         result.skipped += 1;
         result.itemsUnchanged += 1;
         continue;
+      }
+
+      if (existing != null && contentChanged) {
+        try {
+          await recordSourceRevision(existing);
+        } catch (err) {
+          result.errors.push(
+            `Revision snapshot failed for ${existing.title}: ${err instanceof Error ? err.message : "unknown error"}`
+          );
+        }
       }
 
       const created = existing
@@ -95,6 +130,7 @@ export async function importConnectorSources(
               ...(existing.metadata ?? {}),
               ...(candidate.metadata ?? {}),
             },
+            contentHash: newContentHash,
           })
         : await createSourceItem({
             projectId: candidate.projectId ?? null,
@@ -106,6 +142,7 @@ export async function importConnectorSources(
             sourceDate: candidate.sourceDate,
             url: candidate.url ?? null,
             metadata: candidate.metadata ?? null,
+            contentHash: newContentHash,
           });
       if (!created) throw new Error(`Could not persist source ${candidate.title}.`);
 
@@ -219,6 +256,9 @@ export async function importConnectorSources(
       }
       if (options.shouldCancel && (await options.shouldCancel())) {
         await markSourceProcessed(sourceItem, { taskStatus, knowledgeStatus });
+        if (taskStatus === "failed" || knowledgeStatus === "failed") {
+          result.itemsExtractionFailed += 1;
+        }
         result.imported += 1;
         if (existing) {
           result.itemsUpdated += 1;
@@ -245,6 +285,9 @@ export async function importConnectorSources(
       }
 
       await markSourceProcessed(sourceItem, { taskStatus, knowledgeStatus });
+      if (taskStatus === "failed" || knowledgeStatus === "failed") {
+        result.itemsExtractionFailed += 1;
+      }
       result.imported += 1;
       if (existing) {
         result.itemsUpdated += 1;

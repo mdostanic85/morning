@@ -59,6 +59,9 @@ export const dailyBriefV2Schema = z.object({
       jiraKey: z.string().nullable(),
       reason: z.string(),
       evidenceIds: z.array(z.number().int()),
+      // Nullable + defaulted so a brief cached before this field existed
+      // still parses (see buildDailyBrief.ts's safeParse fallback).
+      taskId: z.number().int().nullable().default(null),
     })
   ),
   reviewReadiness: z

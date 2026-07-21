@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { getWorkTaskById } from "@/services/workTasks";
 import { getSourceItems } from "@/services/sourceItems";
+import { AppBadge } from "@/components/AppBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,7 @@ export default async function CorrectionDetailPage({
 
       <header className="mt-7 grid gap-6 border-b border-border pb-7 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
         <div>
-          <span className="minimal-badge minimal-badge-urgent">Required</span>
+          <AppBadge tone="danger">Required</AppBadge>
           <h1 className="ft-screen-title mt-4 max-w-4xl font-display">{criterion}</h1>
           <p className="ft-screen-lead mt-4 max-w-3xl text-muted">
             Complete this outcome as part of {task.title}.

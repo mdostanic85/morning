@@ -12,9 +12,13 @@ import type { DailyBriefV2, DailyWorkItem } from "@/domain/dailyBrief";
 import type { SourceType } from "@/domain/sourceItem";
 import type { WorkTaskStatus } from "@/domain/workTask";
 import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
+import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
 import { SyncMyDayButton } from "@/components/SyncMyDayButton";
 import { TodayMeetingsCard } from "@/components/TodayMeetingsCard";
 import { WhyThisButton } from "@/components/WhyThisButton";
+import { ConfidenceBadge } from "@/components/ConfidenceBadge";
+import { BlockedWaitingCard } from "@/components/BlockedWaitingCard";
+import { dedupeBlockedWaiting } from "@/lib/dailyBrief/blockedWaitingDedupe";
 import { humanizeReason } from "@/lib/tasks/humanizeReason";
 import { taskEligibleForBriefPriority } from "@/lib/filters/ownerFilter";
 
@@ -29,6 +33,8 @@ export interface HumanReadableTask {
   waitingOn: string | null;
   owner: string | null;
   updatedAt: string;
+  /** WL-12: 0..1, decomposed per WL-05. Null for tasks with no scored confidence yet. */
+  confidence: number | null;
   evidence: {
     summary: string;
     quote: string | null;
@@ -42,33 +48,20 @@ export interface HumanReadableTask {
 interface HumanReadableTodayViewProps {
   tasks: HumanReadableTask[];
   connectedProviderLabels: string[];
-  sourceCount: number;
   lastSyncAt: string | null;
   profileName: string | null;
   profileReady: boolean;
   meetings: TodayMeeting[];
   calendarConnected: boolean;
   dailyBrief: DailyBriefV2 | null;
+  /** WL-12: providers whose last sync did not complete cleanly — surfaced on Today chrome, not only the sync overlay. */
+  failedProviderLabels: string[];
 }
-
-type BadgeTone = "accent" | "good" | "warning" | "danger" | "neutral";
 
 interface AttentionEntry {
   item: DailyWorkItem | null;
   task: HumanReadableTask | null;
 }
-
-const SOURCE_LABEL: Record<string, string> = {
-  "Gmail & Gemini notes": "Gemini",
-  "Google Calendar": "Calendar",
-  "Google Drive Gemini notes": "Drive",
-  Jira: "Jira",
-  Confluence: "Confluence",
-  Granola: "Granola",
-  GitHub: "GitHub",
-  Discord: "Discord",
-  Figma: "Figma",
-};
 
 function firstName(profileName: string | null): string | null {
   return profileName?.trim().split(/\s+/)[0] || null;
@@ -83,10 +76,6 @@ function todayLabel(date = new Date()): string {
   });
 }
 
-function compactSources(labels: string[]): string {
-  return Array.from(new Set(labels.map((label) => SOURCE_LABEL[label] ?? label))).join(" · ");
-}
-
 function evidenceDate(task: HumanReadableTask | null): string | null {
   if (!task) return null;
   const times = task.evidence
@@ -94,6 +83,8 @@ function evidenceDate(task: HumanReadableTask | null): string | null {
     .filter(Number.isFinite);
   return times.length ? new Date(Math.max(...times)).toISOString() : task.updatedAt;
 }
+
+const MAX_BLOCKED_WAITING_ITEMS = 3;
 
 function relativeTime(value: string | null): string | null {
   if (!value) return null;
@@ -117,7 +108,7 @@ function statusBadge(
   entry: AttentionEntry,
   brief: DailyBriefV2 | null,
   index: number
-): { label: string; tone: BadgeTone; icon: typeof Clock3 } {
+): { label: string; tone: AppBadgeTone; icon: typeof Clock3 } {
   const item = entry.item;
   const task = entry.task;
   const key = jiraKey(entry);
@@ -169,53 +160,54 @@ function resolveAttention(
 
   // Without a brief, only surface clearly owned work — never pad with guesses.
   if (!dailyBrief) {
-    return ownedTasks.slice(0, 2).map((task) => ({ item: null, task }));
+    return ownedTasks.slice(0, 3).map((task) => ({ item: null, task }));
   }
 
-  return [dailyBrief.todayFirst, ...dailyBrief.afterThat]
-    .map((item) => {
-      // Composer placeholder when nothing is owned — do not render as a priority.
+  const resolved: AttentionEntry[] = [];
+  for (const item of [dailyBrief.todayFirst, ...dailyBrief.afterThat]) {
+    // Composer placeholder when nothing is owned — do not render as a priority.
+    if (
+      item.taskId == null &&
+      item.jiraKey == null &&
+      /^no open owned work$/i.test(item.title.trim())
+    ) {
+      continue;
+    }
+
+    const task =
+      (item.taskId != null
+        ? ownedTasks.find((candidate) => candidate.id === item.taskId)
+        : null) ??
+      (item.jiraKey
+        ? ownedTasks.find((candidate) => candidate.title.includes(item.jiraKey ?? ""))
+        : null) ??
+      null;
+
+    // Stale brief slot pointing at non-owned / missing work.
+    if (item.taskId != null && task == null) continue;
+
+    if (!task) {
+      // Unlinked brief text must still prove ownership on its own.
       if (
-        item.taskId == null &&
-        item.jiraKey == null &&
-        /^no open owned work$/i.test(item.title.trim())
+        !taskEligibleForBriefPriority(
+          {
+            owner: null,
+            title: item.title,
+            reason: item.reason,
+            nextAction: item.nextAction,
+          },
+          myName
+        )
       ) {
-        return null;
+        continue;
       }
+    }
 
-      const task =
-        (item.taskId != null
-          ? ownedTasks.find((candidate) => candidate.id === item.taskId)
-          : null) ??
-        (item.jiraKey
-          ? ownedTasks.find((candidate) => candidate.title.includes(item.jiraKey ?? ""))
-          : null) ??
-        null;
+    resolved.push({ item, task });
+    if (resolved.length >= 3) break;
+  }
 
-      // Stale brief slot pointing at non-owned / missing work.
-      if (item.taskId != null && task == null) return null;
-
-      if (!task) {
-        // Unlinked brief text must still prove ownership on its own.
-        if (
-          !taskEligibleForBriefPriority(
-            {
-              owner: null,
-              title: item.title,
-              reason: item.reason,
-              nextAction: item.nextAction,
-            },
-            myName
-          )
-        ) {
-          return null;
-        }
-      }
-
-      return { item, task };
-    })
-    .filter((entry): entry is AttentionEntry => entry != null)
-    .slice(0, 2);
+  return resolved;
 }
 
 function StatusBadge({
@@ -224,14 +216,13 @@ function StatusBadge({
   Icon,
 }: {
   label: string;
-  tone: BadgeTone;
+  tone: AppBadgeTone;
   Icon: typeof Clock3;
 }) {
   return (
-    <span className={`brief-status-badge brief-status-${tone}`}>
-      <Icon className="size-3.5" aria-hidden />
+    <AppBadge tone={tone} icon={<Icon className="size-3.5" aria-hidden />}>
       {label}
-    </span>
+    </AppBadge>
   );
 }
 
@@ -289,12 +280,12 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
   return (
     <article className="brief-focus-card brief-focus-primary">
       <div className="brief-focus-topline">
-        <span className="brief-order" aria-label={`Priority ${index + 1}`}>
-          {index + 1}
-        </span>
         <div className="brief-badge-row">
           <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
-          {key ? <span className="brief-key-badge">{key}</span> : null}
+          {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
+          {entry.task?.confidence != null ? (
+            <ConfidenceBadge level={entry.task.confidence} />
+          ) : null}
           {updated ? <span className="brief-updated">{updated}</span> : null}
         </div>
       </div>
@@ -335,9 +326,9 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
           <span className="text-sm text-muted">Needs a linked task before execution.</span>
         )}
         {href ? (
-          <Link href={href} className="brief-open-task">
+          <Link href={href} className="button button--primary button--sm shrink-0">
             Open task
-            <ArrowRight className="size-4" aria-hidden />
+            <ArrowRight aria-hidden />
           </Link>
         ) : null}
       </div>
@@ -346,20 +337,23 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
 }
 
 /**
- * Secondary tasks stay quiet: a badge, the headline, and a two-line summary.
- * Anyone who wants more clicks through to the full task for evidence,
- * next action, and done criteria — it isn't repeated here.
+ * Secondary tasks stay quiet: a badge, the headline, a two-line summary, and
+ * — per the app's task-card rule — the next action is always visible even
+ * here, never hidden behind the drill-through link alone.
  */
 function SecondaryTaskCard({
   entry,
   brief,
+  index,
 }: {
   entry: AttentionEntry;
   brief: DailyBriefV2 | null;
+  index: number;
 }) {
   const title = entry.item?.title ?? entry.task?.title ?? "Unresolved work";
   const reason = humanizeReason(entry.item?.reason ?? entry.task?.reason, title);
-  const badge = statusBadge(entry, brief, 1);
+  const nextAction = entry.item?.nextAction ?? entry.task?.nextAction ?? null;
+  const badge = statusBadge(entry, brief, index);
   const key = jiraKey(entry);
   const href = entry.task ? `/tasks/${entry.task.id}` : null;
 
@@ -367,10 +361,19 @@ function SecondaryTaskCard({
     <>
       <div className="brief-secondary-badges">
         <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
-        {key ? <span className="brief-key-badge">{key}</span> : null}
+        {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
+        {entry.task?.confidence != null ? (
+          <ConfidenceBadge level={entry.task.confidence} />
+        ) : null}
       </div>
       <h3 className="brief-secondary-title">{title}</h3>
       <p className="brief-secondary-reason">{reason}</p>
+      {nextAction ? (
+        <p className="brief-secondary-next">
+          <span className="brief-secondary-next-label">Next: </span>
+          {nextAction}
+        </p>
+      ) : null}
     </>
   );
 
@@ -389,56 +392,51 @@ function SecondaryTaskCard({
   );
 }
 
-function MeetingPrep({ brief }: { brief: DailyBriefV2 | null }) {
-  const questions = brief?.meetingPrep.flatMap((prep) =>
-    prep.questions.map((question) => ({ meeting: prep.meetingTitle, question }))
-  );
-  if (!questions?.length) return null;
-
+/** Same card family as `SecondaryTaskCard`/`BlockedWaitingCard` — a conflict has no single task to resolve it, so it never links anywhere. */
+function ConflictCard({ conflict }: { conflict: DailyBriefV2["sourceConflicts"][number] }) {
   return (
-    <section className="brief-prep-card">
-      <p className="brief-kicker">Say this in the meeting</p>
-      <ul>
-        {questions.slice(0, 3).map(({ meeting, question }) => (
-          <li key={`${meeting}:${question}`}>
-            <span>{meeting}</span>
-            {question}
-          </li>
-        ))}
-      </ul>
-    </section>
+    <div className="brief-secondary-card">
+      <div className="brief-secondary-badges">
+        <StatusBadge label="Conflict" tone="danger" Icon={AlertTriangle} />
+      </div>
+      <p className="brief-secondary-reason">{conflict.summary}</p>
+    </div>
   );
 }
 
 export function HumanReadableTodayView({
   tasks,
   connectedProviderLabels,
-  sourceCount,
   lastSyncAt,
   profileName,
   profileReady,
   meetings,
   calendarConnected,
   dailyBrief,
+  failedProviderLabels,
 }: HumanReadableTodayViewProps) {
-  const attention = resolveAttention(tasks, dailyBrief, profileName).slice(0, 2);
+  const attention = resolveAttention(tasks, dailyBrief, profileName);
+  const primary = attention[0] ?? null;
+  const nextTasks = attention.slice(1);
   const name = firstName(profileName);
-  const sources = compactSources(connectedProviderLabels);
+  const dedupedBlockedWaiting = dailyBrief ? dedupeBlockedWaiting(dailyBrief.blockedWaiting) : [];
+  const visibleBlockedWaiting = dedupedBlockedWaiting.slice(0, MAX_BLOCKED_WAITING_ITEMS);
+  const hiddenBlockedWaitingCount = dedupedBlockedWaiting.length - visibleBlockedWaiting.length;
 
   return (
     <div className="brief-page">
       <header className="brief-header">
         <div>
-          <p className="brief-eyebrow">Morning operational brief</p>
           <h1>{name ? `${name}'s focus for today` : "Your focus for today"}</h1>
-          <p className="brief-date">{todayLabel()}</p>
+          <p className="brief-date">
+            <span>{todayLabel()}</span>
+            <span className="brief-date-sep" aria-hidden>
+              ·
+            </span>
+            <span className="brief-date-meta">Morning operational brief</span>
+          </p>
         </div>
         <div className="brief-header-actions">
-          {sources ? (
-            <p className="brief-sources-badge" title={`${sourceCount} sources available`}>
-              Sources: {sources}
-            </p>
-          ) : null}
           <SyncMyDayButton sources={connectedProviderLabels} lastSyncAt={lastSyncAt} />
         </div>
       </header>
@@ -447,6 +445,18 @@ export function HumanReadableTodayView({
         <div className="brief-alert brief-alert-blocked" role="status">
           <AlertTriangle className="size-4 shrink-0" aria-hidden />
           <p>Add your name in Settings so this brief can filter work assigned to you.</p>
+        </div>
+      ) : null}
+
+      {/* WL-12: sync health belongs on Today chrome itself, not only the sync overlay — a failed provider must stay visible until the next successful sync. */}
+      {failedProviderLabels.length > 0 ? (
+        <div className="brief-alert brief-alert-sync" role="status">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden />
+          <p>
+            <strong>Last sync was incomplete: </strong>
+            {failedProviderLabels.join(", ")} did not sync cleanly. Some evidence here may be
+            out of date.
+          </p>
         </div>
       ) : null}
 
@@ -463,9 +473,9 @@ export function HumanReadableTodayView({
       ) : null}
 
       <main className="brief-bento">
-        {attention[0] ? (
+        {primary ? (
           <div className="brief-bento-primary">
-            <FocusCard entry={attention[0]} brief={dailyBrief} />
+            <FocusCard entry={primary} brief={dailyBrief} />
           </div>
         ) : (
           <section className="brief-empty brief-bento-primary">
@@ -477,38 +487,45 @@ export function HumanReadableTodayView({
           </section>
         )}
 
-        <aside className="brief-bento-meetings">
+        <aside className="brief-bento-side">
           <TodayMeetingsCard meetings={meetings} calendarConnected={calendarConnected} />
-          <MeetingPrep brief={dailyBrief} />
-        </aside>
 
-        {attention[1] ? (
-          <div className="brief-bento-secondary">
-            <SecondaryTaskCard entry={attention[1]} brief={dailyBrief} />
-          </div>
-        ) : null}
+          {nextTasks.length > 0 ? (
+            <div className="brief-next-stack">
+              <p className="brief-kicker">Next up</p>
+              {nextTasks.map((entry, index) => (
+                <SecondaryTaskCard
+                  key={entry.task?.id ?? entry.item?.jiraKey ?? entry.item?.title ?? index}
+                  entry={entry}
+                  brief={dailyBrief}
+                  index={index + 1}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {(dailyBrief?.sourceConflicts.length ?? 0) > 0 || visibleBlockedWaiting.length > 0 ? (
+            <div className="brief-next-stack">
+              <p className="brief-kicker brief-kicker-attention">Needs your attention</p>
+              {dailyBrief?.sourceConflicts.map((conflict) => (
+                <ConflictCard key={conflict.summary} conflict={conflict} />
+              ))}
+              {visibleBlockedWaiting.map((item) => (
+                <BlockedWaitingCard key={item.jiraKey ?? item.title} item={item} />
+              ))}
+              {hiddenBlockedWaitingCount > 0 ? (
+                <p className="brief-conflicts-more">
+                  +{hiddenBlockedWaitingCount} more waiting/unclear — open the task to review.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </aside>
       </main>
 
-      {dailyBrief?.keySources.length ? (
-        <details className="brief-source-details">
-          <summary>Key sources and coverage</summary>
-          <div>
-            {dailyBrief.keySources.slice(0, 8).map((source) =>
-              source.url ? (
-                <a key={`${source.label}:${source.url}`} href={source.url} target="_blank" rel="noreferrer">
-                  {source.label}
-                  <ExternalLink className="size-3.5" aria-hidden />
-                </a>
-              ) : (
-                <span key={source.label}>{source.label}</span>
-              )
-            )}
-          </div>
-        </details>
-      ) : null}
-
       <p className="brief-footnote">
-        Up to two priorities, and only when ownership is clear. Empty is better than a forced guess.
+        Up to three priorities, and only when ownership is clear. Empty is better than a forced
+        guess.
       </p>
     </div>
   );

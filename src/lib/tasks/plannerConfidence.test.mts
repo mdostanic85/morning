@@ -5,6 +5,7 @@ import {
   isConfidenceContaminatedByPriority,
   resolvePlannerConfidence,
   shouldRouteLowConfidenceToUnclear,
+  UNSCORED_CONFIDENCE_DEFAULT,
 } from "./plannerConfidence.ts";
 
 describe("plannerConfidence", () => {
@@ -15,22 +16,6 @@ describe("plannerConfidence", () => {
   });
 
   it("never resolves confidence from priorityScore", () => {
-    assert.equal(
-      resolvePlannerConfidence({
-        semanticConfidence: null,
-        existingConfidence: null,
-        priorityScore: 0.156,
-      }),
-      1
-    );
-    assert.equal(
-      resolvePlannerConfidence({
-        semanticConfidence: undefined,
-        existingConfidence: 0.156,
-        priorityScore: 0.156,
-      }),
-      1
-    );
     assert.equal(
       resolvePlannerConfidence({
         semanticConfidence: 0.82,
@@ -46,6 +31,29 @@ describe("plannerConfidence", () => {
         priorityScore: 0.2,
       }),
       0.91
+    );
+  });
+
+  // WL-05: an unscored task must be treated as neutral, never as fully
+  // trusted. This replaces the old default of `1.0`, which silently
+  // inflated the confidence of every task with no semantic/existing score.
+  it("defaults an unscored task to neutral (0.5), never to fully trusted (1.0)", () => {
+    assert.equal(UNSCORED_CONFIDENCE_DEFAULT, 0.5);
+    assert.equal(
+      resolvePlannerConfidence({
+        semanticConfidence: null,
+        existingConfidence: null,
+        priorityScore: 0.156,
+      }),
+      UNSCORED_CONFIDENCE_DEFAULT
+    );
+    assert.equal(
+      resolvePlannerConfidence({
+        semanticConfidence: undefined,
+        existingConfidence: 0.156,
+        priorityScore: 0.156,
+      }),
+      UNSCORED_CONFIDENCE_DEFAULT
     );
   });
 

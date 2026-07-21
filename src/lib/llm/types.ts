@@ -5,6 +5,7 @@ import type { z } from "zod";
 // calls a provider SDK/API directly (see architecture.mdc).
 export const JOB_TYPES = [
   "task_extraction",
+  "task_reflect",
   "project_matching",
   "project_discovery",
   "priority_planning",

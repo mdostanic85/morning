@@ -29,13 +29,16 @@ export interface SourceItem {
   sourceDate: string;
   url: string | null;
   metadata: Record<string, unknown> | null;
+  /** sha256 of (title, body, author, sourceDate, url) — real-change detection independent of the extraction-skip fingerprint (WL-03). */
+  contentHash: string | null;
   createdAt: string;
+  updatedAt: string | null;
 }
 
 export type NewSourceItem = Pick<SourceItem, "sourceType" | "title" | "body" | "sourceDate"> &
   Partial<
     Pick<
       SourceItem,
-      "projectId" | "sourceExternalId" | "author" | "url" | "metadata"
+      "projectId" | "sourceExternalId" | "author" | "url" | "metadata" | "contentHash"
     >
   >;

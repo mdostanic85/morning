@@ -23,6 +23,7 @@ import {
   failSyncProviderRun,
   finalizeCancelledSyncRun,
   finalizeSyncRun,
+  partialSyncProviderRun,
   startSyncProviderRun,
 } from "@/services/syncRuns";
 import type { SyncProviderRunMetrics } from "@/domain/syncRun";
@@ -142,11 +143,15 @@ export const syncMyDay = inngest.createFunction(
             const outcome = await syncProvider(provider, { syncRunId });
 
             if (outcome.cancelled) {
-              if (outcome.partialMetrics) {
-                await completeSyncProviderRun(providerRun.id, outcome.partialMetrics);
-              } else {
-                await cancelSyncProviderRun(providerRun.id);
-              }
+              // WL-01: a cancellation must never record "completed", even
+              // when partial metrics are available — the run stays
+              // cancelled, with those metrics preserved on the row.
+              await cancelSyncProviderRun(
+                providerRun.id,
+                outcome.partialMetrics
+                  ? { ...outcome.partialMetrics, itemsExtractionFailed: outcome.partialResult?.itemsExtractionFailed ?? 0 }
+                  : undefined
+              );
               return {
                 provider,
                 ok: false,
@@ -168,6 +173,7 @@ export const syncMyDay = inngest.createFunction(
                 itemsUpdated: outcome.result.itemsUpdated,
                 itemsUnchanged: outcome.result.itemsUnchanged,
                 itemsFailed: outcome.result.itemsFailed,
+                itemsExtractionFailed: outcome.result.itemsExtractionFailed,
               };
               await completeSyncProviderRun(providerRun.id, metrics);
               return {
@@ -180,6 +186,35 @@ export const syncMyDay = inngest.createFunction(
                 importedItems: outcome.result.importedItems,
                 knowledgeItems: outcome.result.knowledgeExtracted,
                 error: outcome.result.errors[0] ?? null,
+                cancelled: false,
+              };
+            }
+
+            if (outcome.partial) {
+              // WL-01: ran without throwing, but items failed to persist or
+              // to extract — must not be recorded as completed.
+              const metrics: SyncProviderRunMetrics = {
+                itemsFetched: outcome.itemsFetched,
+                itemsCreated: outcome.result.itemsCreated,
+                itemsUpdated: outcome.result.itemsUpdated,
+                itemsUnchanged: outcome.result.itemsUnchanged,
+                itemsFailed: outcome.result.itemsFailed,
+                itemsExtractionFailed: outcome.result.itemsExtractionFailed,
+              };
+              await partialSyncProviderRun(providerRun.id, {
+                metrics,
+                errorMessage: outcome.error,
+              });
+              return {
+                provider,
+                ok: false,
+                imported: outcome.result.imported,
+                skipped: outcome.result.skipped,
+                tasksExtracted: outcome.result.tasksExtracted,
+                knowledgeExtracted: outcome.result.knowledgeExtracted.length,
+                importedItems: outcome.result.importedItems,
+                knowledgeItems: outcome.result.knowledgeExtracted,
+                error: outcome.error,
                 cancelled: false,
               };
             }

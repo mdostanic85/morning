@@ -18,28 +18,67 @@ function toSourceItem(row: typeof sourceItemsTable.$inferSelect): SourceItem {
     sourceDate: row.sourceDate,
     url: row.url,
     metadata: row.metadata ?? null,
+    contentHash: row.contentHash ?? null,
     createdAt: row.createdAt,
+    updatedAt: row.updatedAt ?? null,
   };
 }
 
+/** True for a Postgres unique-violation error (SQLSTATE 23505). */
+function isUniqueViolation(err: unknown): boolean {
+  return Boolean(err) && typeof err === "object" && (err as { code?: string }).code === "23505";
+}
+
+/**
+ * Creates a source item. If a concurrent sync already inserted a row for
+ * the same (sourceType, sourceExternalId) — enforced DB-side by the
+ * `source_items_type_external_id_unique` partial index (WL-04) — this falls
+ * back to updating that winning row instead of throwing or duplicating.
+ * Application code should still look up existing rows first (see
+ * `sourceImportPipeline.ts`); this is the race-safety backstop.
+ */
 export async function createSourceItem(input: NewSourceItem): Promise<SourceItem> {
-  const [row] = await fetchReturning(
-    db
-      .insert(sourceItemsTable)
-      .values({
-        projectId: input.projectId ?? null,
+  try {
+    const [row] = await fetchReturning(
+      db
+        .insert(sourceItemsTable)
+        .values({
+          projectId: input.projectId ?? null,
+          sourceType: input.sourceType,
+          sourceExternalId: input.sourceExternalId ?? null,
+          title: input.title,
+          body: input.body,
+          author: input.author ?? null,
+          sourceDate: input.sourceDate,
+          url: input.url ?? null,
+          metadata: input.metadata ?? null,
+          contentHash: input.contentHash ?? null,
+          updatedAt: new Date().toISOString(),
+        })
+        .returning()
+    );
+    return toSourceItem(row);
+  } catch (err) {
+    if (isUniqueViolation(err) && input.sourceExternalId) {
+      const winner = await getSourceItemByExternalId({
         sourceType: input.sourceType,
-        sourceExternalId: input.sourceExternalId ?? null,
-        title: input.title,
-        body: input.body,
-        author: input.author ?? null,
-        sourceDate: input.sourceDate,
-        url: input.url ?? null,
-        metadata: input.metadata ?? null,
-      })
-      .returning()
-  );
-  return toSourceItem(row);
+        sourceExternalId: input.sourceExternalId,
+      });
+      if (winner) {
+        const updated = await updateSourceItem(winner.id, {
+          title: input.title,
+          body: input.body,
+          author: input.author ?? null,
+          sourceDate: input.sourceDate,
+          url: input.url ?? null,
+          metadata: input.metadata ?? null,
+          contentHash: input.contentHash ?? null,
+        });
+        if (updated) return updated;
+      }
+    }
+    throw err;
+  }
 }
 
 export async function getSourceItems(): Promise<SourceItem[]> {
@@ -113,7 +152,11 @@ export async function updateSourceItem(
   patch: Partial<NewSourceItem>
 ): Promise<SourceItem | null> {
   const [row] = await fetchReturning(
-    db.update(sourceItemsTable).set(patch).where(eq(sourceItemsTable.id, id)).returning()
+    db
+      .update(sourceItemsTable)
+      .set({ ...patch, updatedAt: new Date().toISOString() })
+      .where(eq(sourceItemsTable.id, id))
+      .returning()
   );
   return row ? toSourceItem(row) : null;
 }

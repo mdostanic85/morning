@@ -40,6 +40,13 @@ export function effectiveExtractionConfidence(input: {
 }
 
 /**
+ * WL-05: an unscored task is neutral, never fully trusted by default. This
+ * replaces the old `1.0` fallback, which silently treated every task with no
+ * semantic/existing confidence as if it had been fully verified.
+ */
+export const UNSCORED_CONFIDENCE_DEFAULT = 0.5;
+
+/**
  * Resolve confidence when applying planner decisions.
  * Never falls back to priorityScore.
  */
@@ -60,8 +67,8 @@ export function resolvePlannerConfidence(input: {
     return clamp01(existing);
   }
 
-  // Neutral default: identity/ownership is trusted; ranking stays separate.
-  return 1;
+  // WL-05: neutral, not fully trusted — an unscored task has not been verified.
+  return UNSCORED_CONFIDENCE_DEFAULT;
 }
 
 /** Below this (non-contaminated) confidence, route to Unclear unless exempt. */

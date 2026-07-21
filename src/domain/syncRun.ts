@@ -44,6 +44,8 @@ export interface SyncProviderRun {
   itemsUpdated: number;
   itemsUnchanged: number;
   itemsFailed: number;
+  /** Persisted but failed task/knowledge/embedding interpretation (WL-01). */
+  itemsExtractionFailed: number;
   errorCode: string | null;
   errorMessage: string | null;
 }
@@ -54,4 +56,5 @@ export interface SyncProviderRunMetrics {
   itemsUpdated: number;
   itemsUnchanged: number;
   itemsFailed: number;
+  itemsExtractionFailed: number;
 }

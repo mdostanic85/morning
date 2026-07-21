@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { Toast } from "@heroui/react/toast";
 import { cn } from "@/lib/utils";
+import { AppBadge } from "@/components/AppBadge";
 import { Button } from "@heroui/react/button";
 import { Input } from "@heroui/react/input";
 
@@ -127,26 +128,24 @@ export function ConnectionCard({
         <div className="min-w-0 flex-1 pt-0.5">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold">{label}</h3>
-            <span className={cn("tag", statusStyle)}>{statusLabel}</span>
-            {usingMcp ? (
-              <span className="tag border-border bg-surface-soft text-muted">MCP</span>
-            ) : null}
+            <AppBadge className={cn(statusStyle)}>{statusLabel}</AppBadge>
+            {usingMcp ? <AppBadge tone="neutral">MCP</AppBadge> : null}
           </div>
           {!connected ? (
-            <p className="mt-1 text-xs leading-snug text-muted line-clamp-2">{description}</p>
+            <p className="mt-1 text-sm leading-snug text-muted line-clamp-2">{description}</p>
           ) : lastSync ? (
-            <p className="mt-1 text-xs text-muted-soft">
+            <p className="mt-1 text-sm text-muted-soft">
               Last sync {new Date(lastSync).toLocaleString()}
             </p>
           ) : sharedMcpNote ? (
-            <p className="mt-1 text-xs text-muted-soft">{sharedMcpNote}</p>
+            <p className="mt-1 text-sm text-muted-soft">{sharedMcpNote}</p>
           ) : typeof metadata?.workRepository === "string" &&
             typeof metadata?.workBranch === "string" ? (
-            <p className="mt-1 text-xs text-muted-soft">
+            <p className="mt-1 text-sm text-muted-soft">
               {metadata.workRepository} @ {metadata.workBranch}
             </p>
           ) : null}
-          {errorText ? <p className="mt-1.5 text-xs text-danger">{errorText}</p> : null}
+          {errorText ? <p className="mt-1.5 text-sm text-danger">{errorText}</p> : null}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">

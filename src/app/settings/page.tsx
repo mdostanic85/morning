@@ -2,8 +2,11 @@ import { getApiKeyStatuses } from "@/services/settings";
 import { ApiKeyForm } from "@/components/ApiKeyForm";
 import { ProfileForm } from "@/components/ProfileForm";
 import { IngestForm } from "@/components/IngestForm";
+import { IngestionRulesPanel } from "@/components/IngestionRulesPanel";
 import { getConnections } from "@/services/connections";
 import { getUserProfile } from "@/services/userProfile";
+import { getProjects } from "@/services/projects";
+import { listIngestionRules } from "@/services/ingestionRules";
 import { ConnectionCard } from "@/components/ConnectionCard";
 import { GitHubConnectionSettings } from "@/components/GitHubConnectionSettings";
 import type { ConnectionTransport } from "@/domain/connection";
@@ -16,11 +19,13 @@ export default async function SettingsPage({
 }: {
  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
- const [statuses, connections, profile, params] = await Promise.all([
+ const [statuses, connections, profile, params, projects, ingestionRules] = await Promise.all([
  getApiKeyStatuses(),
  getConnections(),
  getUserProfile(),
  searchParams,
+ getProjects(),
+ listIngestionRules(),
  ]);
 
  const connectionError =
@@ -156,10 +161,10 @@ export default async function SettingsPage({
  </p>
  </div>
  <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
- <span className="text-[13px] font-semibold text-foreground">
+ <span className="text-sm font-semibold text-foreground">
  {connectedCount}/{connectionCards.length} sources
  </span>
- <span className="text-[12px] text-muted-soft">
+ <span className="text-sm text-muted-soft">
  {activeKeyCount}/{statuses.length} model keys
  </span>
  </div>
@@ -191,10 +196,14 @@ export default async function SettingsPage({
  </span>
  <Tabs.Indicator />
  </Tabs.Tab>
- <Tabs.Tab id="transcript" className="flex-1">
- Transcript
- <Tabs.Indicator />
- </Tabs.Tab>
+          <Tabs.Tab id="transcript" className="flex-1">
+              Transcript
+              <Tabs.Indicator />
+            </Tabs.Tab>
+          <Tabs.Tab id="rules" className="flex-1">
+              Rules
+              <Tabs.Indicator />
+            </Tabs.Tab>
  <Tabs.Tab id="model-keys" className="flex-1">
  Model keys
  <span className="tabular-nums text-muted-soft">
@@ -302,10 +311,18 @@ export default async function SettingsPage({
  Paste meeting notes or a transcript — tasks and knowledge go straight into Today.
  </p>
  </div>
- <IngestForm />
- </Tabs.Panel>
+          <IngestForm />
+        </Tabs.Panel>
 
- {/* ── Model keys ─────────────────────────────────────────────────── */}
+        {/* ── Extraction rules ───────────────────────────────────────────── */}
+        <Tabs.Panel id="rules" className="space-y-4">
+          <IngestionRulesPanel
+            initialRules={ingestionRules}
+            projects={projects.map((project) => ({ id: project.id, name: project.name }))}
+          />
+        </Tabs.Panel>
+
+        {/* ── Model keys ─────────────────────────────────────────────────── */}
  <Tabs.Panel id="model-keys" className="space-y-4">
  <p className="text-sm leading-relaxed text-muted">
  Groq runs almost everything for free. OpenAI is only needed for knowledge search

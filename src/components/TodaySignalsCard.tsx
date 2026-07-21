@@ -26,8 +26,8 @@ function SignalList({
             const content = (
               <>
                 <p className="text-sm font-medium leading-snug text-foreground">{item.title}</p>
-                <p className="mt-0.5 text-[13px] leading-snug text-muted">{item.excerpt}</p>
-                <p className="mt-1 text-[12px] text-muted-soft">
+                <p className="mt-0.5 text-sm leading-snug text-muted">{item.excerpt}</p>
+                <p className="mt-1 text-sm text-muted-soft">
                   {item.sourceLabel} · {new Date(item.sourceDate).toLocaleDateString()}
                 </p>
               </>

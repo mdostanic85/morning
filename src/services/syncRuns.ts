@@ -47,6 +47,7 @@ function toSyncProviderRun(row: typeof syncProviderRuns.$inferSelect): SyncProvi
     itemsUpdated: row.itemsUpdated,
     itemsUnchanged: row.itemsUnchanged,
     itemsFailed: row.itemsFailed,
+    itemsExtractionFailed: row.itemsExtractionFailed,
     errorCode: row.errorCode ?? null,
     errorMessage: row.errorMessage ?? null,
   };
@@ -106,6 +107,7 @@ export async function completeSyncProviderRun(
         itemsUpdated: metrics.itemsUpdated,
         itemsUnchanged: metrics.itemsUnchanged,
         itemsFailed: metrics.itemsFailed,
+        itemsExtractionFailed: metrics.itemsExtractionFailed,
         errorCode: null,
         errorMessage: null,
       })
@@ -115,7 +117,41 @@ export async function completeSyncProviderRun(
   return row ? toSyncProviderRun(row) : null;
 }
 
-export async function cancelSyncProviderRun(id: number): Promise<SyncProviderRun | null> {
+/**
+ * Records a provider whose sync succeeded but not cleanly (WL-01): items
+ * failed to persist, or persisted but failed extraction/knowledge/embedding.
+ * Distinct from `completeSyncProviderRun` — this must never leave a provider
+ * marked "completed" while it carries failures.
+ */
+export async function partialSyncProviderRun(
+  id: number,
+  input: { metrics: SyncProviderRunMetrics; errorMessage: string }
+): Promise<SyncProviderRun | null> {
+  const [row] = await fetchReturning(
+    db
+      .update(syncProviderRuns)
+      .set({
+        status: "failed",
+        completedAt: nowIso(),
+        itemsFetched: input.metrics.itemsFetched,
+        itemsCreated: input.metrics.itemsCreated,
+        itemsUpdated: input.metrics.itemsUpdated,
+        itemsUnchanged: input.metrics.itemsUnchanged,
+        itemsFailed: input.metrics.itemsFailed,
+        itemsExtractionFailed: input.metrics.itemsExtractionFailed,
+        errorCode: "partial_failure",
+        errorMessage: input.errorMessage,
+      })
+      .where(eq(syncProviderRuns.id, id))
+      .returning()
+  );
+  return row ? toSyncProviderRun(row) : null;
+}
+
+export async function cancelSyncProviderRun(
+  id: number,
+  partialMetrics?: SyncProviderRunMetrics
+): Promise<SyncProviderRun | null> {
   const [row] = await fetchReturning(
     db
       .update(syncProviderRuns)
@@ -125,6 +161,16 @@ export async function cancelSyncProviderRun(id: number): Promise<SyncProviderRun
         errorCode: "cancelled",
         errorMessage:
           "Sync cancelled. Any in-flight external requests may still complete.",
+        ...(partialMetrics
+          ? {
+              itemsFetched: partialMetrics.itemsFetched,
+              itemsCreated: partialMetrics.itemsCreated,
+              itemsUpdated: partialMetrics.itemsUpdated,
+              itemsUnchanged: partialMetrics.itemsUnchanged,
+              itemsFailed: partialMetrics.itemsFailed,
+              itemsExtractionFailed: partialMetrics.itemsExtractionFailed,
+            }
+          : {}),
       })
       .where(and(eq(syncProviderRuns.id, id), eq(syncProviderRuns.status, "running")))
       .returning()
@@ -197,6 +243,7 @@ export async function failSyncProviderRun(
         itemsUpdated: input.metrics?.itemsUpdated ?? 0,
         itemsUnchanged: input.metrics?.itemsUnchanged ?? 0,
         itemsFailed: input.metrics?.itemsFailed ?? 0,
+        itemsExtractionFailed: input.metrics?.itemsExtractionFailed ?? 0,
         errorCode: input.errorCode,
         errorMessage: input.errorMessage,
       })

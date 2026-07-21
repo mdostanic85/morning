@@ -27,6 +27,9 @@ import {
   syncGitHubIncremental,
 } from "@/lib/imports/syncIncrementalProviders";
 import type { SyncProviderRunMetrics } from "@/domain/syncRun";
+import { isProviderSyncFullyOk } from "./providerSyncStatus";
+
+export { isProviderSyncFullyOk };
 
 export type ProviderSyncOutcome =
   | {
@@ -35,10 +38,27 @@ export type ProviderSyncOutcome =
       result: ConnectorSyncResult;
       itemsFetched: number;
       cancelled?: false;
+      partial?: false;
+    }
+  | {
+      /**
+       * The sync ran to completion without throwing, but some items failed
+       * to persist or failed extraction/knowledge/embedding (WL-01). Must
+       * never be treated the same as a full success — the provider run is
+       * recorded as failed/partial, not completed.
+       */
+      ok: false;
+      provider: ConnectionProvider;
+      partial: true;
+      result: ConnectorSyncResult;
+      itemsFetched: number;
+      error: string;
+      cancelled?: false;
     }
   | {
       ok: false;
       provider: ConnectionProvider;
+      partial?: false;
       error: string;
       configError?: boolean;
       cancelled?: false;
@@ -122,6 +142,7 @@ export async function syncProvider(
         itemsUpdated: importResult.itemsUpdated,
         itemsUnchanged: importResult.itemsUnchanged,
         itemsFailed: importResult.itemsFailed,
+        itemsExtractionFailed: importResult.itemsExtractionFailed,
       };
       return {
         ok: false,
@@ -149,48 +170,69 @@ export async function syncProvider(
       },
     });
 
-    if (provider === "granola") {
-      await commitGranolaConnectionCursorOnSuccess({
-        connectionId: connection.id,
-        candidates,
-        syncedAt: new Date().toISOString(),
-      });
-    }
-    if (provider === "jira") {
-      await commitJiraConnectionCursorOnSuccess({
-        connectionId: connection.id,
-        candidates,
-        syncedAt: new Date().toISOString(),
-      });
-    }
-    if (provider === "calendar") {
-      const pending = consumePendingCalendarSync();
-      if (pending?.syncTokenExpired) {
-        await clearCalendarSyncToken(connection.id);
+    // WL-02: cursors must only advance when every item in this batch
+    // actually succeeded — otherwise a failed item falls outside the next
+    // run's overlap window and is never retried.
+    const providerOk = isProviderSyncFullyOk(importResult);
+
+    if (providerOk) {
+      if (provider === "granola") {
+        await commitGranolaConnectionCursorOnSuccess({
+          connectionId: connection.id,
+          candidates,
+          syncedAt: new Date().toISOString(),
+        });
       }
-      await commitCalendarConnectionCursorOnSuccess({
-        connectionId: connection.id,
-        candidates,
-        nextSyncToken: pending?.nextSyncToken ?? null,
-        syncedAt: new Date().toISOString(),
-      });
-    }
-    if (provider === "gmail") {
-      await commitGmailConnectionCursorOnSuccess({
-        connectionId: connection.id,
-        candidates,
-        syncedAt: new Date().toISOString(),
-      });
-    }
-    if (provider === "drive") {
-      await commitDriveConnectionCursorOnSuccess({
-        connectionId: connection.id,
-        candidates,
-        syncedAt: new Date().toISOString(),
-      });
+      if (provider === "jira") {
+        await commitJiraConnectionCursorOnSuccess({
+          connectionId: connection.id,
+          candidates,
+          syncedAt: new Date().toISOString(),
+        });
+      }
+      if (provider === "calendar") {
+        const pending = consumePendingCalendarSync();
+        if (pending?.syncTokenExpired) {
+          await clearCalendarSyncToken(connection.id);
+        }
+        await commitCalendarConnectionCursorOnSuccess({
+          connectionId: connection.id,
+          candidates,
+          nextSyncToken: pending?.nextSyncToken ?? null,
+          syncedAt: new Date().toISOString(),
+        });
+      }
+      if (provider === "gmail") {
+        await commitGmailConnectionCursorOnSuccess({
+          connectionId: connection.id,
+          candidates,
+          syncedAt: new Date().toISOString(),
+        });
+      }
+      if (provider === "drive") {
+        await commitDriveConnectionCursorOnSuccess({
+          connectionId: connection.id,
+          candidates,
+          syncedAt: new Date().toISOString(),
+        });
+      }
+
+      return { ok: true, provider, result: importResult, itemsFetched: candidates.length };
     }
 
-    return { ok: true, provider, result: importResult, itemsFetched: candidates.length };
+    // WL-01: some items failed to persist or failed extraction/knowledge
+    // interpretation. Never report this as a plain success — the caller
+    // must record the provider run as failed/partial, not completed.
+    return {
+      ok: false,
+      provider,
+      partial: true,
+      result: importResult,
+      itemsFetched: candidates.length,
+      error:
+        importResult.errors[0] ??
+        `${importResult.itemsFailed} item(s) failed to import; ${importResult.itemsExtractionFailed} item(s) failed extraction.`,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Sync failed.";
     const existing = await getConnectionByProvider(provider);

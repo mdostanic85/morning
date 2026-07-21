@@ -488,7 +488,7 @@ function StatusDot({ status }: { status: ProviderUiStatus | FinalizeUiStatus }) 
       ) : status === "running" ? (
         <span className="size-3 animate-spin rounded-full border-2 border-accent/25 border-t-accent motion-reduce:animate-none" />
       ) : status === "failed" ? (
-        <span className="text-[10px] font-bold leading-none">!</span>
+        <span className="text-sm font-bold leading-none">!</span>
       ) : (
         <span className="size-1.5 rounded-full bg-current opacity-50" />
       )}
@@ -521,7 +521,7 @@ function ProgressRow({
         <div className="flex items-center justify-between gap-2">
           <p
             className={cn(
-              "truncate text-[13px] font-semibold leading-snug tracking-[-0.01em] transition-colors duration-300",
+              "truncate text-sm font-semibold leading-snug tracking-[-0.01em] transition-colors duration-300",
               failed ? "text-danger" : done || active ? "text-foreground" : "text-muted-soft"
             )}
           >
@@ -529,7 +529,7 @@ function ProgressRow({
           </p>
           <span
             className={cn(
-              "shrink-0 text-[10px] font-bold uppercase tracking-[0.08em]",
+              "shrink-0 text-sm font-bold uppercase tracking-[0.08em]",
               failed
                 ? "text-danger"
                 : active
@@ -545,7 +545,7 @@ function ProgressRow({
         {(active || failed) && detail ? (
           <p
             className={cn(
-              "mt-0.5 truncate text-[11px] leading-snug",
+              "mt-0.5 truncate text-sm leading-snug",
               failed ? "text-danger/90" : "text-muted"
             )}
             title={detail}
@@ -735,23 +735,23 @@ function SyncOverlay({
  <div className="flex items-center gap-4">
  <SyncActivityAnimation mode={animationMode} />
  <div className="min-w-0 flex-1">
- <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent">
+ <p className="text-sm font-bold uppercase tracking-[0.14em] text-accent">
  Live source update
  </p>
  <p className="mt-1 font-display text-xl font-semibold tracking-[-0.035em] text-foreground">
  {headline}
  </p>
  </div>
- <span className="rounded-full bg-accent-soft-surface px-2.5 py-1 font-mono text-xs font-semibold tabular-nums text-accent">
+ <span className="rounded-full bg-accent-soft-surface px-2.5 py-1 font-mono text-sm font-semibold tabular-nums text-accent">
  {Math.round(progress * 100)}%
  </span>
  </div>
 
  <div className="mt-5 flex items-center justify-between gap-4">
- <p className={cn("truncate text-xs font-medium", networkError ? "text-danger" : "text-muted")}>
+ <p className={cn("truncate text-sm font-medium", networkError ? "text-danger" : "text-muted")}>
  {networkError ?? stepLine}
  </p>
- <span className="shrink-0 text-[11px] tabular-nums text-muted-soft">
+ <span className="shrink-0 text-sm tabular-nums text-muted-soft">
  {providerItems.filter((item) => item.status === "completed").length}/{providerItems.length}
  </span>
  </div>
@@ -776,7 +776,7 @@ function SyncOverlay({
 
  <section className="mx-3 mb-3 rounded-[1.15rem] border border-border/80 bg-surface-soft/70 sm:mx-4 sm:mb-4">
  <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
- <p className="text-[11px] font-semibold tracking-[-0.01em] text-muted">
+ <p className="text-sm font-semibold tracking-[-0.01em] text-muted">
  Checking {providerItems.length} source{providerItems.length === 1 ? "" : "s"}
  </p>
  </div>
@@ -808,13 +808,13 @@ function SyncOverlay({
  type="button"
  variant="ghost"
  size="sm"
- className="mx-auto flex text-xs text-muted hover:text-foreground"
+ className="mx-auto flex text-sm text-muted hover:text-foreground"
  onClick={onCancelRequested}
  >
  Stop update
  </Button>
  ) : cancelRequested ? (
- <p className="text-center text-xs text-muted" role="status">
+ <p className="text-center text-sm text-muted" role="status">
  Finishing in-flight requests before stopping…
  </p>
  ) : null}
@@ -865,22 +865,11 @@ async function pollSyncRun(
  }
 }
 
-function syncStateLabel(sourceCount: number, lastSyncAt: string | null): string {
- const healthy =
- sourceCount > 0
- ? `${sourceCount} source${sourceCount === 1 ? "" : "s"} healthy`
- : "No sources connected";
- if (!lastSyncAt) return healthy;
- const time = new Date(lastSyncAt);
- if (Number.isNaN(time.getTime())) return healthy;
- return `${healthy} · synced ${time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-}
-
 export function SyncMyDayButton({
  sources = [],
- lastSyncAt = null,
 }: {
  sources?: string[];
+ /** @deprecated Kept for call-site compatibility; sync health chrome was removed. */
  lastSyncAt?: string | null;
 }) {
  const router = useRouter();
@@ -1067,13 +1056,6 @@ export function SyncMyDayButton({
  onClose={closeResult}
  />
  ) : null}
- <div className="flex items-center gap-4">
- <span className="hidden items-center gap-2.5 whitespace-nowrap text-sm text-muted md:flex">
- <span className="health-dot" aria-hidden />
- {status === "syncing"
- ? "Syncing connected sources…"
- : syncStateLabel(sources.length, lastSyncAt)}
- </span>
  <Button
  type="button"
  size="lg"
@@ -1097,7 +1079,6 @@ export function SyncMyDayButton({
  "↻ Sync my day"
  )}
  </Button>
- </div>
  {summary ? (
  <p className="max-w-lg text-[14px] leading-relaxed text-muted" role="status">
  {summary}

@@ -70,7 +70,7 @@ function EvidenceCard({
     <li className="rounded-[var(--radius)] border border-border bg-surface/70 p-4">
       <div className="flex flex-wrap items-center gap-2">
         {rank != null ? (
-          <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-accent/12 text-[11px] font-medium tabular-nums text-accent-strong">
+          <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-accent/12 text-sm font-medium tabular-nums text-accent-strong">
             {rank}
           </span>
         ) : null}
@@ -126,11 +126,11 @@ export function WhyThisButton({ whyFirst, evidence }: WhyThisButtonProps) {
       <Button
         type="button"
         size="sm"
-        variant="ghost"
-        className="shrink-0 text-accent hover:bg-accent/10"
+        variant="tertiary"
+        className="shrink-0"
         onPress={() => setOpen(true)}
       >
-        Why this
+        Why this?
       </Button>
 
       <Drawer isOpen={open} onOpenChange={setOpen}>
@@ -152,7 +152,7 @@ export function WhyThisButton({ whyFirst, evidence }: WhyThisButtonProps) {
               <Drawer.Body className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
                 {whyFirst ? (
                   <section>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-soft">
+                    <p className="text-sm font-medium uppercase tracking-[0.08em] text-muted-soft">
                       AI conclusion
                     </p>
                     <p className="mt-2 text-sm leading-relaxed text-foreground">{whyFirst}</p>
@@ -161,7 +161,7 @@ export function WhyThisButton({ whyFirst, evidence }: WhyThisButtonProps) {
 
                 {primary.length > 0 ? (
                   <section>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-soft">
+                    <p className="text-sm font-medium uppercase tracking-[0.08em] text-muted-soft">
                       Most decisive
                     </p>
                     <ul className="mt-3 space-y-3">
@@ -180,7 +180,7 @@ export function WhyThisButton({ whyFirst, evidence }: WhyThisButtonProps) {
 
                 {supporting.length > 0 ? (
                   <section>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-soft">
+                    <p className="text-sm font-medium uppercase tracking-[0.08em] text-muted-soft">
                       Also supporting
                     </p>
                     <ul className="mt-3 space-y-3">

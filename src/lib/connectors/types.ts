@@ -53,6 +53,14 @@ export interface ConnectorSyncResult {
   itemsUpdated: number;
   itemsUnchanged: number;
   itemsFailed: number;
+  /**
+   * A source persisted successfully but its task/knowledge/embedding
+   * interpretation failed (WL-01). Distinct from `itemsFailed`, which is
+   * persist-layer failure only — this counter is what makes
+   * extraction/embedding failures visible to sync completion status instead
+   * of silently vanishing.
+   */
+  itemsExtractionFailed: number;
   /** Extracted tasks added to the Today queue. */
   tasksExtracted: number;
   errors: string[];

@@ -187,7 +187,7 @@ export function FigmaValidateButton({ taskId, taskTitle, hasJiraEvidence }: Prop
  {/* Header */}
  <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
  <div>
- <p className="text-[13px] font-bold uppercase tracking-[0.07em] text-muted">
+ <p className="text-sm font-bold uppercase tracking-[0.07em] text-muted">
  Figma delivery validation
  </p>
  <p className="mt-0.5 text-[15px] font-semibold leading-snug line-clamp-2">{taskTitle}</p>
@@ -245,7 +245,7 @@ export function FigmaValidateButton({ taskId, taskTitle, hasJiraEvidence }: Prop
  >
  {step.label}
  {step.detail ? (
- <span className="ml-1.5 text-[12px] text-muted-soft">{step.detail}</span>
+ <span className="ml-1.5 text-sm text-muted-soft">{step.detail}</span>
  ) : null}
  </span>
  </li>
@@ -258,7 +258,7 @@ export function FigmaValidateButton({ taskId, taskTitle, hasJiraEvidence }: Prop
  <div className="border-t border-border px-5 py-4">
  {isDone && run.report ? (
  <>
- <p className="text-[13px] text-muted leading-relaxed mb-3">
+ <p className="text-sm text-muted leading-relaxed mb-3">
  {run.report.summary}
  </p>
 
@@ -283,7 +283,7 @@ export function FigmaValidateButton({ taskId, taskTitle, hasJiraEvidence }: Prop
 
  {run.report.recommendedNextAction ? (
  <div className="mt-4 rounded-xl border border-accent/20 bg-accent/8 px-4 py-3">
- <p className="text-[13px] font-bold uppercase tracking-[0.06em] text-accent-strong">
+ <p className="text-sm font-bold uppercase tracking-[0.06em] text-accent-strong">
  Recommended next action
  </p>
  <p className="mt-1 text-[14px] leading-snug">
@@ -304,7 +304,7 @@ export function FigmaValidateButton({ taskId, taskTitle, hasJiraEvidence }: Prop
  <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
  {isRunning ? (
  <>
- <p className="text-[13px] text-muted">
+ <p className="text-sm text-muted">
  Using strongest model — this takes 20–40 s.
  </p>
  <Button size="sm" variant="danger-soft" onPress={handleCancel}>

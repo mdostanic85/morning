@@ -7,12 +7,20 @@ import { importConnectorSources } from "./sourceImportPipeline";
 import { getConnectionByProvider, upsertConnection } from "@/services/connections";
 import type { ShouldCancelSync } from "@/lib/imports/syncCancellation";
 import type { ProviderSyncOutcome } from "./syncProvider";
+import { isProviderSyncFullyOk } from "./providerSyncStatus";
 
-export async function finalizeProviderSyncSuccess(input: {
+/**
+ * Updates connection bookkeeping and returns the outcome for a resource-scope
+ * sync. `ok` reflects the true per-item result (WL-01) — a provider that
+ * persisted everything but failed some extractions, or failed to persist any
+ * item, comes back `ok: false` with the partial result attached rather than
+ * being reported as a plain success.
+ */
+export async function finalizeProviderSync(input: {
   provider: ConnectionProvider;
   candidates: ConnectorSourceCandidate[];
   importResult: ConnectorSyncResult;
-  commitCursor?: () => Promise<void>;
+  errors?: string[];
 }): Promise<ProviderSyncOutcome> {
   const existing = await getConnectionByProvider(input.provider);
   await upsertConnection({
@@ -28,14 +36,29 @@ export async function finalizeProviderSyncSuccess(input: {
       lastSyncErrors: input.importResult.errors,
     },
   });
-  if (input.commitCursor) {
-    await input.commitCursor();
+
+  const providerOk =
+    isProviderSyncFullyOk(input.importResult) && (input.errors ?? []).length === 0;
+
+  if (providerOk) {
+    return {
+      ok: true,
+      provider: input.provider,
+      result: input.importResult,
+      itemsFetched: input.candidates.length,
+    };
   }
+
   return {
-    ok: true,
+    ok: false,
     provider: input.provider,
+    partial: true,
     result: input.importResult,
     itemsFetched: input.candidates.length,
+    error:
+      input.importResult.errors[0] ??
+      (input.errors ?? [])[0] ??
+      `${input.importResult.itemsFailed} item(s) failed to import; ${input.importResult.itemsExtractionFailed} item(s) failed extraction.`,
   };
 }
 
@@ -50,6 +73,7 @@ export async function mergeImportResults(
     itemsUpdated: 0,
     itemsUnchanged: 0,
     itemsFailed: 0,
+    itemsExtractionFailed: 0,
     tasksExtracted: 0,
     errors: [],
     importedItems: [],
@@ -63,6 +87,7 @@ export async function mergeImportResults(
     merged.itemsUpdated += result.itemsUpdated;
     merged.itemsUnchanged += result.itemsUnchanged;
     merged.itemsFailed += result.itemsFailed;
+    merged.itemsExtractionFailed += result.itemsExtractionFailed;
     merged.tasksExtracted += result.tasksExtracted;
     merged.errors.push(...result.errors);
     merged.importedItems.push(...result.importedItems);
@@ -100,6 +125,10 @@ export async function syncResourceScopes(input: {
           itemsUpdated: importResults.reduce((sum, entry) => sum + entry.itemsUpdated, 0),
           itemsUnchanged: importResults.reduce((sum, entry) => sum + entry.itemsUnchanged, 0),
           itemsFailed: importResults.reduce((sum, entry) => sum + entry.itemsFailed, 0),
+          itemsExtractionFailed: importResults.reduce(
+            (sum, entry) => sum + entry.itemsExtractionFailed,
+            0
+          ),
         },
         itemsFetched: allCandidates.length,
       };
@@ -131,9 +160,10 @@ export async function syncResourceScopes(input: {
   const merged = await mergeImportResults(importResults);
   if (errors.length > 0) merged.errors.push(...errors);
 
-  return finalizeProviderSyncSuccess({
+  return finalizeProviderSync({
     provider: input.provider,
     candidates: allCandidates,
     importResult: merged,
+    errors,
   });
 }

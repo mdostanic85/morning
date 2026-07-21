@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRightIcon } from "lucide-react";
+import { AppBadge } from "@/components/AppBadge";
 import { SettingsBackLink } from "@/components/SettingsBackLink";
 import { getConnections } from "@/services/connections";
 import { listHydraRuns } from "@/services/hydra";
@@ -44,14 +45,12 @@ export default async function SourcesPage() {
                   <h2 className="font-display text-lg font-semibold">{source.label}</h2>
                   <p className="mt-2 text-sm leading-relaxed text-muted">{source.description}</p>
                 </div>
-                <span
-                  className={`tag border ${connected ? "border-good/30 bg-good/10 text-good" : "border-border bg-surface-soft text-muted"}`}
-                >
+                <AppBadge tone={connected ? "good" : "neutral"}>
                   {connection?.status ?? "not connected"}
-                </span>
+                </AppBadge>
               </div>
               <div className="mt-5 border-t border-border pt-4">
-                <p className="text-xs text-muted">Latest run check</p>
+                <p className="text-sm text-muted">Latest run check</p>
                 <p
                   className={`mt-1 text-sm font-medium ${health?.status === "connected" ? "text-good" : "text-waiting"}`}
                 >

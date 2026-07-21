@@ -1,4 +1,5 @@
 import type { TaskWorkContextSnapshot } from "./taskWorkContext";
+import type { ConfidenceComponents } from "@/lib/tasks/confidenceModel";
 
 export interface TaskMeetingContextEntry {
   sourceItemId: number;
@@ -45,6 +46,8 @@ export interface WorkTask {
   priorityScore: number | null;
   /** 0..1 */
   confidence: number | null;
+  /** WL-05: the deterministic component breakdown that produced `confidence`. Null for tasks created before WL-05. */
+  confidenceComponents: ConfidenceComponents | null;
   reason: string;
   nextAction: string;
   doneCriteria: string[];
@@ -73,6 +76,7 @@ export type NewWorkTask = Pick<
       | "projectId"
       | "priorityScore"
       | "confidence"
+      | "confidenceComponents"
       | "dueDate"
       | "owner"
       | "waitingOn"

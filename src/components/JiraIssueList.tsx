@@ -1,4 +1,5 @@
 import type { JiraPendingSnapshot } from "@/lib/connectors/jiraPending";
+import { AppBadge } from "@/components/AppBadge";
 
 interface JiraIssueListProps {
   issues: JiraPendingSnapshot[];
@@ -31,7 +32,7 @@ export function JiraIssueList({
               ) : (
                 <span className="font-mono text-[14px] text-muted">{issue.key}</span>
               )}
-              <span className="tag border-border bg-surface-soft text-muted">{issue.status}</span>
+              <AppBadge tone="neutral">{issue.status}</AppBadge>
               {issue.priority ? (
                 <span className="text-[14px] text-muted-soft">{issue.priority}</span>
               ) : null}

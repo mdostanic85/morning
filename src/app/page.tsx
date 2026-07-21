@@ -56,6 +56,15 @@ export default async function TodayPage() {
     .map((connection) => CONNECTED_PROVIDER_LABEL[connection.provider as ConnectionProvider])
     .filter(Boolean);
 
+  // WL-12: sync health belongs on Today chrome, not only the sync overlay —
+  // driven by the now-honest per-provider status (WL-01).
+  const failedProviderLabels = (latestSync?.providerRuns ?? [])
+    .filter((providerRun) => providerRun.status === "failed" || providerRun.status === "cancelled")
+    .map(
+      (providerRun) =>
+        CONNECTED_PROVIDER_LABEL[providerRun.provider as ConnectionProvider] ?? providerRun.provider
+    );
+
   // Never drop valid tasks because priorityScore was copied into confidence.
   // Brief cards only use work that is clearly owned — never pad with unclear/
   // someone-else's meeting items.
@@ -141,7 +150,6 @@ export default async function TodayPage() {
     <HumanReadableTodayView
       tasks={orderedTasks}
       connectedProviderLabels={connectedProviderLabels}
-      sourceCount={todayBriefing?.sourceCount ?? sourceItems.length}
       lastSyncAt={
         latestSync?.run.completedAt ?? latestSync?.run.startedAt ?? null
       }
@@ -150,6 +158,7 @@ export default async function TodayPage() {
       meetings={todayMeetings.meetings}
       calendarConnected={todayMeetings.calendarConnected}
       dailyBrief={dailyBrief}
+      failedProviderLabels={failedProviderLabels}
     />
   );
 }

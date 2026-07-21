@@ -1,10 +1,12 @@
 import "server-only";
 import { z } from "zod";
 import { getActiveProviders, getAvailableApiKey } from "@/services/settings";
+import { hashLlmInput, recordLlmTelemetry } from "@/services/llmTelemetry";
 import { openaiClient, openaiEmbed } from "./openai";
 import { anthropicClient } from "./anthropic";
 import { groqClient } from "./groq";
 import { TASK_EXTRACTOR_SYSTEM_PROMPT } from "./prompts/taskExtractor";
+import { TASK_REFLECT_SYSTEM_PROMPT } from "./prompts/factReflect";
 import { PROJECT_MATCHER_SYSTEM_PROMPT } from "./prompts/projectMatcher";
 import { PROJECT_DISCOVERY_SYSTEM_PROMPT } from "./prompts/projectDiscovery";
 import { PRIORITY_PLANNER_SYSTEM_PROMPT } from "./prompts/priorityPlanner";
@@ -85,6 +87,16 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
     model: GROQ_70B,
     maxTokens: 4096,
     fallbacks: STANDARD_TEXT_FALLBACKS,
+  },
+  // WL-07 stage 2: deliberately the cheapest model available — this is a
+  // narrow keep/discard pass, not a reasoning-heavy job. Fails open in
+  // extractor.ts on any error, so a missing/failing fallback chain here
+  // only means the noise filter is skipped, never that extraction breaks.
+  task_reflect: {
+    provider: "groq",
+    model: GROQ_8B,
+    maxTokens: 2048,
+    fallbacks: [OPENAI_MINI_FALLBACK],
   },
   project_matching: {
     provider: "groq",
@@ -186,6 +198,7 @@ export const EMBEDDING_MODEL_CONFIG: ModelConfig = {
 
 export const JOB_SYSTEM_PROMPTS: Record<JobType, string> = {
   task_extraction: TASK_EXTRACTOR_SYSTEM_PROMPT,
+  task_reflect: TASK_REFLECT_SYSTEM_PROMPT,
   project_matching: PROJECT_MATCHER_SYSTEM_PROMPT,
   project_discovery: PROJECT_DISCOVERY_SYSTEM_PROMPT,
   priority_planning: PRIORITY_PLANNER_SYSTEM_PROMPT,
@@ -280,6 +293,8 @@ function logJobEvent(event: {
   error?: string;
   durationMs: number;
   fallback?: boolean;
+  /** Hash of the request input — the join key for the llm_telemetry audit trail (WL-09). */
+  inputHash: string;
   usage?: {
     inputTokens: number;
     outputTokens: number;
@@ -295,6 +310,17 @@ function logJobEvent(event: {
   console.info(
     `[llm] ${event.jobType} via ${event.provider}/${event.model}${via} — ${status} in ${event.durationMs}ms${usage}${error}`
   );
+  void recordLlmTelemetry({
+    jobType: event.jobType,
+    provider: event.provider,
+    model: event.model,
+    inputHash: event.inputHash,
+    ok: event.ok,
+    errorKind: event.ok ? null : (event.kind ?? null),
+    fallback: event.fallback ?? false,
+    durationMs: event.durationMs,
+    usage: event.usage,
+  });
 }
 
 function shouldTryFallback(kind: LlmErrorKind): boolean {
@@ -325,6 +351,7 @@ async function runWithConfig<T>(
   const systemPrompt = params.systemPrompt ?? JOB_SYSTEM_PROMPTS[jobType];
   const client = getProviderClient(provider);
   const maxTokens = params.maxTokens ?? config.maxTokens ?? 4096;
+  const inputHash = hashLlmInput(`${systemPrompt}\n---\n${params.userPrompt}`);
 
   function fail(kind: LlmErrorKind, error: string): LlmJobResult<T> {
     logJobEvent({
@@ -336,6 +363,7 @@ async function runWithConfig<T>(
       error,
       durationMs: Date.now() - startedAt,
       fallback: isFallback,
+      inputHash,
     });
     return { ok: false, jobType, provider, model, kind, error };
   }
@@ -401,6 +429,7 @@ async function runWithConfig<T>(
       durationMs: Date.now() - startedAt,
       fallback: isFallback,
       usage: completion.usage,
+      inputHash,
     });
     return { ok: true, jobType, provider, model, data: validated.data };
   }
@@ -469,6 +498,7 @@ let embeddingsUnavailableReason: string | null = null;
 export async function runEmbeddingJob(texts: string[]): Promise<EmbeddingJobResult> {
   const { provider, model } = EMBEDDING_MODEL_CONFIG;
   const startedAt = Date.now();
+  const inputHash = hashLlmInput(texts.join("\n---\n"));
 
   if (texts.length === 0) {
     return { ok: true, model, vectors: [] };
@@ -503,7 +533,9 @@ export async function runEmbeddingJob(texts: string[]): Promise<EmbeddingJobResu
       model,
       ok: false,
       kind,
+      error,
       durationMs: Date.now() - startedAt,
+      inputHash,
     });
     return { ok: false, model, kind, error };
   }
@@ -524,6 +556,7 @@ export async function runEmbeddingJob(texts: string[]): Promise<EmbeddingJobResu
       model,
       ok: true,
       durationMs: Date.now() - startedAt,
+      inputHash,
     });
     return { ok: true, model, vectors };
   } catch (err) {

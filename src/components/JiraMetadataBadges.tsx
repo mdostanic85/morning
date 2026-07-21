@@ -1,24 +1,15 @@
 import { CalendarIcon, FlagIcon, UserIcon } from "lucide-react";
-import { Chip } from "@heroui/react/chip";
 import type { JiraInlineMetadata } from "@/lib/connectors/jiraText";
 import { jiraStatusVisual } from "@/lib/connectors/jiraStatusVisual";
+import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
 import { cn } from "@/lib/utils";
 
-function priorityBadgeClass(priority: string): string {
+function priorityTone(priority: string): AppBadgeTone {
   const normalized = priority.toLowerCase();
-  if (/(highest|critical|blocker|p0)/.test(normalized)) {
-    return "border-danger/40 bg-danger/8 text-danger";
-  }
-  if (/(high|p1)/.test(normalized)) {
-    return "border-warm/40 bg-warm/8 text-warm";
-  }
-  if (/(medium|normal|p2)/.test(normalized)) {
-    return "border-border bg-surface-soft text-muted";
-  }
-  if (/(low|minor|trivial|p3)/.test(normalized)) {
-    return "border-border/70 bg-surface-soft/70 text-muted-soft";
-  }
-  return "border-border bg-surface-soft text-muted";
+  if (/(highest|critical|blocker|p0)/.test(normalized)) return "danger";
+  if (/(high|p1)/.test(normalized)) return "warning";
+  if (/(low|minor|trivial|p3)/.test(normalized)) return "neutral";
+  return "default";
 }
 
 function formatDueDate(value: string): string {
@@ -46,68 +37,57 @@ export function JiraMetadataBadges({
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
       {metadata.status && statusVisual ? (
-        <Chip
-          variant="tertiary"
-          color="default"
-          className={cn(
-            "tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border text-foreground transition-colors gap-1.5 font-normal",
-            statusVisual.triggerClassName
-          )}
+        <AppBadge
+          tone="default"
+          className={cn("font-normal gap-1.5", statusVisual.triggerClassName)}
+          icon={StatusIcon ? <StatusIcon className="size-3.5 shrink-0" aria-hidden /> : null}
         >
-          {StatusIcon ? <StatusIcon className="size-3 shrink-0" aria-hidden /> : null}
           {metadata.status}
-        </Chip>
+        </AppBadge>
       ) : null}
 
       {metadata.priority ? (
-        <Chip
-          variant="tertiary"
-          color="default"
-          className={cn(
-            "tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border text-foreground transition-colors gap-1.5 font-normal",
-            priorityBadgeClass(metadata.priority)
-          )}
+        <AppBadge
+          tone={priorityTone(metadata.priority)}
+          className="font-normal gap-1.5"
+          icon={<FlagIcon className="size-3.5 shrink-0 opacity-70" aria-hidden />}
         >
-          <FlagIcon className="size-3 shrink-0 opacity-70" aria-hidden />
           <span className="text-muted-soft">Priority</span>
           <span>{metadata.priority}</span>
-        </Chip>
+        </AppBadge>
       ) : null}
 
       {metadata.assignee ? (
-        <Chip
-          variant="tertiary"
-          color="default"
-          className="tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border bg-surface-soft text-muted transition-colors gap-1.5 font-normal"
+        <AppBadge
+          tone="neutral"
+          className="font-normal gap-1.5"
+          icon={<UserIcon className="size-3.5 shrink-0 opacity-70" aria-hidden />}
         >
-          <UserIcon className="size-3 shrink-0 opacity-70" aria-hidden />
           <span className="text-muted-soft">Assignee</span>
           <span className="text-foreground">{metadata.assignee}</span>
-        </Chip>
+        </AppBadge>
       ) : null}
 
       {metadata.reporter ? (
-        <Chip
-          variant="tertiary"
-          color="default"
-          className="tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border/70 bg-surface-soft/60 text-muted transition-colors gap-1.5 font-normal"
+        <AppBadge
+          tone="neutral"
+          className="font-normal gap-1.5 opacity-90"
+          icon={<UserIcon className="size-3.5 shrink-0 opacity-60" aria-hidden />}
         >
-          <UserIcon className="size-3 shrink-0 opacity-60" aria-hidden />
           <span className="text-muted-soft">Reporter</span>
           <span>{metadata.reporter}</span>
-        </Chip>
+        </AppBadge>
       ) : null}
 
       {metadata.dueDate ? (
-        <Chip
-          variant="tertiary"
-          color="default"
-          className="tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border bg-surface-soft text-muted transition-colors gap-1.5 font-normal"
+        <AppBadge
+          tone="neutral"
+          className="font-normal gap-1.5"
+          icon={<CalendarIcon className="size-3.5 shrink-0 opacity-70" aria-hidden />}
         >
-          <CalendarIcon className="size-3 shrink-0 opacity-70" aria-hidden />
           <span className="text-muted-soft">Due</span>
           <span className="text-foreground">{formatDueDate(metadata.dueDate)}</span>
-        </Chip>
+        </AppBadge>
       ) : null}
     </div>
   );

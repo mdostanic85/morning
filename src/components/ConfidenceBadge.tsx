@@ -1,46 +1,32 @@
 "use client";
 
-import { Chip } from "@heroui/react/chip";
 import { Tooltip } from "@heroui/react/tooltip";
-import { cn } from "@/lib/utils";
+import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
 
-function bucket(value: number): { label: string; className: string } {
-  if (value >= 0.7)
-    return {
-      label: "High",
-      className: "border-good/40 bg-good/10 text-good hover:bg-good/10",
-    };
-  if (value >= 0.4)
-    return {
-      label: "Med",
-      className: "border-warm/40 bg-warm/10 text-warm hover:bg-warm/10",
-    };
-  return {
-    label: "Low",
-    className: "border-danger/40 bg-danger/10 text-danger hover:bg-danger/10",
-  };
+function bucket(value: number): { label: string; tone: AppBadgeTone } {
+  if (value >= 0.7) return { label: "High", tone: "good" };
+  if (value >= 0.4) return { label: "Med", tone: "warning" };
+  return { label: "Low", tone: "danger" };
 }
 
 /** `level` is a 0..1 confidence score, as produced by extraction/classification jobs. */
 export function ConfidenceBadge({ level }: { level: number }) {
-  const { label, className } = bucket(level);
+  const { label, tone } = bucket(level);
   return (
     <Tooltip delay={400}>
       <Tooltip.Trigger>
-        <Chip
-          variant="tertiary"
-          color="default"
-          className={cn(
-            "tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border text-foreground transition-colors gap-1 font-medium cursor-default",
-            className
-          )}
-        >
+        <AppBadge tone={tone} className="px-2.5">
           {label} · {Math.round(level * 100)}%
-        </Chip>
+        </AppBadge>
       </Tooltip.Trigger>
-      <Tooltip.Content placement="top" showArrow className="max-w-xs bg-foreground px-3 py-1.5 text-xs text-background">
+      <Tooltip.Content
+        placement="top"
+        showArrow
+        className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background"
+      >
         <Tooltip.Arrow />
-        How confident the AI is that this task was correctly extracted from the source. Low = needs your review.
+        How confident the AI is that this task was correctly extracted from the source. Low = needs
+        your review.
       </Tooltip.Content>
     </Tooltip>
   );

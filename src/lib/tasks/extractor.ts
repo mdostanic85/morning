@@ -35,6 +35,10 @@ import {
   type MergeCandidateTask,
 } from "@/lib/tasks/transcriptTaskMerge";
 import { myOwnerFilter, personMatchesFilter, classifyTaskOwnership } from "@/lib/filters/ownerFilter";
+import { computeTaskConfidence } from "@/lib/tasks/taskConfidence";
+import { getApplicableIngestionRules } from "@/services/ingestionRules";
+import { resolveOrCreatePerson } from "@/services/people";
+import { reflectOnExtractedTasks } from "@/lib/tasks/taskReflect";
 
 export interface ExtractTasksOptions {
   sourceItem: SourceItem;
@@ -81,6 +85,17 @@ function toMergeCandidates(tasks: WorkTask[]): MergeCandidateTask[] {
     status: task.status,
     projectId: task.projectId,
   }));
+}
+
+/** WL-10: best-effort identity resolution — must never block extraction on failure. */
+async function resolvePersonIdForOwner(ownerName: string | null): Promise<number | null> {
+  if (!ownerName?.trim()) return null;
+  try {
+    const { personId } = await resolveOrCreatePerson(ownerName);
+    return personId;
+  } catch {
+    return null;
+  }
 }
 
 function uniqueQuotes(items: { quote: string }[]): { quote: string }[] {
@@ -180,6 +195,10 @@ export async function extractTasksFromSourceItem(
     .slice(0, 30);
 
   const mergeCandidates = toMergeCandidates(existingTasks);
+  const ingestionRules = await getApplicableIngestionRules({
+    sourceType: sourceItem.sourceType,
+    projectId: sourceItem.projectId,
+  });
 
   const result = await runLlmJob({
     jobType: "task_extraction",
@@ -191,6 +210,7 @@ export async function extractTasksFromSourceItem(
       sourceAuthor: sourceItem.author,
       sourceBody: sourceItem.body,
       project,
+      ingestionRules: ingestionRules.map((rule) => rule.rule),
       existingTasks: existingTasks.map((task) => ({
         id: task.id,
         title: task.title,
@@ -213,6 +233,27 @@ export async function extractTasksFromSourceItem(
   const savedEvidence: Evidence[] = [];
   const taskMatchProjects = sourceItem.projectId === null ? await getActiveProjects() : null;
 
+  // WL-07 stage 2: a separate, cheap LLM call filters obvious noise out of
+  // the extraction stage's candidates before any merge/persist logic runs.
+  // Fails open — a reflect-stage error or skip keeps every candidate, so
+  // this can only ever narrow the candidate set, never break extraction.
+  const reflection = await reflectOnExtractedTasks({
+    sourceBody: sourceItem.body,
+    candidates: output.tasks,
+    existingOpenTaskTitles: existingTasks.map((task) => task.title),
+  });
+  const survivingTasks = output.tasks.filter((_, index) => reflection.keepFlags[index]);
+  if (reflection.ranReflectStage && survivingTasks.length < output.tasks.length) {
+    const discarded = output.tasks
+      .map((task, index) => ({ task, index }))
+      .filter(({ index }) => !reflection.keepFlags[index]);
+    console.info(
+      `[task_reflect] discarded ${discarded.length}/${output.tasks.length} candidate(s) for source ${sourceItem.id}: ${discarded
+        .map(({ task, index }) => `"${task.title}" (${reflection.reasons[index]})`)
+        .join("; ")}`
+    );
+  }
+
   type ResolvedGroup = {
     targetId: number | null;
     mode: "full" | "evidence";
@@ -221,7 +262,7 @@ export async function extractTasksFromSourceItem(
 
   const groups = new Map<string, ResolvedGroup>();
 
-  for (const extracted of output.tasks) {
+  for (const extracted of survivingTasks) {
     const resolution = resolveTranscriptMergeTarget({
       source: sourceItem,
       extracted,
@@ -295,6 +336,22 @@ export async function extractTasksFromSourceItem(
         existingSources,
       });
 
+      const mergedOwner = primary.owner ?? existing.owner;
+      const mergedConfidence = incomingIsLatest
+        ? computeTaskConfidence({
+            ownerName: mergedOwner,
+            extractionConfidence: primary.confidence,
+            title: primary.title,
+            reason,
+            nextAction: primary.nextAction,
+            currentUserName,
+            primarySource: sourceItem,
+            hasProject: (existing.projectId ?? sourceItem.projectId) != null,
+            evidenceSources: [sourceItem, ...existingSources],
+            resolvedPersonId: await resolvePersonIdForOwner(mergedOwner),
+          })
+        : null;
+
       const updated = incomingIsLatest
         ? await updateWorkTask(existing.id, {
             projectId: existing.projectId ?? sourceItem.projectId,
@@ -313,9 +370,10 @@ export async function extractTasksFromSourceItem(
               existing.meetingContext,
               meetingContextEntry
             ),
-            confidence: primary.confidence,
+            confidence: mergedConfidence?.finalConfidence ?? primary.confidence,
+            confidenceComponents: mergedConfidence?.components ?? null,
             dueDate: primary.dueDate ?? existing.dueDate,
-            owner: primary.owner ?? existing.owner,
+            owner: mergedOwner,
             waitingOn: primary.status === "waiting" ? primary.waitingOn : null,
           })
         : meetingContextEntry
@@ -361,6 +419,21 @@ export async function extractTasksFromSourceItem(
       }
     }
 
+    // WL-05: decomposed, deterministic confidence — the LLM only supplies
+    // `extractionConfidence`; everything else is derived from real signals.
+    const newTaskConfidence = computeTaskConfidence({
+      ownerName: primary.owner,
+      extractionConfidence: primary.confidence,
+      title: primary.title,
+      reason,
+      nextAction: primary.nextAction,
+      currentUserName,
+      primarySource: sourceItem,
+      hasProject: sourceItem.projectId != null,
+      evidenceSources: [sourceItem],
+      resolvedPersonId: await resolvePersonIdForOwner(primary.owner),
+    });
+
     // Extracted tasks go straight into the Today queue — no manual approval step.
     const created = await createWorkTaskWithEvidence(
       {
@@ -372,7 +445,8 @@ export async function extractTasksFromSourceItem(
         nextAction: primary.nextAction,
         doneCriteria: doneCriteria.length > 0 ? doneCriteria : primary.doneCriteria,
         meetingContext: meetingContextEntry ? [meetingContextEntry] : [],
-        confidence: primary.confidence,
+        confidence: newTaskConfidence.finalConfidence,
+        confidenceComponents: newTaskConfidence.components,
         dueDate: primary.dueDate,
         owner: primary.owner,
         waitingOn: primary.waitingOn,

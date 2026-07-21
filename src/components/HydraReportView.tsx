@@ -1,6 +1,7 @@
 import { AlertTriangleIcon, ExternalLinkIcon } from "lucide-react";
 import type { HydraReport } from "@/domain/hydraReport";
 import type { HydraEvidence } from "@/services/hydra";
+import { AppBadge } from "./AppBadge";
 import { HydraRunStatus } from "./HydraRunStatus";
 
 function EvidenceLinks({ ids, evidence }: { ids: string[]; evidence: HydraEvidence[] }) {
@@ -11,11 +12,16 @@ function EvidenceLinks({ ids, evidence }: { ids: string[]; evidence: HydraEviden
  const item = byId.get(id);
  if (!item) return null;
  return item.url ? (
- <a key={id} href={item.url} target="_blank" rel="noopener noreferrer" className="tag border border-border bg-surface-soft text-muted hover:border-accent/40 hover:text-accent" title={item.title}>
- {item.source} · {id}<ExternalLinkIcon className="size-3" />
+ <a key={id} href={item.url} target="_blank" rel="noopener noreferrer" title={item.title}>
+ <AppBadge tone="neutral" className="hover:border-accent/40 hover:text-accent cursor-pointer">
+ {item.source} · {id}
+ <ExternalLinkIcon className="size-3.5" />
+ </AppBadge>
  </a>
  ) : (
- <span key={id} className="tag border border-border bg-surface-soft text-muted" title={item.title}>{item.source} · {id}</span>
+ <AppBadge key={id} tone="neutral">
+ {item.source} · {id}
+ </AppBadge>
  );
  })}
  </div>

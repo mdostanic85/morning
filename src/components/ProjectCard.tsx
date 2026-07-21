@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Toast } from "@heroui/react/toast";
 import type { ProjectStatus } from "@/domain/project";
-import { Chip } from "@heroui/react/chip";
+import { AppBadge } from "@/components/AppBadge";
 import { ProjectStatusToggle } from "@/components/ProjectStatusToggle";
 
 interface ProjectCardProps {
@@ -84,13 +84,9 @@ export function ProjectCard({
           disabled={pending}
           aria-label={active ? "Turn off project" : "Restore project"}
         />
-        <Chip
-          variant="tertiary"
-          color="default"
-          className="tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border text-foreground transition-colors tabular-nums text-muted"
-        >
+        <AppBadge tone="neutral" className="tabular-nums">
           {totalOpen} open
-        </Chip>
+        </AppBadge>
       </div>
     </div>
   );

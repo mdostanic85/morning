@@ -1,5 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
+import { AppBadge } from "@/components/AppBadge";
+import { cn } from "@/lib/utils";
 
 interface TodayMeetingsCardProps {
   meetings: TodayMeeting[];
@@ -26,6 +28,13 @@ function formatTimeRange(meeting: TodayMeeting): string {
   })}`;
 }
 
+function isMeetingEnded(meeting: TodayMeeting, now = Date.now()): boolean {
+  if (meeting.allDay) return false;
+  if (!meeting.endsAt) return false;
+  const end = Date.parse(meeting.endsAt);
+  return Number.isFinite(end) && end < now;
+}
+
 export function TodayMeetingsCard({ meetings, calendarConnected }: TodayMeetingsCardProps) {
   const sorted = [...meetings].sort((a, b) => {
     const aTime = a.startsAt ? Date.parse(a.startsAt) : Number.POSITIVE_INFINITY;
@@ -34,7 +43,7 @@ export function TodayMeetingsCard({ meetings, calendarConnected }: TodayMeetings
   });
 
   return (
-    <section className="app-card flex h-full min-h-[12rem] flex-col px-5 py-4">
+    <section className="app-card flex flex-col px-5 py-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[15px] font-medium tracking-tight text-foreground">
           Today&apos;s meetings
@@ -51,7 +60,7 @@ export function TodayMeetingsCard({ meetings, calendarConnected }: TodayMeetings
       </div>
 
       {!calendarConnected ? (
-        <div className="mt-5 flex flex-1 flex-col items-center justify-center py-4 text-center">
+        <div className="mt-5 flex flex-col items-center justify-center py-4 text-center">
           <p className="text-sm font-medium text-foreground">Calendar not connected</p>
           <p className="mt-1 text-sm text-muted">
             Connect Google Calendar in Settings, then Sync my day.
@@ -64,38 +73,48 @@ export function TodayMeetingsCard({ meetings, calendarConnected }: TodayMeetings
           </a>
         </div>
       ) : sorted.length === 0 ? (
-        <div className="mt-5 flex flex-1 flex-col items-center justify-center py-6 text-center">
+        <div className="mt-5 flex flex-col items-center justify-center py-6 text-center">
           <p className="text-sm font-medium text-foreground">No meetings today</p>
           <p className="mt-1 text-sm text-muted">Protect the day for focused work.</p>
         </div>
       ) : (
-        <ul className="mt-4 flex-1 space-y-2.5 overflow-y-auto">
+        <ul className="mt-4 space-y-2.5">
           {sorted.map((meeting) => {
             const href = meeting.meetUrl || meeting.url;
+            const ended = isMeetingEnded(meeting);
             const content = (
               <>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[13px] font-medium tabular-nums text-muted">
+                  <span
+                    className={cn(
+                      "text-sm font-medium tabular-nums",
+                      ended ? "text-muted-soft" : "text-muted"
+                    )}
+                  >
                     {formatTimeRange(meeting)}
                   </span>
-                  {meeting.hydraRelated ? (
-                    <span className="minimal-badge minimal-badge-jira !min-h-5 !text-[12px]">
-                      Hydra / ASC
-                    </span>
+                  {ended ? <AppBadge tone="neutral">Ended</AppBadge> : null}
+                  {!ended && meeting.hydraRelated ? (
+                    <AppBadge tone="sky">Hydra / ASC</AppBadge>
                   ) : null}
                 </div>
-                <p className="mt-1 text-sm font-medium leading-snug text-foreground">
+                <p
+                  className={cn(
+                    "mt-1 text-sm font-medium leading-snug",
+                    ended ? "text-muted-soft" : "text-foreground"
+                  )}
+                >
                   {meeting.title}
                 </p>
                 {meeting.location ? (
-                  <p className="mt-0.5 text-xs text-muted-soft">{meeting.location}</p>
+                  <p className="mt-0.5 text-sm text-muted-soft">{meeting.location}</p>
                 ) : null}
               </>
             );
 
             return (
               <li key={meeting.id}>
-                {href ? (
+                {href && !ended ? (
                   <a
                     href={href}
                     target="_blank"
@@ -105,7 +124,15 @@ export function TodayMeetingsCard({ meetings, calendarConnected }: TodayMeetings
                     {content}
                   </a>
                 ) : (
-                  <div className="rounded-[var(--radius)] border border-border bg-surface-soft/40 px-3.5 py-3">
+                  <div
+                    className={cn(
+                      "rounded-[var(--radius)] border border-border px-3.5 py-3",
+                      ended
+                        ? "border-border/70 bg-surface-soft/25 opacity-60"
+                        : "bg-surface-soft/40"
+                    )}
+                    aria-disabled={ended || undefined}
+                  >
                     {content}
                   </div>
                 )}

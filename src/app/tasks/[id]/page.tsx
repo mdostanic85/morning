@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import { getWorkTaskById } from "@/services/workTasks";
 import { getSourceItems } from "@/services/sourceItems";
+import { AppBadge } from "@/components/AppBadge";
 import { BackToTodayButton } from "@/components/BackToTodayButton";
+import { TaskActionButtons } from "@/components/TaskActionButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -39,11 +41,12 @@ export default async function TaskDetailPage({
  ]);
  if (!task) notFound();
 
- const sourceById = new Map(sourceItems.map((source) => [source.id, source]));
- const isJiraTask = task.evidence.some(
- (item) => sourceById.get(item.sourceItemId)?.sourceType === "jira"
- );
- const confidence = task.confidence == null ? null : Math.round(task.confidence * 100);
+  const sourceById = new Map(sourceItems.map((source) => [source.id, source]));
+  const isJiraTask = task.evidence.some(
+    (item) => sourceById.get(item.sourceItemId)?.sourceType === "jira"
+  );
+  const linkedJiraKey = task.title.match(/^([A-Z][A-Z0-9]+-\d+)\b/)?.[1] ?? null;
+  const confidence = task.confidence == null ? null : Math.round(task.confidence * 100);
 
  return (
  <div className="mx-auto w-full max-w-[77.5rem] py-8 pb-20">
@@ -53,19 +56,17 @@ export default async function TaskDetailPage({
 
  <header className="border-b border-border pb-7">
  <div className="flex flex-wrap gap-2">
- <span className="minimal-badge minimal-badge-urgent">
+ <AppBadge tone={task.status === "waiting" || task.status === "unclear" ? "warning" : "danger"}>
  {task.status === "waiting" ? "Waiting" : task.status === "unclear" ? "Verify" : "Priority"}
- </span>
- {isJiraTask ? (
- <span className="minimal-badge minimal-badge-jira">Jira</span>
- ) : null}
+ </AppBadge>
+ {isJiraTask ? <AppBadge tone="sky">Jira</AppBadge> : null}
  {confidence != null ? (
- <span className="minimal-badge minimal-badge-confidence">Source confidence {confidence}%</span>
+ <AppBadge tone="good">Source confidence {confidence}%</AppBadge>
  ) : null}
  </div>
  <h1 className="ft-screen-title mt-4 max-w-4xl font-display">{task.title}</h1>
  <div className="mt-4 max-w-3xl">
- <strong className="block text-xs uppercase tracking-[0.08em] text-accent-strong">
+ <strong className="block text-sm uppercase tracking-[0.08em] text-accent-strong">
  What you are doing
  </strong>
  <p className="ft-screen-lead mt-2 text-muted">{task.reason}</p>
@@ -256,12 +257,30 @@ export default async function TaskDetailPage({
  >
  Open decisive source ↗
  </a>
- ) : null}
- </section>
- </aside>
- </div>
- </div>
- );
+              ) : null}
+            </section>
+
+            {/* WL-12: corrections reachable from Today → task detail, using the existing write-confirmation pattern (TaskActionButtons already gates Done/Delete behind a confirm dialog). */}
+            <section className="rounded-[20px] border border-border bg-surface p-6">
+              <h2 className="ft-panel-subtitle font-display">Corrections</h2>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Adjust status if this isn&rsquo;t right — nothing here writes to Jira or any
+                external system without a separate confirmation.
+              </p>
+              <div className="mt-4">
+                <TaskActionButtons
+                  taskId={task.id}
+                  linkedJiraKey={linkedJiraKey}
+                  latestVerificationReport={task.latestVerificationReport}
+                  latestSyncReviewReport={task.latestSyncReviewReport}
+                  showJiraStatus={isJiraTask}
+                />
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    );
 }
 
 function MeetingContextList({ title, items }: { title: string; items: string[] }) {

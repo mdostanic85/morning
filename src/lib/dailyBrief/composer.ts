@@ -18,6 +18,7 @@ import type { AttendanceContext } from "@/lib/tasks/sourceAuthority";
 import { buildCoverageWarnings, buildMeetingPrep } from "@/lib/dailyBrief/coverage";
 import { parseLinkedJiraRefs, resolveLinkedJiraEvidence } from "@/lib/tasks/linkedJiraRetrieval";
 import { jiraKeyForTask } from "@/lib/tasks/transcriptTaskMerge";
+import { detectJiraDoneVsOpenTaskConflicts } from "@/lib/tasks/conflictDetection";
 import { detectSelfReportedCompletion } from "@/lib/tasks/completionEvidence";
 import {
   classifyTaskOwnership,
@@ -361,6 +362,9 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
           ? "Ownership unclear — confirm this is yours before acting"
           : "Scope/owner decision unclear",
       evidenceIds: task.evidence.map((item) => item.sourceItemId),
+      // So the UI can link straight to the task and its "Not mine"/status
+      // actions — a blocked/unclear item the user cannot act on is just noise.
+      taskId: task.id,
     }));
 
   const dayChangeJira = input.jiraPending.find((issue) =>
@@ -394,34 +398,14 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
           }
         : null;
 
-  const sourceConflicts: DailyBriefV2["sourceConflicts"] = [];
-  for (const source of input.sources) {
-    if (source.sourceType !== "jira" || !isJiraDoneMetadata(source.metadata)) continue;
-    const key = source.sourceExternalId?.toUpperCase();
-    if (!key) continue;
-    const transcriptStillOpen = input.tasks.some((task) => {
-      if (task.status === "done") return false;
-      const taskKey = jiraKeyForTask(task)?.toUpperCase();
-      const cites = task.evidence.some((item) => item.sourceItemId === source.id);
-      return cites || taskKey === key;
-    });
-    // Conflict only when a non-closed meeting task still treats Done work as open
-    // and was in the original (pre-filter) set — characterization of the bug.
-    if (transcriptStillOpen) {
-      const transcriptIds = input.tasks
-        .filter((task) =>
-          task.evidence.some((item) => {
-            const evSource = sourceById.get(item.sourceItemId);
-            return evSource?.sourceType === "granola" || evSource?.sourceType === "gmail";
-          })
-        )
-        .flatMap((task) => task.evidence.map((item) => item.sourceItemId));
-      sourceConflicts.push({
-        summary: `Transcript still treats ${key} work as open while Jira is Done`,
-        evidenceIds: [...new Set([source.id, ...transcriptIds])],
-      });
-    }
-  }
+  // WL-06: structural conflict detection lives in conflictDetection.ts so it
+  // is independently testable and task-keyed (evidence is only attached from
+  // tasks that actually cite/name the conflicting ticket — never every
+  // transcript-derived task in the queue).
+  const sourceConflicts: DailyBriefV2["sourceConflicts"] = detectJiraDoneVsOpenTaskConflicts({
+    tasks: input.tasks,
+    sources: input.sources,
+  });
 
   const coverageWarnings = [
     ...coverageFromPrimary,

@@ -8,6 +8,7 @@ import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 const LINKS = [
  { href: "/", label: "Today" },
+ { href: "/how-ai-works", label: "How we decide" },
  { href: "/settings", label: "Settings" },
 ] as const;
 

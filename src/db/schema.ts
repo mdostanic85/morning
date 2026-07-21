@@ -8,6 +8,7 @@ import {
   serial,
   text,
   unique,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 const createdAt = {
@@ -67,7 +68,10 @@ export const sourceItems = pgTable("source_items", {
   sourceDate: text("source_date").notNull(),
   url: text("url"),
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  /** sha256 of (title, body, author, sourceDate, url) — real-change detection independent of the extraction-skip fingerprint (WL-03). */
+  contentHash: text("content_hash"),
   ...createdAt,
+  updatedAt: text("updated_at"),
 });
 
 export const WORK_TASK_STATUSES = [
@@ -91,6 +95,9 @@ export const workTasks = pgTable("work_tasks", {
   reviewStatus: text("review_status", { enum: REVIEW_STATUSES }).notNull().default("approved"),
   priorityScore: doublePrecision("priority_score"),
   confidence: doublePrecision("confidence"),
+  /** WL-05 decomposed confidence breakdown — the deterministic components that produced `confidence`. */
+  confidenceComponents: jsonb("confidence_components")
+    .$type<import("@/lib/tasks/confidenceModel").ConfidenceComponents | null>(),
   reason: text("reason").notNull(),
   nextAction: text("next_action").notNull(),
   doneCriteria: jsonb("done_criteria").$type<string[]>().notNull(),
@@ -549,8 +556,71 @@ export const syncProviderRuns = pgTable("sync_provider_runs", {
   itemsUpdated: integer("items_updated").notNull().default(0),
   itemsUnchanged: integer("items_unchanged").notNull().default(0),
   itemsFailed: integer("items_failed").notNull().default(0),
+  /** Persisted but failed task/knowledge/embedding interpretation (WL-01) — previously invisible to completion status. */
+  itemsExtractionFailed: integer("items_extraction_failed").notNull().default(0),
   errorCode: text("error_code"),
   errorMessage: text("error_message"),
+});
+
+/**
+ * WL-10 — durable person entities. `mergedIntoId` is set only by an
+ * explicit, separate confirm action (`mergePersonInto` in
+ * `services/people.ts`) — resolution never auto-merges two distinct-looking
+ * people (see `personIdentity.ts`).
+ */
+export const people = pgTable("people", {
+  id: serial("id").primaryKey(),
+  displayName: text("display_name").notNull(),
+  mergedIntoId: integer("merged_into_id").references((): AnyPgColumn => people.id),
+  ...createdAndUpdatedAt,
+});
+
+export const personAliases = pgTable("person_aliases", {
+  id: serial("id").primaryKey(),
+  personId: integer("person_id")
+    .notNull()
+    .references(() => people.id),
+  alias: text("alias").notNull(),
+  ...createdAt,
+});
+
+/**
+ * WL-08 — user-authored, per-scope extraction steering ("ignore GitHub CI
+ * noise", "attribute repo X to project Y"). Null `sourceType`/`projectId`
+ * means "applies to all". Rule text is untrusted-adjacent (user-authored,
+ * but still wrapped like any other prompt content) — see
+ * `ingestionRuleMatch.ts` and `taskExtractor.ts`.
+ */
+export const ingestionRules = pgTable("ingestion_rules", {
+  id: serial("id").primaryKey(),
+  sourceType: text("source_type", { enum: SOURCE_TYPES }),
+  projectId: integer("project_id").references(() => projects.id),
+  rule: text("rule").notNull(),
+  active: boolean("active").notNull().default(true),
+  ...createdAndUpdatedAt,
+});
+
+/**
+ * Per-call audit trail for every `runLlmJob`/`runEmbeddingJob` invocation —
+ * the measurement backbone that later accuracy work (confidence calibration,
+ * extraction stability) compares against. Previously only `console.info`.
+ */
+export const llmTelemetry = pgTable("llm_telemetry", {
+  id: serial("id").primaryKey(),
+  jobType: text("job_type").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  promptVersion: text("prompt_version"),
+  inputHash: text("input_hash").notNull(),
+  ok: boolean("ok").notNull(),
+  errorKind: text("error_kind"),
+  fallback: boolean("fallback").notNull().default(false),
+  durationMs: integer("duration_ms").notNull(),
+  inputTokens: integer("input_tokens"),
+  outputTokens: integer("output_tokens"),
+  totalTokens: integer("total_tokens"),
+  estimatedCostUsd: doublePrecision("estimated_cost_usd"),
+  ...createdAt,
 });
 
 /** One DailyBriefV2 per calendar day — Sync my day write target. */

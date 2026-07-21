@@ -13,9 +13,9 @@ import {
  CheckIcon,
  type LucideIcon,
 } from "lucide-react";
-import { Chip } from "@heroui/react/chip";
 import { Card } from "@heroui/react/card";
 import { Tooltip } from "@heroui/react/tooltip";
+import { AppBadge } from "./AppBadge";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { DailyFocusCard } from "./DailyFocusCard";
 import { EvidencePanel, type EvidenceItem } from "./EvidencePanel";
@@ -69,13 +69,13 @@ const STATUS_ICON: Record<WorkTaskStatus, LucideIcon> = {
 };
 
 const STATUS_BADGE: Record<WorkTaskStatus, string> = {
- now: "border-now/45 bg-now/10 text-now hover:bg-now/10",
- next: "border-accent/40 bg-accent/8 text-accent-strong hover:bg-accent/8",
- later: "border-border bg-surface-soft text-muted hover:bg-surface-soft",
- waiting: "border-waiting/40 bg-waiting/8 text-waiting hover:bg-waiting/8",
- tomorrow: "border-tomorrow/40 bg-tomorrow/8 text-tomorrow hover:bg-tomorrow/8",
- unclear: "border-unclear/40 bg-unclear/8 text-unclear hover:bg-unclear/8",
- done: "border-good/40 bg-good/8 text-good hover:bg-good/8",
+ now: "border-now/45 bg-now/10 text-now",
+ next: "border-accent/40 bg-accent/8 text-accent-strong",
+ later: "border-border bg-surface-soft text-muted",
+ waiting: "border-waiting/40 bg-waiting/8 text-waiting",
+ tomorrow: "border-tomorrow/40 bg-tomorrow/8 text-tomorrow",
+ unclear: "border-unclear/40 bg-unclear/8 text-unclear",
+ done: "border-good/40 bg-good/8 text-good",
 };
 
 export function TaskCard({
@@ -168,22 +168,17 @@ export function TaskCard({
  <div className="mt-3 flex flex-wrap items-center gap-2">
  <Tooltip delay={400}>
  <Tooltip.Trigger>
- <Chip
- variant="tertiary"
- color="default"
- className={cn(
- "tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border border-border text-foreground transition-colors cursor-default gap-1 capitalize",
- STATUS_BADGE[status]
- )}
- >
- {(() => {
+ <AppBadge
+ className={cn("capitalize font-normal", STATUS_BADGE[status])}
+ icon={(() => {
  const Icon = STATUS_ICON[status];
- return <Icon className="size-3" aria-hidden />;
+ return <Icon className="size-3.5" aria-hidden />;
  })()}
+ >
  {status}
- </Chip>
+ </AppBadge>
  </Tooltip.Trigger>
- <Tooltip.Content placement="top" showArrow className="max-w-xs bg-foreground px-3 py-1.5 text-xs text-background">
+ <Tooltip.Content placement="top" showArrow className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background">
  <Tooltip.Arrow />
  {STATUS_DESCRIPTION[status]}
  </Tooltip.Content>
@@ -192,18 +187,18 @@ export function TaskCard({
  <SourceBadge key={sourceType} sourceType={sourceType} />
  ))}
  {projectName ? (
- <span className="text-[14px] text-muted">{projectName}</span>
+ <span className="text-sm text-muted">{projectName}</span>
  ) : (
- <span className="text-[14px] font-medium text-waiting">Unassigned project</span>
+ <span className="text-sm font-medium text-waiting">Unassigned project</span>
  )}
  {priorityScore != null ? (
  <Tooltip delay={400}>
  <Tooltip.Trigger>
- <span className="cursor-default font-mono text-[14px] text-muted-soft">
+ <span className="cursor-default font-mono text-sm text-muted-soft">
  {priorityScore.toFixed(2)}
  </span>
  </Tooltip.Trigger>
- <Tooltip.Content placement="top" showArrow className="max-w-xs bg-foreground px-3 py-1.5 text-xs text-background">
+ <Tooltip.Content placement="top" showArrow className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background">
  <Tooltip.Arrow />
  Priority score — higher = more urgent.
  </Tooltip.Content>
@@ -216,13 +211,9 @@ export function TaskCard({
  {confidence != null ? (
  <ConfidenceBadge level={confidence} />
  ) : (
- <Chip
- variant="tertiary"
- color="default"
- className={cn("tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border transition-colors", "border-border/50 text-muted-soft")}
- >
+ <AppBadge tone="neutral" className="border-border/50 text-muted-soft">
  —
- </Chip>
+ </AppBadge>
  )}
  </div>
  </div>
