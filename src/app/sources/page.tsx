@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const SOURCES = [
   { key: "granola", connection: "granola", label: "Granola", description: "Meetings, notes, transcripts, and capability limits." },
-  { key: "calendar", connection: "calendar", label: "Google Calendar", description: "Hydra/ASC events, participants, time, and links." },
+  { key: "calendar", connection: "calendar", label: "Google Calendar", description: "Work-scope events, participants, time, and links." },
   { key: "drive", connection: "drive", label: "Google Drive", description: "Gemini meeting notes and Google Docs transcripts saved to Drive." },
   { key: "gmail", connection: "gmail", label: "Gmail", description: "Gemini / Google Meet notes delivered as email." },
   { key: "jira", connection: "jira", label: "Jira", description: "Assigned unfinished UATL issues, comments, status, and blockers." },
@@ -29,7 +29,7 @@ export default async function SourcesPage() {
         <SettingsBackLink section="Source health" />
         <h1 className="mt-2 font-display text-4xl font-semibold tracking-[-0.04em]">Sources</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-          Connection state and the most recent run-level health are shown separately, so a stale or
+          Connection state and the latest sync health are shown separately, so a stale or
           unavailable source cannot look silently complete.
         </p>
       </header>

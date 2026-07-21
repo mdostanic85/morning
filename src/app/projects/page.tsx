@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getProjects } from "@/services/projects";
 import { ProjectCard } from "@/components/ProjectCard";
 import { EmptyState } from "@/components/EmptyState";
@@ -65,19 +66,31 @@ export default async function ProjectsPage({
         <EmptyState
           title={
             projects.length === 0
-              ? "No projects yet."
+              ? "No work contexts yet"
               : activeFilter === "all"
-                ? "No projects."
+                ? "No work contexts"
                 : activeFilter === "active"
-                  ? "No active projects."
-                  : "No inactive projects."
+                  ? "No active work contexts"
+                  : "No inactive work contexts"
           }
           description={
             projects.length === 0
-              ? "Run Sync my day — projects are synced from Jira (via MCP) and other connected sources."
+              ? "Sync Jira or another source to find the projects that should shape your brief."
               : activeFilter === "inactive"
                 ? "Turn off a project with the switch to hide it from your active work."
-                : "Sync my day to refresh projects from connected sources."
+                : "Sync my day to refresh work contexts from connected sources."
+          }
+          action={
+            projects.length === 0 ? (
+              <div className="flex flex-wrap justify-center gap-3">
+                <Link href="/" className="link-btn-primary motion-btn">
+                  Sync my day
+                </Link>
+                <Link href="/settings" className="link-btn-outline motion-btn">
+                  Connect a source
+                </Link>
+              </div>
+            ) : undefined
           }
         />
       ) : (

@@ -23,9 +23,10 @@ import type {
 } from "@/domain/workTask";
 import type { Evidence } from "@/domain/evidence";
 import {
-  isIncomingSourceAuthoritative,
-  isTranscriptSource,
-} from "@/lib/tasks/sourceAuthority";
+  buildCriterionEvidenceLinks,
+} from "@/lib/tasks/criterionEvidence";
+import { replaceCriterionEvidenceLinks } from "@/lib/tasks/criterionEvidenceStore";
+import { isIncomingSourceAuthoritative, isTranscriptSource } from "@/lib/tasks/sourceAuthority";
 import { getSourceItemsByIds } from "@/services/sourceItems";
 import {
   jiraKeyForTask,
@@ -461,6 +462,16 @@ export async function extractTasksFromSourceItem(
     );
 
     let task = created.task;
+    const criterionLinks = buildCriterionEvidenceLinks(
+      task.doneCriteria,
+      primary.doneCriteriaEvidence ?? [],
+      created.evidence,
+      new Map([[sourceItem.id, sourceItem.body]])
+    );
+    if (criterionLinks.length > 0) {
+      await replaceCriterionEvidenceLinks(task.id, criterionLinks);
+    }
+
     if (task.projectId === null && taskMatchProjects && taskMatchProjects.length > 0) {
       const projectMatch = await matchAndAssignTaskToProject({
         task,

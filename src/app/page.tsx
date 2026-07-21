@@ -11,6 +11,7 @@ import { resolveFocusLinkedTaskId } from "@/lib/tasks/resolveFocusTask";
 import { getTodayMeetings } from "@/lib/calendar/todayMeetings";
 import { filterQueueByOwners, myOwnerFilter, taskEligibleForBriefPriority } from "@/lib/filters/ownerFilter";
 import { filterTasksForTodayView } from "@/lib/tasks/taskVisibility";
+import { deriveSyncFreshnessState } from "@/components/SyncFreshnessBanner";
 import { HumanReadableTodayView } from "@/components/HumanReadableTodayView";
 
 export const dynamic = "force-dynamic";
@@ -56,14 +57,8 @@ export default async function TodayPage() {
     .map((connection) => CONNECTED_PROVIDER_LABEL[connection.provider as ConnectionProvider])
     .filter(Boolean);
 
-  // WL-12: sync health belongs on Today chrome, not only the sync overlay —
-  // driven by the now-honest per-provider status (WL-01).
-  const failedProviderLabels = (latestSync?.providerRuns ?? [])
-    .filter((providerRun) => providerRun.status === "failed" || providerRun.status === "cancelled")
-    .map(
-      (providerRun) =>
-        CONNECTED_PROVIDER_LABEL[providerRun.provider as ConnectionProvider] ?? providerRun.provider
-    );
+  const syncFreshness = deriveSyncFreshnessState(latestSync);
+  const sourceTitleById = Object.fromEntries(sourceItems.map((source) => [source.id, source.title]));
 
   // Never drop valid tasks because priorityScore was copied into confidence.
   // Brief cards only use work that is clearly owned — never pad with unclear/
@@ -158,7 +153,8 @@ export default async function TodayPage() {
       meetings={todayMeetings.meetings}
       calendarConnected={todayMeetings.calendarConnected}
       dailyBrief={dailyBrief}
-      failedProviderLabels={failedProviderLabels}
+      syncFreshness={syncFreshness}
+      sourceTitleById={sourceTitleById}
     />
   );
 }

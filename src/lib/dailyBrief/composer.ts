@@ -24,11 +24,13 @@ import {
   classifyTaskOwnership,
   taskEligibleForBriefPriority,
 } from "@/lib/filters/ownerFilter";
+import { isRejectedOwnership } from "@/lib/tasks/ownershipDecision";
 
 export type ComposerTask = WorkTaskForRanking & {
   owner: string | null;
   confidence: number | null;
   canonicalKey?: string | null;
+  ownershipDecision?: import("@/domain/workTask").OwnershipDecision | null;
 };
 
 export type PreviousBriefMemory = {
@@ -167,7 +169,8 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
   // owned tasks in the ranked priority pool. Someone else's action item must
   // never become todayFirst / afterThat.
   const activeTasks = input.tasks.filter(
-    (task) => !isTaskJiraDone(task) && !isTaskSelfReportedComplete(task)
+    (task) =>
+      !isTaskJiraDone(task) && !isTaskSelfReportedComplete(task) && !isRejectedOwnership(task)
   );
   const ownedForPriority = activeTasks.filter((task) =>
     taskEligibleForBriefPriority(
@@ -177,6 +180,7 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
         reason: task.reason,
         nextAction: task.nextAction,
         jiraAssignee: jiraAssigneeForTask(task),
+        ownershipDecision: task.ownershipDecision ?? null,
       },
       myName
     )

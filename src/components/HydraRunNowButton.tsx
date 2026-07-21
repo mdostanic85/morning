@@ -34,12 +34,12 @@ export function HydraRunNowButton({ large = false }: { large?: boolean }) {
     pollRef.current = null;
     router.refresh();
     if (payload.run.status === "failed") {
-      Toast.toast.danger("Hydra run failed", { description: payload.run.error ?? "Open run details for the failure." });
+      Toast.toast.danger("Brief run failed", { description: payload.run.error ?? "Open run details for the failure." });
       return;
     }
-    Toast.toast.success(payload.run.status === "partial" ? "Partial Hydra report ready" : "Hydra report ready");
+    Toast.toast.success(payload.run.status === "partial" ? "Partial brief ready" : "Brief ready");
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-      new Notification("Hydra report ready", { body: "Your evidence-backed daily report is available." });
+      new Notification("Brief ready", { body: "Your evidence-backed daily brief is available." });
     }
   }
 
@@ -51,13 +51,13 @@ export function HydraRunNowButton({ large = false }: { large?: boolean }) {
       }
       const response = await fetch("/api/reports/run", { method: "POST" });
       const payload = (await response.json()) as RunPayload;
-      if (!response.ok) throw new Error("Could not create the Hydra run.");
+      if (!response.ok) throw new Error("Could not create the brief run.");
       setRun(payload.run);
       void fetch(`/api/reports/run/${payload.run.id}/execute`, { method: "POST" }).catch(() => null);
       await poll(payload.run.id);
       pollRef.current = setInterval(() => void poll(payload.run.id), 1000);
     } catch (error) {
-      Toast.toast.danger(error instanceof Error ? error.message : "Could not start Hydra.");
+      Toast.toast.danger(error instanceof Error ? error.message : "Could not start brief run.");
       setRun(null);
     } finally {
       setStarting(false);
@@ -75,7 +75,7 @@ export function HydraRunNowButton({ large = false }: { large?: boolean }) {
       <div className="app-card w-full space-y-4 p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="eyebrow">Hydra run #{run.id}</p>
+            <p className="eyebrow">Brief run #{run.id}</p>
             <div className="mt-2"><HydraRunStatus status={run.status} /></div>
           </div>
           <Button variant="ghost" size="sm" onClick={cancel}>

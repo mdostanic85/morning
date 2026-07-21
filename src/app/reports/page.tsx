@@ -22,13 +22,13 @@ export default async function ReportsPage({
         <div>
           <SettingsBackLink section="Report history" />
           <h1 className="mt-2 font-display text-4xl font-semibold tracking-[-0.04em]">
-            Report ledger
+            Report history
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-            Every scheduled and manual run, with its source coverage, state, and reproducible
+            Every scheduled and manual brief run, with its source coverage, state, and reproducible
             evidence snapshot.{" "}
             <Link href="/schedule" className="text-accent hover:underline">
-              Schedule
+              Automated briefs
             </Link>
           </p>
         </div>
@@ -50,7 +50,16 @@ export default async function ReportsPage({
         })}
       </div>
       {runs.length === 0 ? (
-        <div className="app-card p-8 text-center"><p className="font-display text-xl font-semibold">No matching runs yet</p><p className="mt-2 text-sm text-muted">Run Hydra now or wait for the next weekday schedule.</p></div>
+        <div className="app-card p-8 text-center">
+          <p className="font-display text-xl font-semibold">No brief runs yet</p>
+          <p className="mt-2 text-sm text-muted">Run a brief now or set a weekday schedule.</p>
+          <div className="mt-5 flex flex-wrap justify-center gap-3">
+            <HydraRunNowButton />
+            <Link href="/schedule" className="link-btn-outline motion-btn">
+              Set schedule
+            </Link>
+          </div>
+        </div>
       ) : (
         <div className="space-y-2">{runs.map((run) => (
           <Link key={run.id} href={`/reports/${run.id}`} className="group grid gap-4 rounded-surface border border-border bg-surface px-5 py-4 transition hover:border-border-strong sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">

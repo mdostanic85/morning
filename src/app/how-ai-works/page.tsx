@@ -97,7 +97,7 @@ const RULES = [
   {
     id: "conflicts",
     title: "4. Conflicts stay visible",
-    body: "Disagreement between sources is shown, not silently “fixed.” Newer usually wins; Jira Done wins for ticket status.",
+    body: "Worklight flags source disagreement for review. Open the task to compare available evidence.",
     valid: [
       "Conflict banner with both sides’ evidence",
       "Freshest ~5-day window per task for competing signals",
@@ -107,6 +107,7 @@ const RULES = [
       "Picking one source and hiding the other",
       "Treating calendar invite mail as a meeting transcript",
       "Keeping a transcript “still open” when Jira is Done for that key",
+      "Claiming a durable conflict decision is stored before you choose one",
     ],
   },
   {
@@ -114,8 +115,8 @@ const RULES = [
     title: "5. Confidence ≠ urgency",
     body: "Confidence is how sure we are the task was correctly understood from sources — not how urgent it is.",
     valid: [
-      "High ≥ 70% · Med ≥ 40% · Low < 40%",
-      "Low confidence → review / Unclear treatment",
+      "High ≥ 70% · Medium 40–69% · Low under 40%",
+      "Low confidence → review evidence / Unclear treatment",
       "Unresolved conflict lowers confidence and stays on screen",
     ],
     invalid: [

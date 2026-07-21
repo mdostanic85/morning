@@ -113,8 +113,8 @@ export function ConnectionCard({
       ? `Reconnect ${mcpConnectLabel}`
       : `Connect ${mcpConnectLabel}`
     : connected
-      ? "Reconnect via MCP"
-      : "Connect via MCP";
+      ? `Reconnect ${label}`
+      : `Connect ${label}`;
   const hasTokenForm = (authType !== "oauth" && authType !== "mcp") || patFallback;
   const showPatFallback = patFallback && authType === "oauth";
   const showToggle =
@@ -145,7 +145,7 @@ export function ConnectionCard({
               {metadata.workRepository} @ {metadata.workBranch}
             </p>
           ) : null}
-          {errorText ? <p className="mt-1.5 text-sm text-danger">{errorText}</p> : null}
+          {errorText ? <p className="mt-1.5 text-sm text-danger">{label} connection failed</p> : null}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -164,11 +164,11 @@ export function ConnectionCard({
                 aria-disabled="true"
                 title="OAuth app credentials are missing — see details below."
               >
-                {connected ? "Reconnect" : "Connect"}
+                {connected ? `Reconnect ${label}` : `Connect ${label}`}
               </span>
             ) : (
               <a href={apiConnectHref} className="link-btn-primary motion-btn">
-                {connected ? "Reconnect" : "Connect"}
+                {connected ? `Reconnect ${label}` : `Connect ${label}`}
               </a>
             )
           ) : null}
@@ -180,7 +180,7 @@ export function ConnectionCard({
               onPress={disconnect}
               isDisabled={pending !== null}
             >
-              Disconnect
+              Disconnect {label}
             </Button>
           ) : null}
           {showToggle ? (
@@ -191,7 +191,7 @@ export function ConnectionCard({
               onPress={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
             >
-              {expanded ? "Hide" : hasTokenForm && !connected ? "Add token" : "Manage"}
+              {expanded ? "Hide advanced setup" : "Advanced setup"}
             </Button>
           ) : null}
         </div>
@@ -215,7 +215,7 @@ export function ConnectionCard({
 
           {supportsMcp && !usingMcp && showApiConnect ? (
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-soft">Direct API setup (optional)</p>
+              <p className="text-xs font-medium text-muted-soft">Source settings (optional)</p>
               {setupHint ? (
                 <span className="link-btn-outline disabled" aria-disabled="true">
                   {connected ? "Reconnect (API)" : "Connect (API)"}

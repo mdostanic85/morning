@@ -1,4 +1,5 @@
-import type { WorkTaskStatus } from "@/domain/workTask";
+import type { OwnershipDecision, WorkTaskStatus } from "@/domain/workTask";
+import { isConfirmedOwnership, isRejectedOwnership } from "@/lib/tasks/ownershipDecision";
 import { OPEN_QUEUE_STATUSES } from "@/domain/workTask";
 import type { WorkTaskWithEvidence } from "@/services/workTasks";
 import type { StoredTodayBriefing } from "@/lib/llm/prompts/todayBriefing";
@@ -127,6 +128,7 @@ export type TaskOwnershipSignals = {
   nextAction?: string | null;
   /** Jira assignee when the task is backed by a Jira issue. */
   jiraAssignee?: string | null;
+  ownershipDecision?: OwnershipDecision | null;
 };
 
 /**
@@ -230,6 +232,8 @@ export function taskEligibleForBriefPriority(
   task: TaskOwnershipSignals,
   myName: string | null
 ): boolean {
+  if (isRejectedOwnership(task)) return false;
+  if (isConfirmedOwnership(task)) return true;
   return classifyTaskOwnership(task, myName) === "mine";
 }
 

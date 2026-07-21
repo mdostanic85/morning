@@ -4,6 +4,7 @@ import { getTodayQueue } from "@/services/workTasks";
 import { getSourceItems } from "@/services/sourceItems";
 import { TaskCard } from "@/components/TaskCard";
 import { EmptyState } from "@/components/EmptyState";
+import { SyncMyDayButton } from "@/components/SyncMyDayButton";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +19,14 @@ export default async function TomorrowPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-4xl font-semibold tracking-tight">Tomorrow</h1>
-        <p className="mt-3 text-[15px] leading-relaxed text-muted">
-          The first planned task from the latest end-of-day memory and current queue.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-4xl font-semibold tracking-tight">Tomorrow</h1>
+          <p className="mt-3 text-[15px] leading-relaxed text-muted">
+            The first planned task from the latest end-of-day memory and current queue.
+          </p>
+        </div>
+        <SyncMyDayButton sources={[]} lastSyncAt={null} />
       </div>
 
       {memory?.firstTomorrow ? (
@@ -69,8 +73,15 @@ export default async function TomorrowPage() {
         />
       ) : (
         <EmptyState
-          title="No tomorrow task yet."
-          description="Use End day on Today to generate a first task for tomorrow."
+          title="Nothing planned for tomorrow"
+          description="Move a task to Tomorrow from any task, or sync after your last update."
+          action={
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link href="/" className="link-btn-outline motion-btn">
+                Back to Today
+              </Link>
+            </div>
+          }
         />
       )}
 

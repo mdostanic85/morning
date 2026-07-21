@@ -20,6 +20,20 @@ describe("taskVisibility", () => {
     assert.equal(decideTaskVisibility(uatl233, JUL20_MY_NAME).visible, true);
   });
 
+  it("hides tasks the user rejected as not theirs", () => {
+    const decision = decideTaskVisibility(
+      {
+        id: 3,
+        owner: null,
+        confidence: 0.9,
+        priorityScore: 0.5,
+        ownershipDecision: "rejected_not_mine",
+      },
+      JUL20_MY_NAME
+    );
+    assert.equal(decision.visible, false);
+  });
+
   it("does not hide owner:null tasks", () => {
     const decision = decideTaskVisibility(
       {

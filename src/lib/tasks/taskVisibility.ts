@@ -5,12 +5,14 @@ import {
   myOwnerFilter,
   taskMatchesOwner,
 } from "@/lib/filters/ownerFilter";
+import { isConfirmedOwnership, isRejectedOwnership } from "@/lib/tasks/ownershipDecision";
 
 export type TaskForVisibility = {
   id: number;
   owner: string | null;
   confidence: number | null;
   priorityScore: number | null;
+  ownershipDecision?: import("@/domain/workTask").OwnershipDecision | null;
   status?: WorkTaskStatus;
   title?: string;
   reason?: string;
@@ -44,7 +46,17 @@ export function decideTaskVisibility(
   task: TaskForVisibility,
   myName: string | null
 ): TaskVisibilityDecision {
-  const ownership = classifyTaskOwnership(
+  if (isRejectedOwnership(task)) {
+    return {
+      visible: false,
+      reason: "other_owner",
+      treatAsUnclear: false,
+    };
+  }
+
+  const ownership = isConfirmedOwnership(task)
+    ? "mine"
+    : classifyTaskOwnership(
     {
       owner: task.owner,
       title: task.title,

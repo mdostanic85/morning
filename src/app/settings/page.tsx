@@ -8,6 +8,7 @@ import { getUserProfile } from "@/services/userProfile";
 import { getProjects } from "@/services/projects";
 import { listIngestionRules } from "@/services/ingestionRules";
 import { ConnectionCard } from "@/components/ConnectionCard";
+import { SettingsHubLinks } from "@/components/SettingsHubLinks";
 import { GitHubConnectionSettings } from "@/components/GitHubConnectionSettings";
 import type { ConnectionTransport } from "@/domain/connection";
 import { Tabs } from "@heroui/react/tabs";
@@ -96,7 +97,7 @@ export default async function SettingsPage({
  provider: "granola",
  label: "Granola",
  description:
- "Read-only sync for meeting notes and transcripts. Connect via MCP (recommended, browser sign-in) or paste a grn_ API key from the Granola app.",
+ "Read meeting notes and transcripts from Granola.",
  authType: "api_key" as const,
  supportsMcp: true,
  mcpConnectUrl: "/api/mcp/granola/connect",
@@ -156,8 +157,11 @@ export default async function SettingsPage({
  <div>
  <h1 className="font-display text-2xl font-semibold tracking-tight">Settings</h1>
  <p className="mt-1.5 text-sm leading-relaxed text-muted">
- Local credentials for models and read-only source imports.
- Raw secrets never leave the browser.
+ Choose what Worklight can read and how it decides what belongs in Today.
+ </p>
+ <p className="mt-2 text-sm leading-relaxed text-muted-soft">
+ Credentials stay on this device. Worklight sends them only to its local server and the
+ provider you connect.
  </p>
  </div>
  <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
@@ -197,22 +201,22 @@ export default async function SettingsPage({
  <Tabs.Indicator />
  </Tabs.Tab>
           <Tabs.Tab id="transcript" className="flex-1">
-              Transcript
+              Paste notes
               <Tabs.Indicator />
             </Tabs.Tab>
           <Tabs.Tab id="rules" className="flex-1">
-              Rules
+              Extraction preferences
               <Tabs.Indicator />
             </Tabs.Tab>
  <Tabs.Tab id="model-keys" className="flex-1">
- Model keys
+ AI model access
  <span className="tabular-nums text-muted-soft">
  {activeKeyCount}/{statuses.length}
  </span>
  <Tabs.Indicator />
  </Tabs.Tab>
  <Tabs.Tab id="profile" className="flex-1">
- Profile
+ Your profile
  <Tabs.Indicator />
  </Tabs.Tab>
  </Tabs.List>
@@ -349,6 +353,8 @@ export default async function SettingsPage({
  />
  </Tabs.Panel>
  </Tabs>
+
+ <SettingsHubLinks />
  </div>
  );
 }

@@ -95,7 +95,7 @@ export function TodayMeetingsCard({ meetings, calendarConnected }: TodayMeetings
                   </span>
                   {ended ? <AppBadge tone="neutral">Ended</AppBadge> : null}
                   {!ended && meeting.hydraRelated ? (
-                    <AppBadge tone="sky">Hydra / ASC</AppBadge>
+            <AppBadge tone="sky">Work scope</AppBadge>
                   ) : null}
                 </div>
                 <p

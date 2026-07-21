@@ -9,8 +9,8 @@ export default async function AuditPage() {
   return (
     <div className="space-y-7">
       <header>
-        <SettingsBackLink section="Trust trail" />
-        <h1 className="mt-2 font-display text-4xl font-semibold tracking-[-0.04em]">Audit log</h1>
+        <SettingsBackLink section="Activity log" />
+        <h1 className="mt-2 font-display text-4xl font-semibold tracking-[-0.04em]">Activity log</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
           Manual runs, schedule/config changes, outcomes, and delivery metadata. Source content and
           secrets are intentionally excluded.

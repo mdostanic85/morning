@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, ChevronDown, Clock3 } from "lucide-react";
 import type { DailyBriefV2 } from "@/domain/dailyBrief";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
+import { OwnershipDecisionButtons } from "@/components/OwnershipDecisionButtons";
 import { TaskActionButtons } from "@/components/TaskActionButtons";
 import { cn } from "@/lib/utils";
 
@@ -59,12 +60,18 @@ export function BlockedWaitingCard({ item }: { item: DailyBriefV2["blockedWaitin
       )}
 
       <p className="brief-secondary-reason">{item.reason}</p>
-      <p className="brief-secondary-next">
-        <span className="brief-secondary-next-label">Action: </span>
-        {blockedWaitingActionCopy(item.reason)}
-      </p>
+      {!isWaiting && item.taskId != null ? (
+        <div className="mt-3">
+          <OwnershipDecisionButtons taskId={item.taskId} compact />
+        </div>
+      ) : (
+        <p className="brief-secondary-next">
+          <span className="brief-secondary-next-label">Action: </span>
+          {blockedWaitingActionCopy(item.reason)}
+        </p>
+      )}
 
-      {item.taskId != null ? (
+      {isWaiting && item.taskId != null ? (
         <>
           <button
             type="button"

@@ -13,6 +13,8 @@ import type { SourceType } from "@/domain/sourceItem";
 import type { WorkTaskStatus } from "@/domain/workTask";
 import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
+import { SourceConflictCard } from "@/components/SourceConflictCard";
+import { SyncFreshnessBanner, type SyncFreshnessState } from "@/components/SyncFreshnessBanner";
 import { SyncMyDayButton } from "@/components/SyncMyDayButton";
 import { TodayMeetingsCard } from "@/components/TodayMeetingsCard";
 import { WhyThisButton } from "@/components/WhyThisButton";
@@ -54,8 +56,8 @@ interface HumanReadableTodayViewProps {
   meetings: TodayMeeting[];
   calendarConnected: boolean;
   dailyBrief: DailyBriefV2 | null;
-  /** WL-12: providers whose last sync did not complete cleanly — surfaced on Today chrome, not only the sync overlay. */
-  failedProviderLabels: string[];
+  syncFreshness: SyncFreshnessState;
+  sourceTitleById: Record<number, string>;
 }
 
 interface AttentionEntry {
@@ -226,7 +228,13 @@ function StatusBadge({
   );
 }
 
-function EvidenceRow({ entry }: { entry: AttentionEntry }) {
+function EvidenceRow({
+  entry,
+  reviewHref,
+}: {
+  entry: AttentionEntry;
+  reviewHref?: string | null;
+}) {
   const evidence = entry.task?.evidence[0] ?? null;
   const sourceLink = entry.item?.sourceLinks[0] ?? null;
   const label = evidence?.sourceTitle ?? sourceLink?.label ?? null;
@@ -235,9 +243,14 @@ function EvidenceRow({ entry }: { entry: AttentionEntry }) {
 
   return (
     <div className="brief-pillar brief-pillar-evidence">
-      <p className="brief-pillar-label">Evidence</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="brief-pillar-label mb-0">Evidence</p>
+        {entry.task?.confidence != null ? (
+          <ConfidenceBadge level={entry.task.confidence} reviewHref={reviewHref} />
+        ) : null}
+      </div>
       {label ? (
-        <div>
+        <div className="mt-3">
           {url ? (
             <a href={url} target="_blank" rel="noreferrer" className="brief-source-link">
               {label}
@@ -249,7 +262,7 @@ function EvidenceRow({ entry }: { entry: AttentionEntry }) {
           {quote ? <p className="brief-evidence-quote">“{quote}”</p> : null}
         </div>
       ) : (
-        <p className="brief-evidence-missing">No source excerpt is available. Clarify before acting.</p>
+        <p className="brief-evidence-missing mt-3">No source attached. Clarify before acting.</p>
       )}
     </div>
   );
@@ -283,9 +296,6 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
         <div className="brief-badge-row">
           <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
           {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
-          {entry.task?.confidence != null ? (
-            <ConfidenceBadge level={entry.task.confidence} />
-          ) : null}
           {updated ? <span className="brief-updated">{updated}</span> : null}
         </div>
       </div>
@@ -316,7 +326,10 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
           </ul>
         </div>
 
-        <EvidenceRow entry={entry} />
+        <EvidenceRow
+          entry={entry}
+          reviewHref={entry.task ? `/tasks/${entry.task.id}#task-evidence` : null}
+        />
       </div>
 
       <div className="brief-focus-footer">
@@ -353,6 +366,18 @@ function SecondaryTaskCard({
   const title = entry.item?.title ?? entry.task?.title ?? "Unresolved work";
   const reason = humanizeReason(entry.item?.reason ?? entry.task?.reason, title);
   const nextAction = entry.item?.nextAction ?? entry.task?.nextAction ?? null;
+  const doneCriteria =
+    entry.item?.doneCriteria.length
+      ? entry.item.doneCriteria
+      : entry.task?.doneCriteria.length
+        ? entry.task.doneCriteria
+        : [];
+  const primaryDone = doneCriteria[0] ?? null;
+  const evidence = entry.task?.evidence[0] ?? null;
+  const sourceLink = entry.item?.sourceLinks[0] ?? null;
+  const evidenceLabel = evidence?.sourceTitle ?? sourceLink?.label ?? null;
+  const evidenceQuote =
+    evidence?.quote?.trim() || evidence?.summary?.trim() || null;
   const badge = statusBadge(entry, brief, index);
   const key = jiraKey(entry);
   const href = entry.task ? `/tasks/${entry.task.id}` : null;
@@ -362,18 +387,42 @@ function SecondaryTaskCard({
       <div className="brief-secondary-badges">
         <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
         {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
-        {entry.task?.confidence != null ? (
-          <ConfidenceBadge level={entry.task.confidence} />
-        ) : null}
       </div>
       <h3 className="brief-secondary-title">{title}</h3>
       <p className="brief-secondary-reason">{reason}</p>
       {nextAction ? (
         <p className="brief-secondary-next">
-          <span className="brief-secondary-next-label">Next: </span>
+          <span className="brief-secondary-next-label">Next action: </span>
           {nextAction}
         </p>
       ) : null}
+      {primaryDone ? (
+        <p className="brief-secondary-next">
+          <span className="brief-secondary-next-label">Done when: </span>
+          {primaryDone}
+        </p>
+      ) : null}
+      <div className="brief-secondary-evidence">
+        <span className="brief-secondary-next-label">Evidence: </span>
+        {evidenceLabel ? (
+          <>
+            {evidenceLabel}
+            {evidenceQuote ? (
+              <span className="brief-secondary-evidence-quote"> — “{evidenceQuote}”</span>
+            ) : null}
+          </>
+        ) : (
+          <span className="brief-evidence-missing">No source attached. Clarify before acting.</span>
+        )}
+        {entry.task?.confidence != null ? (
+          <div className="mt-2">
+            <ConfidenceBadge
+              level={entry.task.confidence}
+              reviewHref={`/tasks/${entry.task.id}#task-evidence`}
+            />
+          </div>
+        ) : null}
+      </div>
     </>
   );
 
@@ -385,23 +434,25 @@ function SecondaryTaskCard({
     <Link href={href} className="brief-secondary-card brief-secondary-card-link">
       {body}
       <span className="brief-secondary-more">
-        More details
+        Open task
         <ArrowRight className="size-3.5" aria-hidden />
       </span>
     </Link>
   );
 }
 
-/** Same card family as `SecondaryTaskCard`/`BlockedWaitingCard` — a conflict has no single task to resolve it, so it never links anywhere. */
-function ConflictCard({ conflict }: { conflict: DailyBriefV2["sourceConflicts"][number] }) {
-  return (
-    <div className="brief-secondary-card">
-      <div className="brief-secondary-badges">
-        <StatusBadge label="Conflict" tone="danger" Icon={AlertTriangle} />
-      </div>
-      <p className="brief-secondary-reason">{conflict.summary}</p>
-    </div>
-  );
+/** Same card family as `SecondaryTaskCard`/`BlockedWaitingCard` — conflicts resolve locally. */
+function ConflictCard({
+  conflict,
+  sourceTitleById,
+}: {
+  conflict: DailyBriefV2["sourceConflicts"][number];
+  sourceTitleById: Record<number, string>;
+}) {
+  const sourceLabels = conflict.evidenceIds
+    .map((id) => sourceTitleById[id])
+    .filter((label): label is string => Boolean(label));
+  return <SourceConflictCard conflict={conflict} sourceLabels={sourceLabels} />;
 }
 
 export function HumanReadableTodayView({
@@ -413,7 +464,8 @@ export function HumanReadableTodayView({
   meetings,
   calendarConnected,
   dailyBrief,
-  failedProviderLabels,
+  syncFreshness,
+  sourceTitleById,
 }: HumanReadableTodayViewProps) {
   const attention = resolveAttention(tasks, dailyBrief, profileName);
   const primary = attention[0] ?? null;
@@ -448,17 +500,7 @@ export function HumanReadableTodayView({
         </div>
       ) : null}
 
-      {/* WL-12: sync health belongs on Today chrome itself, not only the sync overlay — a failed provider must stay visible until the next successful sync. */}
-      {failedProviderLabels.length > 0 ? (
-        <div className="brief-alert brief-alert-sync" role="status">
-          <AlertTriangle className="size-4 shrink-0" aria-hidden />
-          <p>
-            <strong>Last sync was incomplete: </strong>
-            {failedProviderLabels.join(", ")} did not sync cleanly. Some evidence here may be
-            out of date.
-          </p>
-        </div>
-      ) : null}
+      <SyncFreshnessBanner freshness={syncFreshness} />
 
       {dailyBrief?.dayChange ? (
         <section className="brief-change-alert">
@@ -508,7 +550,11 @@ export function HumanReadableTodayView({
             <div className="brief-next-stack">
               <p className="brief-kicker brief-kicker-attention">Needs your attention</p>
               {dailyBrief?.sourceConflicts.map((conflict) => (
-                <ConflictCard key={conflict.summary} conflict={conflict} />
+                <ConflictCard
+                  key={conflict.summary}
+                  conflict={conflict}
+                  sourceTitleById={sourceTitleById}
+                />
               ))}
               {visibleBlockedWaiting.map((item) => (
                 <BlockedWaitingCard key={item.jiraKey ?? item.title} item={item} />

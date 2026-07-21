@@ -86,6 +86,16 @@ export const WORK_TASK_STATUSES = [
 
 export const REVIEW_STATUSES = ["pending", "approved"] as const;
 
+export const OWNERSHIP_DECISIONS = ["confirmed_mine", "rejected_not_mine"] as const;
+export type OwnershipDecision = (typeof OWNERSHIP_DECISIONS)[number];
+
+export const CONFLICT_RESOLUTION_DECISIONS = [
+  "keep_open",
+  "mark_done_locally",
+  "decide_later",
+] as const;
+export type ConflictResolutionDecision = (typeof CONFLICT_RESOLUTION_DECISIONS)[number];
+
 export const workTasks = pgTable("work_tasks", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").references(() => projects.id),
@@ -115,6 +125,8 @@ export const workTasks = pgTable("work_tasks", {
     .$type<import("@/domain/taskWorkContext").TaskWorkContextSnapshot | null>(),
   /** Stable identity e.g. jira:{site}:{KEY} — nullable until backfilled. */
   canonicalKey: text("canonical_key"),
+  /** User-confirmed ownership — survives sync and must not be overwritten. */
+  ownershipDecision: text("ownership_decision", { enum: OWNERSHIP_DECISIONS }),
   ...createdAndUpdatedAt,
 });
 
@@ -131,6 +143,47 @@ export const evidence = pgTable("evidence", {
   sourceDate: text("source_date").notNull(),
   url: text("url"),
 });
+
+export const taskCriterionEvidence = pgTable(
+  "task_criterion_evidence",
+  {
+    id: serial("id").primaryKey(),
+    taskId: integer("task_id")
+      .notNull()
+      .references(() => workTasks.id),
+    criterionItemId: text("criterion_item_id").notNull(),
+    evidenceId: integer("evidence_id")
+      .notNull()
+      .references(() => evidence.id),
+    ...createdAt,
+  },
+  (table) => [
+    unique("task_criterion_evidence_unique").on(
+      table.taskId,
+      table.criterionItemId,
+      table.evidenceId
+    ),
+  ]
+);
+
+export const taskConflictDecisions = pgTable(
+  "task_conflict_decisions",
+  {
+    id: serial("id").primaryKey(),
+    taskId: integer("task_id")
+      .notNull()
+      .references(() => workTasks.id),
+    conflictKey: text("conflict_key").notNull(),
+    summary: text("summary").notNull(),
+    decision: text("decision", { enum: CONFLICT_RESOLUTION_DECISIONS }).notNull(),
+    evidenceSourceItemIds: jsonb("evidence_source_item_ids")
+      .$type<number[]>()
+      .notNull()
+      .default([]),
+    ...createdAndUpdatedAt,
+  },
+  (table) => [unique("task_conflict_decisions_unique").on(table.taskId, table.conflictKey)]
+);
 
 export const KNOWLEDGE_ITEM_TYPES = [
   "requirement",

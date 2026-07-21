@@ -1,33 +1,50 @@
 "use client";
 
-import { Tooltip } from "@heroui/react/tooltip";
+import Link from "next/link";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
+import {
+  CONFIDENCE_EXPLANATION,
+  confidenceBand,
+  confidenceNeedsReview,
+  formatConfidenceLabel,
+} from "@/lib/tasks/confidencePresentation";
 
-function bucket(value: number): { label: string; tone: AppBadgeTone } {
-  if (value >= 0.7) return { label: "High", tone: "good" };
-  if (value >= 0.4) return { label: "Med", tone: "warning" };
-  return { label: "Low", tone: "danger" };
+function toneForBand(band: ReturnType<typeof confidenceBand>): AppBadgeTone {
+  switch (band) {
+    case "high":
+      return "good";
+    case "medium":
+      return "warning";
+    case "low":
+      return "danger";
+    case "not_scored":
+      return "neutral";
+  }
 }
 
 /** `level` is a 0..1 confidence score, as produced by extraction/classification jobs. */
-export function ConfidenceBadge({ level }: { level: number }) {
-  const { label, tone } = bucket(level);
+export function ConfidenceBadge({
+  level,
+  reviewHref,
+}: {
+  level: number | null | undefined;
+  reviewHref?: string | null;
+}) {
+  const band = confidenceBand(level);
+  const label = formatConfidenceLabel(level);
+  const needsReview = confidenceNeedsReview(level);
+
   return (
-    <Tooltip delay={400}>
-      <Tooltip.Trigger>
-        <AppBadge tone={tone} className="px-2.5">
-          {label} · {Math.round(level * 100)}%
-        </AppBadge>
-      </Tooltip.Trigger>
-      <Tooltip.Content
-        placement="top"
-        showArrow
-        className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background"
-      >
-        <Tooltip.Arrow />
-        How confident the AI is that this task was correctly extracted from the source. Low = needs
-        your review.
-      </Tooltip.Content>
-    </Tooltip>
+    <div className="inline-flex flex-wrap items-center gap-2" title={CONFIDENCE_EXPLANATION}>
+      <AppBadge tone={toneForBand(band)} className="px-2.5">
+        {label}
+      </AppBadge>
+      {needsReview && reviewHref ? (
+        <Link href={reviewHref} className="text-xs font-semibold text-accent-strong hover:underline">
+          Review evidence
+        </Link>
+      ) : null}
+      <span className="sr-only">{CONFIDENCE_EXPLANATION}</span>
+    </div>
   );
 }

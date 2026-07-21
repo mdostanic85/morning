@@ -23,6 +23,7 @@ interface JiraStatusDropdownProps {
  embedded?: boolean;
  buttonSize?: "sm" | "default";
  className?: string;
+ detailLayout?: boolean;
 }
 
 export function JiraStatusDropdown({
@@ -32,6 +33,7 @@ export function JiraStatusDropdown({
  embedded = false,
  buttonSize,
  className,
+ detailLayout = false,
 }: JiraStatusDropdownProps) {
  const router = useRouter();
  const [jiraStatus, setJiraStatus] = useState<string | null>(null);
@@ -138,7 +140,9 @@ export function JiraStatusDropdown({
  aria-hidden
  />
  )}
- <span className="truncate">{loading ? "Loading…" : visual.label}</span>
+ <span className="truncate">
+ {loading ? "Loading…" : detailLayout ? `Jira · ${visual.label}` : visual.label}
+ </span>
  </span>
  <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" aria-hidden />
  </Dropdown.Trigger>
@@ -185,7 +189,9 @@ export function JiraStatusDropdown({
  <AlertDialog.Container placement="center" size="xs" className="w-full max-w-none px-4">
  <AlertDialog.Dialog className="w-full max-w-sm rounded-surface border border-border bg-overlay p-5 text-foreground outline-none">
  <AlertDialog.Header className="flex flex-col items-start gap-1.5 text-left">
- <AlertDialog.Heading className="text-base font-medium">Move {jiraKey} on Jira?</AlertDialog.Heading>
+ <AlertDialog.Heading className="text-base font-medium">
+ {detailLayout ? `Update ${jiraKey} in Jira?` : `Move ${jiraKey} on Jira?`}
+ </AlertDialog.Heading>
  </AlertDialog.Header>
  <p slot="description" className="text-sm text-pretty text-muted">
  This will transition{" "}
@@ -204,7 +210,9 @@ export function JiraStatusDropdown({
  </p>
  <AlertDialog.Footer className="-mx-5 -mb-5 mt-5 flex flex-col-reverse gap-2 rounded-b-surface border-t border-border/70 bg-surface-soft/60 p-5 sm:flex-row sm:justify-end">
  <Button slot="close" variant="outline">Cancel</Button>
- <Button slot="close" variant="primary" onClick={() => runTransition()} isDisabled={pendingMove}>Move on Jira</Button>
+ <Button slot="close" variant="primary" onClick={() => runTransition()} isDisabled={pendingMove}>
+ {detailLayout ? "Update Jira" : "Move on Jira"}
+ </Button>
  </AlertDialog.Footer>
  </AlertDialog.Dialog>
  </AlertDialog.Container>

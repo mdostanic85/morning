@@ -12,8 +12,14 @@ import { AlertDialog } from "@heroui/react/alert-dialog";
 import { Modal } from "@heroui/react/modal";
 import type { VerificationReport } from "@/domain/verificationReport";
 import type { SyncReviewReport } from "@/domain/syncReviewReport";
+import type { WorkTaskStatus } from "@/domain/workTask";
 import { JiraStatusDropdown } from "@/components/JiraStatusDropdown";
 import { cn } from "@/lib/utils";
+import { resolveFocusPrimaryCta } from "@/lib/tasks/focusPrimaryCta";
+import {
+  localStatusLabel,
+  QUEUE_POSITION_ACTIONS,
+} from "@/lib/tasks/taskDetailActionModel";
 
 interface FocusTaskSeed {
  title: string;
@@ -29,7 +35,12 @@ interface TaskActionButtonsProps {
  latestVerificationReport?: VerificationReport | null;
  latestSyncReviewReport?: SyncReviewReport | null;
  embedded?: boolean;
- layout?: "stack" | "focus";
+ layout?: "stack" | "focus" | "detail";
+ status?: WorkTaskStatus;
+ figmaFrameUrl?: string | null;
+ githubRepo?: string | null;
+ localRepoPath?: string | null;
+ linkedJiraUrl?: string | null;
  focusExtras?: ReactNode;
  focusTaskSeed?: FocusTaskSeed | null;
  showJiraStatus?: boolean;
@@ -51,6 +62,11 @@ export function TaskActionButtons({
  latestSyncReviewReport = null,
  embedded = false,
  layout = "stack",
+ status = "next",
+ figmaFrameUrl = null,
+ githubRepo = null,
+ localRepoPath = null,
+ linkedJiraUrl = null,
  focusExtras = null,
  focusTaskSeed = null,
  showJiraStatus = true,
@@ -92,8 +108,9 @@ export function TaskActionButtons({
  const hasTask = effectiveTaskId != null;
 
  const isFocusLayout = layout === "focus";
- const embeddedBtnClass = embedded && !isFocusLayout ? "min-w-[9.5rem] flex-1 basis-0" : "";
- const buttonSize = isFocusLayout ? "md" : embedded ? "sm" : "md";
+ const isDetailLayout = layout === "detail";
+ const embeddedBtnClass = embedded && !isFocusLayout && !isDetailLayout ? "min-w-[9.5rem] flex-1 basis-0" : "";
+ const buttonSize = isFocusLayout || isDetailLayout ? "md" : embedded ? "sm" : "md";
  const focusSeedKey = focusTaskSeed
  ? `${focusTaskSeed.title}\n${focusTaskSeed.reason}\n${focusTaskSeed.nextAction}\n${focusTaskSeed.doneCriteria.join("\n")}`
  : null;
@@ -206,14 +223,150 @@ export function TaskActionButtons({
  return (
  <div
  className={
- isFocusLayout
+ isFocusLayout || isDetailLayout
  ? "space-y-4"
  : embedded
  ? "min-w-0 flex-1 basis-0"
  : "mt-6 space-y-4 border-t border-border/50 pt-5"
  }
  >
- {isFocusLayout ? (
+ {isDetailLayout ? (
+ <div className="space-y-5">
+ <section className="space-y-3">
+ <div>
+ <h3 className="text-sm font-semibold text-foreground">Task status</h3>
+ <p className="mt-1 text-sm text-muted">
+ Changes here update Worklight only. Jira stays unchanged.
+ </p>
+ </div>
+ <p className="text-sm font-medium text-accent-strong">{localStatusLabel(status)}</p>
+
+ {hasTask ? (
+ <div className="grid gap-2.5">
+ {(() => {
+ const primaryCta = resolveFocusPrimaryCta({
+ status,
+ figmaFrameUrl,
+ githubRepo,
+ localRepoPath,
+ linkedJiraUrl,
+ referenceLinks,
+ });
+ if (primaryCta.href) {
+ return (
+ <a
+ href={primaryCta.href}
+ target="_blank"
+ rel="noreferrer"
+ className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground"
+ >
+ {primaryCta.label}
+ </a>
+ );
+ }
+ if (primaryCta.scrollTargetId) {
+ return (
+ <Button
+ type="button"
+ size="lg"
+ className="h-11 w-full"
+ onClick={() => {
+ document.getElementById(primaryCta.scrollTargetId ?? "")?.scrollIntoView({ behavior: "smooth" });
+ }}
+ >
+ {primaryCta.label}
+ </Button>
+ );
+ }
+ return null;
+ })()}
+
+ <Button
+ type="button"
+ size="lg"
+ onClick={() => setDoneConfirmOpen(true)}
+ isDisabled={isLoading}
+ className="h-11 w-full border border-good/40 bg-good/[0.12] text-good hover:border-good/60 hover:bg-good/20"
+ >
+ {pendingAction === "done" ? (
+ <Loader2Icon className="size-4 animate-spin" aria-hidden />
+ ) : null}
+ Mark done in Worklight
+ </Button>
+
+ <details className="rounded-xl border border-border bg-surface-soft/40 px-4 py-3">
+ <summary className="cursor-pointer text-sm font-semibold text-accent-strong">
+ Change queue position
+ </summary>
+ <div className="mt-3 grid gap-2">
+ {QUEUE_POSITION_ACTIONS.map((item) => (
+ <Button
+ key={item.action}
+ type="button"
+ variant="outline"
+ size="sm"
+ className="w-full justify-start"
+ onClick={() => runStatusAction(item.action)}
+ isDisabled={isLoading}
+ >
+ {item.label}
+ </Button>
+ ))}
+ </div>
+ </details>
+
+ <details className="rounded-xl border border-border bg-surface-soft/40 px-4 py-3">
+ <summary className="cursor-pointer text-sm font-semibold text-accent-strong">
+ More actions
+ </summary>
+ <div className="mt-3 grid gap-2">
+ <Button
+ type="button"
+ variant="outline"
+ size="sm"
+ className="w-full justify-start"
+ onClick={() => setVerifyOpen(true)}
+ isDisabled={isLoading}
+ >
+ Check delivery against criteria
+ </Button>
+ {showDelete ? (
+ <Button
+ type="button"
+ variant="danger-soft"
+ size="sm"
+ className="w-full justify-start"
+ onClick={() => setDeleteConfirmOpen(true)}
+ isDisabled={isLoading}
+ >
+ Remove from Worklight
+ </Button>
+ ) : null}
+ </div>
+ </details>
+ </div>
+ ) : null}
+ </section>
+
+ {hasJiraStatusControl && jiraKey ? (
+ <section className="space-y-3 border-t border-border pt-5">
+ <div>
+ <h3 className="text-sm font-semibold text-foreground">Jira status · {jiraKey}</h3>
+ <p className="mt-1 text-sm text-muted">This changes Jira after you confirm.</p>
+ </div>
+ <JiraStatusDropdown
+ taskId={effectiveTaskId}
+ linkedJiraKey={jiraKey}
+ disabled={isLoading}
+ embedded
+ buttonSize="default"
+ className="h-11 w-full text-[15px]"
+ detailLayout
+ />
+ </section>
+ ) : null}
+ </div>
+ ) : isFocusLayout ? (
  <div className="space-y-3">
  {ensurePending && !hasTask ? (
  <div className="flex h-12 items-center justify-center rounded-lg border border-border/70 bg-surface-soft/40 text-sm text-muted">
@@ -414,12 +567,20 @@ export function TaskActionButtons({
  <AlertDialog.Container placement="center" size="xs" className="w-full max-w-none px-4">
  <AlertDialog.Dialog className="w-full max-w-sm rounded-surface border border-border bg-overlay p-5 text-foreground outline-none">
  <AlertDialog.Header className="flex flex-col items-start gap-1.5 text-left">
- <AlertDialog.Heading className="text-base font-medium">Mark as done?</AlertDialog.Heading>
+ <AlertDialog.Heading className="text-base font-medium">
+ {isDetailLayout ? "Mark done in Worklight?" : "Mark as done?"}
+ </AlertDialog.Heading>
  </AlertDialog.Header>
- <p slot="description" className="text-sm text-pretty text-muted">This will move the task out of your queue.</p>
+ <p slot="description" className="text-sm text-pretty text-muted">
+ {isDetailLayout
+ ? "This removes the task from Today. It does not change Jira."
+ : "This will move the task out of your queue."}
+ </p>
  <AlertDialog.Footer className="-mx-5 -mb-5 mt-5 flex flex-col-reverse gap-2 rounded-b-surface border-t border-border/70 bg-surface-soft/60 p-5 sm:flex-row sm:justify-end">
  <Button slot="close" variant="outline">Cancel</Button>
- <Button slot="close" variant="primary" onClick={() => runStatusAction("done")} className="border border-good/40 bg-good/15 text-good hover:bg-good/25">Mark done</Button>
+ <Button slot="close" variant="primary" onClick={() => runStatusAction("done")} className="border border-good/40 bg-good/15 text-good hover:bg-good/25">
+ {isDetailLayout ? "Mark done" : "Mark done"}
+ </Button>
  </AlertDialog.Footer>
  </AlertDialog.Dialog>
  </AlertDialog.Container>

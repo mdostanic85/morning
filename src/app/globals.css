@@ -1922,7 +1922,7 @@ summary {
 }
 
 .brief-pillar-action .brief-pillar-label {
-  color: color-mix(in srgb, var(--accent-contrast) 78%, transparent);
+  color: color-mix(in srgb, var(--action-primary-foreground) 82%, transparent);
 }
 
 .brief-action-copy,
@@ -1934,7 +1934,7 @@ summary {
 }
 
 .brief-action-copy {
-  color: var(--accent-contrast);
+  color: var(--action-primary-foreground);
   font-size: 0.95rem;
   font-weight: 680;
   line-height: 1.58;

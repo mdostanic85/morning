@@ -57,7 +57,7 @@ export function HydraScheduleSettings({ initialSchedules }: { initialSchedules: 
       {schedules.map((schedule) => (
         <section key={schedule.id} className="app-card p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
-            <div><p className="eyebrow">Weekdays</p><h2 className="mt-1 font-display text-xl font-semibold capitalize">{schedule.type} report</h2></div>
+            <div><p className="eyebrow">Weekdays</p><h2 className="mt-1 font-display text-xl font-semibold capitalize">{schedule.type} brief</h2></div>
             <Switch
               size="sm"
               isSelected={schedule.enabled}
@@ -75,7 +75,7 @@ export function HydraScheduleSettings({ initialSchedules }: { initialSchedules: 
             <label><span className="text-xs font-medium text-muted">Local time</span><Input className="mt-1.5" type="time" value={asTime(schedule)} onChange={(event) => { const [hour, minute] = event.target.value.split(":").map(Number); update(schedule.id, { hour, minute }); }} /></label>
             <label><span className="text-xs font-medium text-muted">Timezone</span><Input className="mt-1.5" value={schedule.timezone} onChange={(event) => update(schedule.id, { timezone: event.target.value })} /></label>
           </div>
-          <p className="mt-4 text-xs leading-relaxed text-muted">Runs Monday–Friday. The idempotency key prevents duplicate reports for the same date and run type.</p>
+          <p className="mt-4 text-xs leading-relaxed text-muted">Runs Monday–Friday. Each date and run type only produces one brief.</p>
           <Button className="mt-5 w-full" variant="outline" onClick={() => save(schedule)} isDisabled={saving === schedule.id}>{saving === schedule.id ? "Saving…" : "Save schedule"}</Button>
         </section>
       ))}

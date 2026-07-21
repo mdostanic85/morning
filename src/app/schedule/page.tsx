@@ -13,10 +13,10 @@ export default async function SchedulePage() {
     <div className="space-y-7">
       <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <SettingsBackLink section="Automation" />
-          <h1 className="mt-2 font-display text-4xl font-semibold tracking-[-0.04em]">Schedule</h1>
+          <SettingsBackLink section="Automated briefs" />
+          <h1 className="mt-2 font-display text-4xl font-semibold tracking-[-0.04em]">Automated briefs</h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-            Two predictable weekday reports in your timezone. Manual runs use the same evidence and
+            Two predictable weekday briefs in your timezone. Manual runs use the same evidence and
             validation pipeline without moving the next scheduled time.{" "}
             <Link href="/reports" className="text-accent hover:underline">
               Report history

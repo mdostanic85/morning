@@ -95,6 +95,7 @@ const OUTPUT_SHAPE = `{
       "reason": string,               // why this matters, grounded in the source
       "nextAction": string,
       "doneCriteria": string[],       // at least one
+      "doneCriteriaEvidence": [ { "criterion": string, "quote": string } ],
       "meetingContext": {
         "overview": string,
         "keyPoints": string[],
@@ -185,6 +186,14 @@ export const extractedTaskSchema = z
     reason: z.string().min(1),
     nextAction: z.string().min(1),
     doneCriteria: z.array(z.string().min(1)).min(1),
+    doneCriteriaEvidence: z
+      .array(
+        z.object({
+          criterion: z.string().min(1),
+          quote: z.string().min(1),
+        })
+      )
+      .default([]),
     meetingContext: z
       .object({
         overview: z.string().min(1),

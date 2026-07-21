@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getWorkTaskById, updateWorkTask } from "@/services/workTasks";
-import type { WorkTaskPatch, WorkTaskStatus } from "@/domain/workTask";
+import type { ConflictResolutionDecision, WorkTaskPatch, WorkTaskStatus } from "@/domain/workTask";
+import { CONFLICT_RESOLUTION_DECISIONS } from "@/domain/workTask";
+import { upsertTaskConflictDecision } from "@/services/taskConflictDecisions";
 
 const ACTION_TO_STATUS: Record<string, WorkTaskStatus> = {
   start: "now",
@@ -8,13 +10,7 @@ const ACTION_TO_STATUS: Record<string, WorkTaskStatus> = {
   snooze: "tomorrow",
   skip: "later",
   waiting: "waiting",
-  not_mine: "unclear",
 };
-
-function noteNotMine(reason: string): string {
-  const note = "Not mine: user marked this as not their responsibility.";
-  return reason.includes(note) ? reason : `${reason} (${note})`;
-}
 
 export async function PATCH(
   request: Request,
@@ -29,25 +25,66 @@ export async function PATCH(
 
   const body = await request.json();
   const action = typeof body?.action === "string" ? body.action : "";
-  const nextStatus = ACTION_TO_STATUS[action];
-
-  if (!nextStatus) {
-    return NextResponse.json({ error: "Unsupported task action." }, { status: 400 });
-  }
 
   const existing = await getWorkTaskById(taskId);
   if (!existing) {
     return NextResponse.json({ error: "Task not found." }, { status: 404 });
   }
 
-  // A user click is an explicit triage decision — the priority planner must
-  // never overwrite it on the next rebuild.
-  const patch: WorkTaskPatch = { status: nextStatus, statusManuallySet: true };
+  if (action === "confirm_mine") {
+    const task = await updateWorkTask(taskId, {
+      ownershipDecision: "confirmed_mine",
+      statusManuallySet: true,
+      status: existing.status === "unclear" ? "next" : existing.status,
+    });
+    return NextResponse.json({ task });
+  }
 
   if (action === "not_mine") {
-    patch.reason = noteNotMine(existing.reason);
-    patch.waitingOn = null;
+    const task = await updateWorkTask(taskId, {
+      ownershipDecision: "rejected_not_mine",
+      statusManuallySet: true,
+      waitingOn: null,
+    });
+    return NextResponse.json({ task });
   }
+
+  if (action === "resolve_conflict") {
+    const decision = body?.decision;
+    const summary = typeof body?.summary === "string" ? body.summary.trim() : "";
+    const evidenceSourceItemIds = Array.isArray(body?.evidenceSourceItemIds)
+      ? body.evidenceSourceItemIds.filter((value: unknown) => Number.isInteger(value))
+      : [];
+
+    if (
+      !summary ||
+      !CONFLICT_RESOLUTION_DECISIONS.includes(decision as ConflictResolutionDecision)
+    ) {
+      return NextResponse.json({ error: "Unsupported conflict decision." }, { status: 400 });
+    }
+
+    const stored = await upsertTaskConflictDecision({
+      taskId,
+      summary,
+      decision: decision as ConflictResolutionDecision,
+      evidenceSourceItemIds,
+    });
+
+    let taskPatch: WorkTaskPatch | null = null;
+    if (decision === "mark_done_locally") {
+      taskPatch = { status: "done", statusManuallySet: true };
+    }
+
+    const task = taskPatch ? await updateWorkTask(taskId, taskPatch) : existing;
+    return NextResponse.json({ task, conflictDecision: stored });
+  }
+
+  const nextStatus = ACTION_TO_STATUS[action];
+  if (!nextStatus) {
+    return NextResponse.json({ error: "Unsupported task action." }, { status: 400 });
+  }
+
+  const patch: WorkTaskPatch = { status: nextStatus, statusManuallySet: true };
 
   if (action === "waiting" && !existing.waitingOn) {
     patch.waitingOn = "Manual follow-up needed";

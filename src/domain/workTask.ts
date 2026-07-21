@@ -34,6 +34,16 @@ export const OPEN_QUEUE_STATUSES = WORK_TASK_STATUSES.filter(
 export const REVIEW_STATUSES = ["pending", "approved"] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
+export const OWNERSHIP_DECISIONS = ["confirmed_mine", "rejected_not_mine"] as const;
+export type OwnershipDecision = (typeof OWNERSHIP_DECISIONS)[number];
+
+export const CONFLICT_RESOLUTION_DECISIONS = [
+  "keep_open",
+  "mark_done_locally",
+  "decide_later",
+] as const;
+export type ConflictResolutionDecision = (typeof CONFLICT_RESOLUTION_DECISIONS)[number];
+
 export interface WorkTask {
   id: number;
   projectId: number | null;
@@ -62,6 +72,8 @@ export interface WorkTask {
   workContext: TaskWorkContextSnapshot | null;
   /** Stable identity e.g. jira:{site}:{KEY}. */
   canonicalKey: string | null;
+  /** User-confirmed ownership decision — null until the user chooses. */
+  ownershipDecision: OwnershipDecision | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -88,6 +100,7 @@ export type NewWorkTask = Pick<
       | "canonicalKey"
       | "reviewStatus"
       | "statusManuallySet"
+      | "ownershipDecision"
     >
   >;
 

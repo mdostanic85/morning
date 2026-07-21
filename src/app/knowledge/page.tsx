@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getKnowledgeItemsWithContext } from "@/services/knowledgeItems";
 import { getSourceItems } from "@/services/sourceItems";
 import { getUserProfile } from "@/services/userProfile";
@@ -47,8 +48,18 @@ export default async function KnowledgePage() {
         <div className="mt-3">
           {allKnowledgeItems.length === 0 ? (
             <EmptyState
-              title="No knowledge items yet."
-              description="Learnings are extracted after you sync connected sources or paste a transcript in Settings."
+              title="No learnings yet"
+              description="Sync a source or paste notes to extract recent, evidence-backed learnings."
+              action={
+                <div className="flex flex-wrap justify-center gap-3">
+                  <Link href="/" className="link-btn-primary motion-btn">
+                    Sync my day
+                  </Link>
+                  <Link href="/settings" className="link-btn-outline motion-btn">
+                    Paste notes
+                  </Link>
+                </div>
+              }
             />
           ) : !myName ? (
             <EmptyState

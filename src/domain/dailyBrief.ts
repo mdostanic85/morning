@@ -36,6 +36,7 @@ export const dailyBriefV2Schema = z.object({
     z.object({
       summary: z.string(),
       evidenceIds: z.array(z.number().int()),
+      taskId: z.number().int().nullable().optional(),
     })
   ),
   todayMeetings: z.array(
