@@ -350,9 +350,8 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
 }
 
 /**
- * Secondary tasks stay quiet: a badge, the headline, a two-line summary, and
- * — per the app's task-card rule — the next action is always visible even
- * here, never hidden behind the drill-through link alone.
+ * Secondary "Next up" cards stay quiet: badge, headline, short why, and a
+ * drill-through. Next action / Done when / Evidence live on the task page.
  */
 function SecondaryTaskCard({
   entry,
@@ -365,19 +364,6 @@ function SecondaryTaskCard({
 }) {
   const title = entry.item?.title ?? entry.task?.title ?? "Unresolved work";
   const reason = humanizeReason(entry.item?.reason ?? entry.task?.reason, title);
-  const nextAction = entry.item?.nextAction ?? entry.task?.nextAction ?? null;
-  const doneCriteria =
-    entry.item?.doneCriteria.length
-      ? entry.item.doneCriteria
-      : entry.task?.doneCriteria.length
-        ? entry.task.doneCriteria
-        : [];
-  const primaryDone = doneCriteria[0] ?? null;
-  const evidence = entry.task?.evidence[0] ?? null;
-  const sourceLink = entry.item?.sourceLinks[0] ?? null;
-  const evidenceLabel = evidence?.sourceTitle ?? sourceLink?.label ?? null;
-  const evidenceQuote =
-    evidence?.quote?.trim() || evidence?.summary?.trim() || null;
   const badge = statusBadge(entry, brief, index);
   const key = jiraKey(entry);
   const href = entry.task ? `/tasks/${entry.task.id}` : null;
@@ -386,43 +372,13 @@ function SecondaryTaskCard({
     <>
       <div className="brief-secondary-badges">
         <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
+        {entry.task?.confidence != null ? (
+          <ConfidenceBadge level={entry.task.confidence} />
+        ) : null}
         {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
       </div>
       <h3 className="brief-secondary-title">{title}</h3>
       <p className="brief-secondary-reason">{reason}</p>
-      {nextAction ? (
-        <p className="brief-secondary-next">
-          <span className="brief-secondary-next-label">Next action: </span>
-          {nextAction}
-        </p>
-      ) : null}
-      {primaryDone ? (
-        <p className="brief-secondary-next">
-          <span className="brief-secondary-next-label">Done when: </span>
-          {primaryDone}
-        </p>
-      ) : null}
-      <div className="brief-secondary-evidence">
-        <span className="brief-secondary-next-label">Evidence: </span>
-        {evidenceLabel ? (
-          <>
-            {evidenceLabel}
-            {evidenceQuote ? (
-              <span className="brief-secondary-evidence-quote"> — “{evidenceQuote}”</span>
-            ) : null}
-          </>
-        ) : (
-          <span className="brief-evidence-missing">No source attached. Clarify before acting.</span>
-        )}
-        {entry.task?.confidence != null ? (
-          <div className="mt-2">
-            <ConfidenceBadge
-              level={entry.task.confidence}
-              reviewHref={`/tasks/${entry.task.id}#task-evidence`}
-            />
-          </div>
-        ) : null}
-      </div>
     </>
   );
 
