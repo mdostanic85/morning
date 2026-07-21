@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
 import { getWorkTaskById } from "@/services/workTasks";
 import { getSourceItems } from "@/services/sourceItems";
+import { BackToTodayButton } from "@/components/BackToTodayButton";
 
 export const dynamic = "force-dynamic";
 
@@ -46,14 +47,11 @@ export default async function TaskDetailPage({
 
  return (
  <div className="mx-auto w-full max-w-[77.5rem] py-8 pb-20">
- <nav className="flex items-center gap-2 text-sm font-medium text-muted">
- <Link href="/" className="text-accent-strong hover:underline">Today</Link>
- <span>/</span>
- <strong className="text-foreground">{task.title}</strong>
- </nav>
+ <div className="mb-7">
+ <BackToTodayButton />
+ </div>
 
- <header className="mt-7 grid gap-6 border-b border-border pb-7 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
- <div>
+ <header className="border-b border-border pb-7">
  <div className="flex flex-wrap gap-2">
  <span className="minimal-badge minimal-badge-urgent">
  {task.status === "waiting" ? "Waiting" : task.status === "unclear" ? "Verify" : "Priority"}
@@ -75,13 +73,6 @@ export default async function TaskDetailPage({
  <p className="ft-header-meta mt-3 text-muted-soft">
  {task.doneCriteria.length} required outcomes · {task.evidence.length} supporting sources
  </p>
- </div>
- <Link
- href="/"
- className="inline-flex min-h-11 items-center gap-2 rounded-[14px] border border-border-strong bg-surface px-4 text-sm font-semibold text-accent-strong"
- >
- <ArrowLeft className="size-4" /> Back to today
- </Link>
  </header>
 
  <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1.55fr)_minmax(19rem,.65fr)] lg:items-start">

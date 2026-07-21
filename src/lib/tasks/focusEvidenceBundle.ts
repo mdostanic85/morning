@@ -4,6 +4,7 @@ import { cleanJiraText, extractJiraDescription } from "@/lib/connectors/jiraText
 import type { BriefingFocusItemDraft } from "@/lib/tasks/priorityRank";
 import type { WorkTaskForRanking } from "@/lib/tasks/priorityRank";
 import { relevantContextSources } from "@/lib/tasks/granolaRelevance";
+import { parseLinkedJiraRefs, resolveLinkedJiraEvidence } from "@/lib/tasks/linkedJiraRetrieval";
 
 const SOURCE_EXCERPT_MAX = 2200;
 const MAX_SOURCES_PER_ITEM = 8;
@@ -14,6 +15,8 @@ export interface FocusEvidenceSource {
   sourceDate: string;
   url: string | null;
   excerpt: string;
+  /** Explicit gap when a linked issue was referenced but not loaded. */
+  missingEvidence?: string;
 }
 
 function excerpt(text: string, max = SOURCE_EXCERPT_MAX): string {
@@ -124,6 +127,36 @@ export function buildFocusEvidenceBundle(input: {
         ),
       });
       textParts.push(jiraSource.body);
+
+      const linked = resolveLinkedJiraEvidence({
+        refs: parseLinkedJiraRefs({
+          text: jiraSource.body,
+          parentIssueKey: jiraKey,
+        }),
+        sources: sourceItems,
+      });
+      for (const ref of linked) {
+        if (ref.status === "loaded") {
+          const linkedSource = sourceItems.find((item) => item.id === ref.sourceItemId);
+          if (!linkedSource) continue;
+          pushSource(bundle, seen, {
+            sourceType: "jira",
+            title: linkedSource.title,
+            sourceDate: linkedSource.sourceDate,
+            url: linkedSource.url,
+            excerpt: excerpt(cleanJiraText(linkedSource.body)),
+          });
+        } else {
+          pushSource(bundle, seen, {
+            sourceType: "jira",
+            title: `${ref.issueKey} (not loaded)`,
+            sourceDate: "unknown",
+            url: null,
+            excerpt: `Linked ${ref.issueKey} was referenced but not imported.`,
+            missingEvidence: ref.missingEvidence,
+          });
+        }
+      }
     } else if (jiraIssue) {
       pushSource(bundle, seen, {
         sourceType: "jira",

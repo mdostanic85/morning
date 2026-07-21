@@ -106,6 +106,8 @@ export const workTasks = pgTable("work_tasks", {
   githubRepo: text("github_repo"),
   workContext: jsonb("work_context")
     .$type<import("@/domain/taskWorkContext").TaskWorkContextSnapshot | null>(),
+  /** Stable identity e.g. jira:{site}:{KEY} — nullable until backfilled. */
+  canonicalKey: text("canonical_key"),
   ...createdAndUpdatedAt,
 });
 
@@ -550,3 +552,23 @@ export const syncProviderRuns = pgTable("sync_provider_runs", {
   errorCode: text("error_code"),
   errorMessage: text("error_message"),
 });
+
+/** One DailyBriefV2 per calendar day — Sync my day write target. */
+export const dailyBriefs = pgTable(
+  "daily_briefs",
+  {
+    id: serial("id").primaryKey(),
+    today: text("today").notNull(),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    inputHash: text("input_hash").notNull(),
+    structuredJson: jsonb("structured_json")
+      .$type<import("@/domain/dailyBrief").DailyBriefV2>()
+      .notNull(),
+    modelProvider: text("model_provider"),
+    modelName: text("model_name"),
+    promptVersion: text("prompt_version"),
+    validationOk: boolean("validation_ok").notNull().default(true),
+    ...createdAndUpdatedAt,
+  },
+  (table) => [unique("daily_briefs_today_unique").on(table.today)]
+);

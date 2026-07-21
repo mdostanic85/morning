@@ -39,6 +39,7 @@ function toWorkTask(row: typeof workTasksTable.$inferSelect): WorkTask {
     localRepoPath: row.localRepoPath,
     githubRepo: row.githubRepo,
     workContext: row.workContext,
+    canonicalKey: row.canonicalKey ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -134,8 +135,11 @@ function insertWorkTaskRow(tx: DbOrTransaction, input: NewWorkTask): WorkTask {
     dueDate: input.dueDate ?? null,
     owner: input.owner ?? null,
     waitingOn: input.waitingOn ?? null,
+    githubRepo: input.githubRepo ?? null,
+    workContext: input.workContext ?? null,
     reviewStatus: input.reviewStatus ?? "approved",
     statusManuallySet: input.statusManuallySet ?? false,
+    canonicalKey: input.canonicalKey ?? null,
   }).returning();
   const rows = syncAll(returning);
   const [row] = rows;
@@ -166,6 +170,7 @@ export async function createWorkTask(input: NewWorkTask): Promise<WorkTask> {
         waitingOn: input.waitingOn ?? null,
         reviewStatus: input.reviewStatus ?? "approved",
         statusManuallySet: input.statusManuallySet ?? false,
+        canonicalKey: input.canonicalKey ?? null,
       })
       .returning()
   );
@@ -215,6 +220,7 @@ export async function createWorkTaskWithEvidence(
         waitingOn: effectiveInput.waitingOn ?? null,
         reviewStatus: effectiveInput.reviewStatus ?? "approved",
         statusManuallySet: effectiveInput.statusManuallySet ?? false,
+        canonicalKey: effectiveInput.canonicalKey ?? null,
       }).returning();
       const task = toWorkTask(taskRow);
       const evidenceRows = await Promise.all(

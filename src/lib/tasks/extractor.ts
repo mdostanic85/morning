@@ -34,6 +34,7 @@ import {
   resolveTranscriptMergeTarget,
   type MergeCandidateTask,
 } from "@/lib/tasks/transcriptTaskMerge";
+import { myOwnerFilter, personMatchesFilter, classifyTaskOwnership } from "@/lib/filters/ownerFilter";
 
 export interface ExtractTasksOptions {
   sourceItem: SourceItem;
@@ -335,16 +336,29 @@ export async function extractTasksFromSourceItem(
       continue;
     }
 
-    // Drop tasks the LLM explicitly attributed to someone else. If the source
-    // names a specific owner and we know who the user is, and the owner clearly
-    // isn't the user, there is nothing for the user to do — skip creation.
-    if (
-      primary.owner !== null &&
-      currentUserName !== null &&
-      !primary.owner.toLowerCase().includes(currentUserName.toLowerCase()) &&
-      !currentUserName.toLowerCase().includes(primary.owner.toLowerCase())
-    ) {
-      continue;
+    // Drop tasks the LLM attributed to someone else — either via owner field
+    // or via clear third-person attribution in the extracted text.
+    if (currentUserName !== null) {
+      const ownership = classifyTaskOwnership(
+        {
+          owner: primary.owner,
+          title: primary.title,
+          reason: primary.reason,
+          nextAction: primary.nextAction,
+        },
+        currentUserName
+      );
+      if (ownership === "other") continue;
+      if (
+        primary.owner !== null &&
+        !personMatchesFilter(
+          primary.owner,
+          myOwnerFilter(currentUserName) ?? new Set(),
+          currentUserName
+        )
+      ) {
+        continue;
+      }
     }
 
     // Extracted tasks go straight into the Today queue — no manual approval step.

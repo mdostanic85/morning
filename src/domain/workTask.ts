@@ -57,6 +57,8 @@ export interface WorkTask {
   localRepoPath: string | null;
   githubRepo: string | null;
   workContext: TaskWorkContextSnapshot | null;
+  /** Stable identity e.g. jira:{site}:{KEY}. */
+  canonicalKey: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -79,6 +81,7 @@ export type NewWorkTask = Pick<
       | "localRepoPath"
       | "githubRepo"
       | "workContext"
+      | "canonicalKey"
       | "reviewStatus"
       | "statusManuallySet"
     >

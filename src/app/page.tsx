@@ -3,13 +3,15 @@ import { getSourceItems } from "@/services/sourceItems";
 import { getConnections } from "@/services/connections";
 import { getUserProfile } from "@/services/userProfile";
 import { getTodayBriefing } from "@/lib/tasks/todayBriefing";
+import { getTodayDailyBrief } from "@/lib/dailyBrief/buildDailyBrief";
 import { OPEN_QUEUE_STATUSES } from "@/domain/workTask";
 import type { ConnectionProvider } from "@/lib/connectors/providers";
 import { getLatestFinishedSyncRun } from "@/services/syncRuns";
 import { resolveFocusLinkedTaskId } from "@/lib/tasks/resolveFocusTask";
 import { getTodayMeetings } from "@/lib/calendar/todayMeetings";
-import { getPersonalMentionSignals } from "@/lib/signals/personalMentions";
-import { MinimalTodayView } from "@/components/MinimalTodayView";
+import { filterQueueByOwners, myOwnerFilter, taskEligibleForBriefPriority } from "@/lib/filters/ownerFilter";
+import { filterTasksForTodayView } from "@/lib/tasks/taskVisibility";
+import { HumanReadableTodayView } from "@/components/HumanReadableTodayView";
 
 export const dynamic = "force-dynamic";
 
@@ -26,27 +28,50 @@ const CONNECTED_PROVIDER_LABEL: Record<ConnectionProvider, string> = {
 };
 
 export default async function TodayPage() {
-  const [queue, sourceItems, connections, profile, todayBriefing, latestSync, todayMeetings, mentions] =
-    await Promise.all([
+  const [
+    rawQueue,
+    sourceItems,
+    connections,
+    profile,
+    todayBriefing,
+    dailyBrief,
+    latestSync,
+    todayMeetings,
+  ] = await Promise.all([
       getTodayQueue(),
       getSourceItems(),
       getConnections(),
       getUserProfile(),
       getTodayBriefing(),
+      getTodayDailyBrief(),
       getLatestFinishedSyncRun(),
       getTodayMeetings(),
-      getPersonalMentionSignals(),
     ]);
+
+  const myName = profile?.name?.trim() || null;
+  const queue = filterQueueByOwners(rawQueue, myOwnerFilter(myName), myName);
 
   const connectedProviderLabels = connections
     .filter((connection) => connection.status === "connected")
     .map((connection) => CONNECTED_PROVIDER_LABEL[connection.provider as ConnectionProvider])
     .filter(Boolean);
 
-  const MIN_CONFIDENCE = 0.8;
-
-  const allOpenTasks = OPEN_QUEUE_STATUSES.flatMap((status) => queue[status]).filter(
-    (task) => task.confidence == null || task.confidence >= MIN_CONFIDENCE
+  // Never drop valid tasks because priorityScore was copied into confidence.
+  // Brief cards only use work that is clearly owned — never pad with unclear/
+  // someone-else's meeting items.
+  const allOpenTasks = filterTasksForTodayView(
+    OPEN_QUEUE_STATUSES.flatMap((status) => queue[status]),
+    myName
+  ).filter((task) =>
+    taskEligibleForBriefPriority(
+      {
+        owner: task.owner,
+        title: task.title,
+        reason: task.reason,
+        nextAction: task.nextAction,
+      },
+      myName
+    )
   );
   // Live queue wins over a cached briefing. Briefing only enriches the same
   // task — otherwise a stale focusItems[0] can hide the real top priority.
@@ -61,9 +86,6 @@ export default async function TodayPage() {
       return linkedId == null ? [] : [[linkedId, item] as const];
     })
   );
-  const briefingFocus =
-    primaryTask == null ? null : briefingFocusByTaskId.get(primaryTask.id) ?? null;
-
   const sourceById = new Map(sourceItems.map((source) => [source.id, source]));
   const tasks = allOpenTasks.map((task) => {
     const focus = briefingFocusByTaskId.get(task.id);
@@ -89,6 +111,7 @@ export default async function TodayPage() {
         : null,
       confidence: task.confidence,
       waitingOn: task.waitingOn,
+      owner: task.owner,
       updatedAt: task.updatedAt,
       evidence: task.evidence.map((item) => ({
         summary: item.summary,
@@ -100,30 +123,6 @@ export default async function TodayPage() {
       })),
     };
   });
-
-  // The main-card bullets must contain the synthesized work itself, never
-  // instructions that hand source research back to the user.
-  const isResearchInstruction = (value: string) =>
-    /^\s*(open|read|review|check|inspect|compare|consult|look at|go through)\b/i.test(
-      value
-    );
-  const isGenericOutcome = (value: string) =>
-    /\b(has been reviewed|necessary actions? (or updates )?have been taken|work is complete|feedback (is )?addressed|updates? have been (made|taken))\b/i.test(
-      value
-    ) ||
-    /^\s*(the jira issue|any necessary)\b/i.test(value);
-  const workSummary = (briefingFocus?.todayWorkSummary ?? []).filter(
-    (item) => !isResearchInstruction(item) && !isGenericOutcome(item)
-  );
-  const executionSteps = (briefingFocus?.actionSteps ?? []).filter(
-    (item) => !isResearchInstruction(item) && !isGenericOutcome(item)
-  );
-  // Never fall back to doneCriteria here — those are outcomes, not today's work.
-  const bulletSource =
-    workSummary.length > 0 ? workSummary : executionSteps.length > 0 ? executionSteps : [];
-  const primarySubtasks = bulletSource
-    .slice(0, 5)
-    .map((label) => ({ label, agreed: null }));
 
   const normalizedTitle = (title: string) => title.trim().toLowerCase();
   const orderedTasks = primaryTask
@@ -139,21 +138,18 @@ export default async function TodayPage() {
     : tasks;
 
   return (
-    <MinimalTodayView
+    <HumanReadableTodayView
       tasks={orderedTasks}
       connectedProviderLabels={connectedProviderLabels}
       sourceCount={todayBriefing?.sourceCount ?? sourceItems.length}
       lastSyncAt={
         latestSync?.run.completedAt ?? latestSync?.run.startedAt ?? null
       }
+      profileName={profile?.name?.trim() || null}
       profileReady={Boolean(profile?.name?.trim())}
-      primarySummary={briefingFocus?.reason ?? null}
-      primaryWhyFirst={briefingFocus?.priorityExplanation ?? null}
-      primarySubtasks={primarySubtasks}
       meetings={todayMeetings.meetings}
       calendarConnected={todayMeetings.calendarConnected}
-      meetingMentions={mentions.meetings}
-      jiraMentions={mentions.jiraTagged}
+      dailyBrief={dailyBrief}
     />
   );
 }

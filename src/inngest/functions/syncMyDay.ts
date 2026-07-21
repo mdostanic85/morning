@@ -7,8 +7,10 @@ import { approveAllPendingExtractions } from "@/lib/tasks/approvePending";
 import { backfillUnextractedSources } from "@/lib/imports/backfillExtractions";
 import { fetchJiraPendingSnapshot } from "@/lib/connectors/jiraPending";
 import { buildTodayBriefing } from "@/lib/tasks/todayBriefing";
+import { buildDailyBriefV2 } from "@/lib/dailyBrief/buildDailyBrief";
 import { rebuildTodayQueue } from "@/lib/tasks/prioritizer";
 import { detectJiraDoneNotifications } from "@/lib/imports/jiraDoneNotifications";
+import { importLinkedJiraEvidence } from "@/lib/imports/linkedJiraImport";
 import { buildSyncWhatsNew } from "@/lib/imports/syncWhatsNew";
 import type { ImportedSourceItem, SyncKnowledgeItem } from "@/lib/connectors/types";
 import { getConnections } from "@/services/connections";
@@ -291,6 +293,8 @@ export const syncMyDay = inngest.createFunction(
       return { syncRunId, status: "cancelled" as const };
     }
 
+    await step.run("import-linked-jira", () => importLinkedJiraEvidence());
+
     const rebuild = await step.run("rebuild-queue", () => rebuildTodayQueue({ jiraPending }));
 
     if (
@@ -309,6 +313,10 @@ export const syncMyDay = inngest.createFunction(
     );
 
     const briefingResult = await step.run("build-briefing", () => buildTodayBriefing({ jiraPending }));
+
+    const dailyBriefResult = await step.run("build-daily-brief-v2", () =>
+      buildDailyBriefV2({ jiraPending })
+    );
 
     if (
       await step.run("check-cancelled-before-publication", async () =>
@@ -345,12 +353,13 @@ export const syncMyDay = inngest.createFunction(
       errorParts.push(`${figmaAudits.errors.length} Figma audit(s) failed.`);
     }
     if (!briefingResult.ok) errorParts.push(briefingResult.error ?? "Briefing failed.");
+    if (!dailyBriefResult.ok) errorParts.push(dailyBriefResult.error ?? "Daily brief failed.");
 
     const status = deriveSyncRunCompletionStatus({
       providerCount: providerResults.length,
       failedProviderCount: providerFailures.length,
       rebuildOk: rebuild.ok,
-      briefingOk: briefingResult.ok,
+      briefingOk: briefingResult.ok && dailyBriefResult.ok,
     });
 
     const whatsNewPayload = buildSyncWhatsNew({

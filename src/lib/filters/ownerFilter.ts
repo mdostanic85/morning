@@ -62,8 +62,175 @@ export function taskMatchesOwner(
   myName: string | null = null
 ): boolean {
   if (selectedOwners === null) return true;
-  if (!task.owner?.trim()) return false;
+  // Null/empty owner needs classification — never silently hide via this helper alone.
+  // Prefer classifyTaskOwnership() when title/reason evidence is available.
+  if (!task.owner?.trim()) return true;
   return ownerParts(task.owner).some((part) => personMatchesFilter(part, selectedOwners, myName));
+}
+
+/** Words that look like names in title case but are not people. */
+const NON_PERSON_ACTORS = new Set([
+  "please",
+  "today",
+  "tomorrow",
+  "review",
+  "make",
+  "send",
+  "finish",
+  "update",
+  "check",
+  "confirm",
+  "waiting",
+  "status",
+  "priority",
+  "project",
+  "content",
+  "discord",
+  "credentials",
+  "team",
+  "someone",
+  "anyone",
+  "everyone",
+  "user",
+  "owner",
+  "assignee",
+  "jira",
+  "figma",
+  "design",
+  "frontend",
+  "backend",
+  "hydra",
+  "canvas",
+  "task",
+  "this",
+  "that",
+  "what",
+  "when",
+  "where",
+  "which",
+  "next",
+  "open",
+  "closed",
+  "done",
+  "blocked",
+  "scope",
+  "action",
+  "item",
+]);
+
+export type TaskOwnershipClass = "mine" | "other" | "unclear";
+
+export type TaskOwnershipSignals = {
+  owner?: string | null;
+  title?: string | null;
+  reason?: string | null;
+  nextAction?: string | null;
+  /** Jira assignee when the task is backed by a Jira issue. */
+  jiraAssignee?: string | null;
+};
+
+/**
+ * Extract a named person attributed as the actor (not the user) from free text.
+ * Examples: "Sofija to send…", "assigned to Lucas", "Daniel will follow up".
+ */
+export function namedForeignActor(
+  text: string,
+  myName: string | null
+): string | null {
+  if (!text.trim()) return null;
+  const selected = myOwnerFilter(myName);
+  const patterns = [
+    /\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]+)?)\s+(?:to|will|should|needs?\s+to|must)\b/g,
+    /\b(?:assigned to|owner[:\s]+|action(?:\s+item)?\s+for)\s*([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]+)?)/gi,
+  ];
+
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) != null) {
+      const candidate = match[1]?.trim();
+      if (!candidate) continue;
+      const first = candidate.split(/\s+/)[0]?.toLowerCase() ?? "";
+      if (NON_PERSON_ACTORS.has(first)) continue;
+      if (selected && personMatchesFilter(candidate, selected, myName)) continue;
+      if (!selected && myName && personMatchesFilter(candidate, new Set([normalizePerson(myName)]), myName)) {
+        continue;
+      }
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function firstPersonCommitment(text: string): boolean {
+  return /\b(i(?:'ll| will| am going to| need to)|my action|for me to)\b/i.test(text);
+}
+
+/**
+ * True only when the user is named as the actor — not merely mentioned
+ * (e.g. "according to Milos design" must not count as ownership).
+ */
+export function namedMeAsActor(text: string, myName: string): boolean {
+  const me = normalizePerson(myName);
+  if (!me || !text.trim()) return false;
+  const firstName = me.split(/\s+/)[0];
+  if (firstName.length < 3) return false;
+
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const nameAlt = `${escape(firstName)}(?:\\s+${escape(me.slice(firstName.length).trim())})?`;
+  const patterns = [
+    new RegExp(`\\b${nameAlt}\\s+(?:to|will|should|needs?\\s+to|must)\\b`, "i"),
+    new RegExp(
+      `\\b(?:assigned to|owner[:\\s]+|action(?:\\s+item)?\\s+for)\\s*${nameAlt}\\b`,
+      "i"
+    ),
+  ];
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+/**
+ * Classify whether a task belongs on the user's brief.
+ * - mine: explicit owner/assignee match, or first-person / my-name-as-actor signal
+ * - other: explicit other owner/assignee, or text attributes the action to someone else
+ * - unclear: no owner and no reliable signal (never force into ranked priorities)
+ */
+export function classifyTaskOwnership(
+  task: TaskOwnershipSignals,
+  myName: string | null
+): TaskOwnershipClass {
+  if (!myName?.trim()) return "unclear";
+
+  const selected = myOwnerFilter(myName);
+  if (!selected) return "unclear";
+
+  if (task.owner?.trim()) {
+    return ownerParts(task.owner).some((part) => personMatchesFilter(part, selected, myName))
+      ? "mine"
+      : "other";
+  }
+
+  if (task.jiraAssignee?.trim()) {
+    return personMatchesFilter(task.jiraAssignee, selected, myName) ? "mine" : "other";
+  }
+
+  const blob = [task.title, task.reason, task.nextAction].filter(Boolean).join("\n");
+  const foreign = namedForeignActor(blob, myName);
+  if (foreign) return "other";
+
+  if (firstPersonCommitment(blob)) return "mine";
+  if (namedMeAsActor(blob, myName)) return "mine";
+
+  // A bare mention of the user's name (e.g. "according to Milos design") is
+  // not ownership. Leave unattributed work as unclear — never force it.
+  return "unclear";
+}
+
+/** True when the task may appear in todayFirst / afterThat. */
+export function taskEligibleForBriefPriority(
+  task: TaskOwnershipSignals,
+  myName: string | null
+): boolean {
+  return classifyTaskOwnership(task, myName) === "mine";
 }
 
 export function parseJiraAssigneeFromText(text: string): string | null {

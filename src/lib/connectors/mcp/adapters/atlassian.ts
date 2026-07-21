@@ -334,3 +334,16 @@ export async function fetchJiraIssuesForProjectKeys(
   if (jiraKeys.length === 0) return [];
   return fetchJiraIssuesViaMcp({ projectJiraKeys: jiraKeys, maxResults });
 }
+
+/** Depth-1 read-only fetch for a single issue key (linked evidence). */
+export async function fetchJiraIssueByKeyViaMcp(
+  issueKey: string
+): Promise<ConnectorSourceCandidate | null> {
+  const key = issueKey.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9]+-\d+$/.test(key)) return null;
+  const issues = await fetchJiraIssuesViaMcp({
+    jql: `key = ${key}`,
+    maxResults: 1,
+  });
+  return issues[0] ?? null;
+}

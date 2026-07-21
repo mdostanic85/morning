@@ -10,6 +10,7 @@ import { TodaySignalsCard } from "@/components/TodaySignalsCard";
 import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
 import type { PersonalMentionSignal } from "@/lib/signals/personalMentions";
 import { priorityExplanationForDisplay } from "@/lib/tasks/priorityExplanation";
+import type { DailyBriefV2 } from "@/domain/dailyBrief";
 
 interface MinimalTask {
   id: number;
@@ -47,6 +48,7 @@ interface MinimalTodayViewProps {
   connectedProviderLabels: string[];
   sourceCount: number;
   lastSyncAt: string | null;
+  profileName: string | null;
   profileReady: boolean;
   primarySummary: string | null;
   primaryWhyFirst: string | null;
@@ -55,6 +57,42 @@ interface MinimalTodayViewProps {
   calendarConnected: boolean;
   meetingMentions: PersonalMentionSignal[];
   jiraMentions: PersonalMentionSignal[];
+  dailyBrief?: DailyBriefV2 | null;
+}
+
+const SOURCE_PILL_LABEL: Record<string, string> = {
+  "Gmail & Gemini notes": "Gemini",
+  "Google Calendar": "Calendar",
+  "Google Drive Gemini notes": "Drive",
+  Jira: "Jira",
+  Confluence: "Confluence",
+  Granola: "Granola",
+  GitHub: "GitHub",
+  Discord: "Discord",
+  Figma: "Figma",
+};
+
+function focusHeroTitle(profileName: string | null): string {
+  const first = profileName?.trim().split(/\s+/)[0];
+  if (!first) return "Your focus for today";
+  const possessive = /s$/i.test(first) ? `${first}'` : `${first}'s`;
+  return `${possessive} focus for today`;
+}
+
+function formatTodayHeading(date = new Date()): string {
+  return date.toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function compactSourceLine(labels: string[]): string | null {
+  if (labels.length === 0) return null;
+  const short = labels.map((label) => SOURCE_PILL_LABEL[label] ?? label);
+  const unique = Array.from(new Set(short));
+  return `Sources: ${unique.join(" · ")}`;
 }
 
 function relativeTime(value: string): string {
@@ -72,16 +110,6 @@ function latestEvidenceDate(task: MinimalTask): string {
     .filter((time) => !Number.isNaN(time));
   if (dates.length === 0) return task.updatedAt;
   return new Date(Math.max(...dates)).toISOString();
-}
-
-function syncLabel(value: string | null): string {
-  if (!value) return "Not synced yet";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Last sync available";
-  return `Synced ${date.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
 }
 
 function confidenceBadge(task: MinimalTask): string | null {
@@ -173,7 +201,7 @@ function buildTodayNarrative(
 }
 
 function SecondaryTaskCard({ task }: { task: MinimalTask }) {
-  const label = taskLabel(task);
+  const label = task.status === "unclear" ? "Unclear" : taskLabel(task);
   const summary = taskCardDescription(task);
   return (
     <Link
@@ -185,8 +213,30 @@ function SecondaryTaskCard({ task }: { task: MinimalTask }) {
           {task.title}
         </strong>
         <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted">{summary}</p>
+        {task.nextAction ? (
+          <p className="mt-2 text-sm leading-snug">
+            <span className="font-medium text-foreground">Next: </span>
+            {task.nextAction}
+          </p>
+        ) : null}
+        {task.doneCriteria[0] ? (
+          <p className="mt-1 text-sm leading-snug text-muted">
+            <span className="font-medium text-foreground">Done when: </span>
+            {task.doneCriteria[0]}
+          </p>
+        ) : null}
+        {task.evidence[0] ? (
+          <p className="mt-1 line-clamp-1 text-xs text-muted-soft">
+            Evidence: {task.evidence[0].sourceTitle}
+            {task.evidence[0].quote ? ` — “${task.evidence[0].quote}”` : ""}
+          </p>
+        ) : null}
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <span className={`minimal-badge minimal-badge-${label.toLowerCase()}`}>{label}</span>
+          <span
+            className={`minimal-badge minimal-badge-${label === "Unclear" ? "verify" : label.toLowerCase()}`}
+          >
+            {label}
+          </span>
           {confidenceBadge(task) ? (
             <span className="minimal-badge minimal-badge-confidence">{confidenceBadge(task)}</span>
           ) : null}
@@ -205,6 +255,7 @@ export function MinimalTodayView({
   connectedProviderLabels,
   sourceCount,
   lastSyncAt,
+  profileName,
   profileReady,
   primarySummary,
   primaryWhyFirst,
@@ -213,18 +264,33 @@ export function MinimalTodayView({
   calendarConnected,
   meetingMentions,
   jiraMentions,
+  dailyBrief = null,
 }: MinimalTodayViewProps) {
-  const primary = tasks[0] ?? null;
-  const otherTasks = tasks.slice(1);
+  const briefPrimaryId = dailyBrief?.todayFirst.taskId ?? null;
+  const primary =
+    (briefPrimaryId != null ? tasks.find((task) => task.id === briefPrimaryId) : null) ??
+    tasks[0] ??
+    null;
+  const afterThatIds = new Set(
+    (dailyBrief?.afterThat ?? [])
+      .map((item) => item.taskId)
+      .filter((id): id is number => id != null)
+  );
+  const secondaryTasks =
+    afterThatIds.size > 0
+      ? tasks.filter((task) => afterThatIds.has(task.id) && task.id !== primary?.id).slice(0, 2)
+      : tasks.filter((task) => task.id !== primary?.id).slice(0, 2);
+
+  const sourcesLine = compactSourceLine(connectedProviderLabels);
 
   const steps =
     primarySubtasks.length > 0
       ? primarySubtasks.map((item) => item.label)
       : primary
         ? [
+            primary.nextAction,
             ...primary.actionSteps,
             ...primary.todayWorkSummary,
-            ...primary.doneCriteria,
           ].filter(Boolean)
         : [];
 
@@ -233,47 +299,45 @@ export function MinimalTodayView({
     5
   );
 
-  const heroTitle = primary
-    ? "One task needs you first"
-    : lastSyncAt
-      ? "All clear"
-      : "Nothing queued yet";
-  const nextUpSentence = (() => {
-    if (otherTasks.length === 0) {
-      return "Nothing else is competing for your attention right now.";
-    }
-    const count = otherTasks.length;
-    return `${count === 1 ? "One more priority follows" : `${count} more priorities follow`} once it's moving.`;
-  })();
-  const heroLead = primary
-    ? `Start with "${primary.title}". ${nextUpSentence}`
-    : lastSyncAt
-      ? "Nothing from the latest sync requires your attention. Sync again when you want a fresh check."
-      : "Sync your day to pull fresh evidence from your sources and build today’s priority order.";
+  const heroTitle = focusHeroTitle(profileName);
+  const todayHeading = formatTodayHeading();
 
-  const narrative = primary ? buildTodayNarrative(primary, primarySummary) : "";
+  const narrative = primary
+    ? dailyBrief?.todayFirst.reason || buildTodayNarrative(primary, primarySummary)
+    : "";
   const whyFirst = primary
     ? priorityExplanationForDisplay(
-        primaryWhyFirst || primary.priorityExplanation || primary.reason || ""
+        dailyBrief?.todayFirst.reason ||
+          primaryWhyFirst ||
+          primary.priorityExplanation ||
+          primary.reason ||
+          ""
       )
     : "";
+  const isUnclearPrimary =
+    dailyBrief?.todayFirst.statusHint === "unclear" || primary?.status === "unclear";
+  const meetingQuestions =
+    dailyBrief?.meetingPrep.flatMap((prep) =>
+      prep.questions.map((question) => ({ meeting: prep.meetingTitle, question }))
+    ) ?? [];
 
   return (
     <div className="minimal-today">
       <section className="minimal-hero">
         <div className="flex flex-wrap items-start justify-between gap-5">
-          <div>
+          <div className="min-w-0 flex-1">
+            <p className="minimal-hero-eyebrow">Worklight · Morning operational brief</p>
             <h1 className="ft-hero-title">{heroTitle}</h1>
-            <p className="ft-hero-lead">{heroLead}</p>
+            <div className="minimal-hero-subrow">
+              <p className="minimal-hero-date">{todayHeading}</p>
+              {sourcesLine ? (
+                <p className="minimal-sources-pill" title={`${sourceCount} sources available`}>
+                  {sourcesLine}
+                </p>
+              ) : null}
+            </div>
           </div>
           <SyncMyDayButton sources={connectedProviderLabels} lastSyncAt={lastSyncAt} />
-        </div>
-        <div className="minimal-meta ft-meta">
-          <span>{syncLabel(lastSyncAt)}</span>
-          <span>{sourceCount} sources checked</span>
-          <span>
-            {tasks.length} {tasks.length === 1 ? "priority" : "priorities"} selected
-          </span>
         </div>
       </section>
 
@@ -283,20 +347,26 @@ export function MinimalTodayView({
         </p>
       ) : null}
 
+      {dailyBrief?.dayChange ? (
+        <p className="ft-body mb-4 rounded-[var(--radius)] border border-border bg-surface-soft px-4 py-3">
+          <span className="font-semibold">What changed: </span>
+          {dailyBrief.dayChange.text}
+        </p>
+      ) : null}
+
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-stretch">
           {primary ? (
             <article className="minimal-urgent-card min-w-0 flex-1">
               <div className="flex flex-wrap items-start justify-between gap-3 pr-14">
                 <div className="flex flex-wrap gap-[7px]">
-                  <span className="minimal-badge minimal-badge-urgent">Urgent</span>
+                  {isUnclearPrimary ? (
+                    <span className="minimal-badge minimal-badge-verify">Unclear — clarify first</span>
+                  ) : (
+                    <span className="minimal-badge minimal-badge-urgent">First today</span>
+                  )}
                   {isJiraTask(primary) ? (
                     <span className="minimal-badge minimal-badge-jira">Jira</span>
-                  ) : null}
-                  {confidenceBadge(primary) ? (
-                    <span className="minimal-badge minimal-badge-confidence">
-                      {confidenceBadge(primary)}
-                    </span>
                   ) : null}
                 </div>
               </div>
@@ -315,9 +385,16 @@ export function MinimalTodayView({
                 </Link>
 
                 <strong className="mt-4 block text-xs uppercase tracking-[0.08em] text-muted">
-                  Where things stand
+                  Why first
                 </strong>
                 <p className="minimal-urgent-description ft-body-lg !mt-2">{narrative}</p>
+
+                <strong className="mt-4 block text-xs uppercase tracking-[0.08em] text-muted">
+                  Next action
+                </strong>
+                <p className="mt-2 text-[15px] leading-relaxed">
+                  {dailyBrief?.todayFirst.nextAction || primary.nextAction}
+                </p>
 
                 {uniqueSteps.length > 0 ? (
                   <>
@@ -330,6 +407,26 @@ export function MinimalTodayView({
                       ))}
                     </ul>
                   </>
+                ) : null}
+
+                <strong className="mt-4 block text-xs uppercase tracking-[0.08em] text-muted">
+                  Done when
+                </strong>
+                <ul className="minimal-steps" aria-label="Done criteria">
+                  {(dailyBrief?.todayFirst.doneCriteria.length
+                    ? dailyBrief.todayFirst.doneCriteria
+                    : primary.doneCriteria
+                  ).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+
+                {primary.evidence[0] ? (
+                  <p className="mt-3 text-sm text-muted">
+                    <span className="font-medium text-foreground">Evidence: </span>
+                    {primary.evidence[0].sourceTitle}
+                    {primary.evidence[0].quote ? ` — “${primary.evidence[0].quote}”` : ""}
+                  </p>
                 ) : null}
 
                 {primary.figmaAudit ? (
@@ -348,9 +445,7 @@ export function MinimalTodayView({
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/80 pt-3">
                   <p className="ft-source-meta text-muted">
-                    {primary.doneCriteria.length} required outcome
-                    {primary.doneCriteria.length === 1 ? "" : "s"} · Highest source updated{" "}
-                    {relativeTime(latestEvidenceDate(primary))}
+                    Highest source updated {relativeTime(latestEvidenceDate(primary))}
                   </p>
                   <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                     <WhyThisButton whyFirst={whyFirst} evidence={primary.evidence} />
@@ -386,20 +481,75 @@ export function MinimalTodayView({
 
           <aside className="w-full shrink-0 md:w-[18.75rem] lg:w-[20rem]">
             <TodayMeetingsCard meetings={meetings} calendarConnected={calendarConnected} />
+            {meetingQuestions.length > 0 ? (
+              <div className="mt-3 rounded-[var(--radius)] border border-border bg-surface px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.08em] text-muted-soft">
+                  Close in meetings
+                </p>
+                <ul className="mt-2 space-y-2 text-sm leading-snug">
+                  {meetingQuestions.slice(0, 5).map((item) => (
+                    <li key={`${item.meeting}:${item.question}`}>
+                      <span className="text-muted">{item.meeting}: </span>
+                      {item.question}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </aside>
         </div>
 
-        {primary && tasks.length > 1 ? (
+        {secondaryTasks.length > 0 ? (
           <div>
             <p className="mb-2.5 px-0.5 text-xs font-bold uppercase tracking-[0.08em] text-muted-soft">
-              Other priorities
+              After that
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              {tasks.slice(1).map((task) => (
+              {secondaryTasks.map((task) => (
                 <SecondaryTaskCard key={task.id} task={task} />
               ))}
             </div>
           </div>
+        ) : null}
+
+        {dailyBrief &&
+        (dailyBrief.blockedWaiting.length > 0 ||
+          dailyBrief.sourceConflicts.length > 0 ||
+          dailyBrief.coverageWarnings.length > 0 ||
+          dailyBrief.reviewReadiness) ? (
+          <details className="rounded-[var(--radius)] border border-border bg-surface px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold">
+              Blockers, conflicts, and source coverage
+            </summary>
+            <div className="mt-3 space-y-3 text-sm leading-relaxed text-muted">
+              {dailyBrief.blockedWaiting.map((item) => (
+                <p key={item.title}>
+                  <span className="font-medium text-foreground">Waiting / unclear: </span>
+                  {item.title} — {item.reason}
+                </p>
+              ))}
+              {dailyBrief.sourceConflicts.map((item) => (
+                <p key={item.summary}>
+                  <span className="font-medium text-foreground">Conflict: </span>
+                  {item.summary}
+                </p>
+              ))}
+              {dailyBrief.reviewReadiness ? (
+                <p>
+                  <span className="font-medium text-foreground">Figma readiness: </span>
+                  {dailyBrief.reviewReadiness.verified
+                    ? "Verified"
+                    : dailyBrief.reviewReadiness.warning ?? "not verified"}
+                </p>
+              ) : null}
+              {dailyBrief.coverageWarnings.map((warning) => (
+                <p key={`${warning.code}:${warning.message}`}>
+                  <span className="font-medium text-foreground">Coverage: </span>
+                  {warning.message}
+                </p>
+              ))}
+            </div>
+          </details>
         ) : null}
 
         <TodaySignalsCard meetings={meetingMentions} jiraTagged={jiraMentions} />

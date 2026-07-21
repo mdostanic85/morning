@@ -10,6 +10,11 @@ import {
   sourceAuthorityScoreBoost,
   type AttendanceContext,
 } from "@/lib/tasks/sourceAuthority";
+import {
+  claimAwareScoreAdjustment,
+  isNewJiraAssignment,
+} from "@/lib/tasks/claimAwareRanking";
+import { isJiraDoneMetadata } from "@/lib/tasks/canonicalKey";
 
 export interface RankedWorkTask {
   taskId: number;
@@ -195,9 +200,17 @@ export function rankWorkTask(
     else if (task.status === "next") explanation.push("Queued as next up");
   }
 
-  if (task.statusManuallySet) {
+  // Resolve Jira Done from evidence early — a manual queue pin is about
+  // ordering, not a dispute with Jira's mechanical status. Done always wins.
+  const jiraDoneFromEvidence = task.evidence
+    .map((item) => sourceById.get(item.sourceItemId))
+    .some((source) => source?.sourceType === "jira" && isJiraDoneMetadata(source.metadata));
+
+  if (task.statusManuallySet && !jiraDoneFromEvidence) {
     score += 1000;
     explanation.push("You explicitly set its queue position");
+  } else if (task.statusManuallySet && jiraDoneFromEvidence) {
+    explanation.push("Jira now shows this issue as Done — manual pin no longer applies");
   }
 
   const taskText = `${task.title} ${task.reason} ${task.nextAction}`;
@@ -300,6 +313,33 @@ export function rankWorkTask(
   score += authority.score;
   explanation.push(...authority.notes);
   if (authority.forceInclude) forceInclude = true;
+
+  // Claim-aware: Jira mechanical Done beats transcript forceInclude;
+  // same-day assignment gets an explicit boost.
+  const jiraStatusFromSource = allSources
+    .filter((source) => source.sourceType === "jira")
+    .map((source) =>
+      typeof source.metadata?.status === "string" ? source.metadata.status : null
+    )
+    .find(Boolean);
+  const jiraDoneFromSource = allSources.some(
+    (source) => source.sourceType === "jira" && isJiraDoneMetadata(source.metadata)
+  );
+  const jiraStatus = jiraSnapshot?.status ?? jiraStatusFromSource ?? null;
+  const newAssignment = isNewJiraAssignment({
+    jiraUpdatedAt: jiraSnapshot?.updatedAt ?? null,
+    today,
+    assignee: jiraSnapshot?.assignee ?? null,
+    myName: attendance?.myName ?? null,
+  });
+  const claimAdjust = claimAwareScoreAdjustment({
+    forceInclude,
+    jiraStatus: jiraDoneFromSource ? jiraStatus ?? "Done" : jiraStatus,
+    newAssignment,
+  });
+  score += claimAdjust.scoreDelta;
+  forceInclude = claimAdjust.forceInclude;
+  explanation.push(...claimAdjust.notes);
 
   if (sources.length >= 2) {
     score += 25;

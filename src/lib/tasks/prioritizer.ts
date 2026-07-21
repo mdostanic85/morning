@@ -38,6 +38,14 @@ import { OPEN_QUEUE_STATUSES, type WorkTaskStatus } from "@/domain/workTask";
 import { localDateString } from "@/lib/dates";
 import type { Project } from "@/domain/project";
 import type { SourceItem } from "@/domain/sourceItem";
+import {
+  resolvePlannerConfidence,
+  shouldRouteLowConfidenceToUnclear,
+} from "@/lib/tasks/plannerConfidence";
+import {
+  reconcileJiraWorkItems,
+  reconcileSelfReportedCompletion,
+} from "@/services/jiraWorkItemReconciliation";
 
 const RECENT_SOURCE_LIMIT = 8;
 const SOURCE_EXCERPT_LENGTH = 360;
@@ -231,6 +239,12 @@ export async function rebuildTodayQueue(options?: {
   today?: string;
   jiraPending?: JiraPendingSnapshot[];
 }): Promise<RebuildTodayQueueResult> {
+  // Close Done Jira work items and merge duplicates before ranking.
+  await reconcileJiraWorkItems();
+  // Close tasks whose own freshest evidence self-reports the work is done
+  // (e.g. today's meeting notes saying the design is finalized).
+  await reconcileSelfReportedCompletion();
+
   const today = options?.today ?? localDateString();
   const [queue, allProjects, sourceItems, previousDailyMemory, profile] = await Promise.all([
     getTodayQueue(),
@@ -367,11 +381,25 @@ export async function rebuildTodayQueue(options?: {
     ranked.filter((entry) => entry.forceInclude).map((entry) => entry.taskId)
   );
 
+  const confidenceByTaskId = new Map(
+    tasks.map((task) => [task.id, task.confidence] as const)
+  );
+
   const { updated } = await applyPlannerDecisions(
     deterministicDecisions.map((decision) => ({
       ...(() => {
         const semantic = semanticDecisionByTaskId.get(decision.taskId);
         const isForced = forcedTaskIds.has(decision.taskId);
+        const confidence = resolvePlannerConfidence({
+          semanticConfidence: semantic?.confidence,
+          existingConfidence: confidenceByTaskId.get(decision.taskId) ?? null,
+          priorityScore: decision.priorityScore,
+        });
+        const routeUnclear = shouldRouteLowConfidenceToUnclear({
+          confidence,
+          priorityScore: decision.priorityScore,
+          forceInclude: isForced,
+        });
         const semanticDeferredStatus =
           !isForced &&
           (semantic?.status === "waiting" ||
@@ -379,16 +407,20 @@ export async function rebuildTodayQueue(options?: {
             semantic?.status === "unclear")
             ? semantic.status
             : null;
+        const status =
+          routeUnclear && !isForced
+            ? ("unclear" as const)
+            : (semanticDeferredStatus ?? decision.status);
         return {
-          status: semanticDeferredStatus ?? decision.status,
+          status,
           reason: semantic?.reason?.trim() || decision.reason,
           waitingOn:
-            semanticDeferredStatus === "waiting"
+            status === "waiting"
               ? semantic?.waitingOn ??
                 rankingTasks.find((task) => task.id === decision.taskId)?.waitingOn ??
                 null
               : null,
-          confidence: semantic?.confidence ?? decision.priorityScore,
+          confidence,
         };
       })(),
       taskId: decision.taskId,

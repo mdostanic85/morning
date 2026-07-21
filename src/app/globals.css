@@ -23,12 +23,15 @@
    HeroUI semantic variables are mapped onto our own tokens so that the
    primitives automatically inherit the Worklight identity.
 
+   Light theme follows Space Inch brand colors (https://www.spaceinch.com/):
+   SI blue #5852f2, logo blue #1d79f3, pearl/off-white surfaces, SI pink #f659f3.
+
    COLOR ROLES — one rule, enforced everywhere:
-   --action-primary (#315889 light / #3f6fa8 dark)
+   --action-primary (#1d79f3 light / #3f6fa8 dark)
        The one filled CTA blue. Used by HeroUI Button variant="primary",
        the brand-mark, and the active nav pill. Nowhere else filled.
-   --accent (#6258e8 light / #aaa5ff dark)
-       Purple highlight. Chips, soft surfaces, focus rings, links,
+   --accent (#5852f2 light / #aaa5ff dark)
+       Brand violet-blue highlight. Chips, soft surfaces, focus rings, links,
        selection dots, decorative rails. NEVER a filled clickable button.
    --good / --danger / --waiting
        Semantic status only. Never repurposed for primary actions.
@@ -36,26 +39,26 @@
        Evidence chips and tag variants only.
 ─────────────────────────────────────────────────────────────────────────── */
 :root {
-  /* ── App palette – light AI workspace from the approved prototype ── */
+  /* ── App palette – Space Inch light brand ── */
   color-scheme: light;
-  --background: #f5f8fc;
-  --foreground: #17192b;
+  --background: #fcfcfc;
+  --foreground: #1e1e1f;
   --surface: #ffffff;
   --surface-foreground: var(--foreground);
   --surface-raised: #ffffff;
-  --surface-soft: #f8fbff;
+  --surface-soft: #f0f4f7;
   --surface-secondary: var(--surface-soft);
   --surface-secondary-foreground: var(--foreground);
   --surface-tertiary: color-mix(in srgb, var(--surface-raised) 82%, var(--foreground));
   --surface-tertiary-foreground: var(--foreground);
   --overlay: #ffffff;
   --overlay-foreground: var(--foreground);
-  --muted: #60697c;
-  --muted-soft: #687286;
-  --border: #e1e7f0;
-  --border-strong: #ccd6f5;
-  --accent: #6258e8;
-  --accent-strong: #4840cf;
+  --muted: #55545d;
+  --muted-soft: #73727b;
+  --border: #e0e0e0;
+  --border-strong: #c7b8fa;
+  --accent: #5852f2;
+  --accent-strong: #4741d4;
   --accent-contrast: #ffffff;
   --warm: #785810;
   --good: #247e61;
@@ -65,9 +68,9 @@
   --success-foreground: #ffffff;
   --warning: var(--waiting);
   --warning-foreground: #ffffff;
-  --action-primary: #315889;
-  --action-primary-hover: #27456f;
-  --action-primary-active: #20395d;
+  --action-primary: #1d79f3;
+  --action-primary-hover: #1666d0;
+  --action-primary-active: #1256b0;
   --action-primary-foreground: #ffffff;
   --default: var(--surface-soft);
   --default-foreground: var(--foreground);
@@ -81,13 +84,13 @@
   --separator: var(--border);
   --focus: var(--accent);
   --link: var(--accent);
-  --backdrop: rgba(17, 19, 21, 0.34);
+  --backdrop: rgba(30, 30, 31, 0.34);
   --now: var(--accent);
   --waiting: #785810;
-  --tomorrow: #6258c9;
+  --tomorrow: #7253f2;
   --unclear: var(--danger);
   --accent-foreground: var(--accent-contrast);
-  --accent-soft-surface: #efedff;
+  --accent-soft-surface: #d7d9ff;
   --danger-soft-surface: #fff8f7;
   --success-soft-surface: #eaf8f3;
   --waiting-soft-surface: #fff4e8;
@@ -112,27 +115,27 @@
   --motion-slow: 520ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.16, 1.35, 0.3, 1);
-  --sky: #73b7ff;
-  --sky-soft: #edf7ff;
+  --sky: #7cb1f8;
+  --sky-soft: #f1f6fc;
   --mint: #70d2b0;
   --mint-soft: #ecfbf6;
   --sun: #ffd66b;
   --sun-soft: #fff9df;
-  --pink: #eba8cf;
-  --pink-soft: #fff1f8;
-  --orange: #ff8f78;
+  --pink: #f659f3;
+  --pink-soft: #fde7fc;
+  --orange: #ff7448;
   --orange-soft: #fff2ef;
-  --sky-foreground: #245f96;
+  --sky-foreground: #1d79f3;
   --mint-foreground: #17694e;
-  --pink-foreground: #934166;
+  --pink-foreground: #b12cae;
   --sun-foreground: #75500a;
   --shadow: none;
   --shadow-soft: none;
   --surface-shadow: none;
-  --glow-dawn: rgba(115, 183, 255, 0.13);
-  --glow-sky: rgba(101, 92, 244, 0.1);
-  --button-shadow: 0 10px 24px rgba(20, 24, 30, 0.12);
-  --panel-hover-shadow: 0 18px 44px rgba(20, 24, 30, 0.08);
+  --glow-dawn: rgba(29, 121, 243, 0.12);
+  --glow-sky: rgba(88, 82, 242, 0.12);
+  --button-shadow: 0 10px 24px rgba(30, 30, 31, 0.1);
+  --panel-hover-shadow: 0 18px 44px rgba(30, 30, 31, 0.07);
   --button-shine: rgba(255, 255, 255, 0.26);
   --focus-spotlight: rgba(255, 255, 255, 0.56);
   --gradient-surface: linear-gradient(180deg, var(--surface-raised), var(--surface-soft));
@@ -374,7 +377,50 @@
 }
 
 .minimal-hero {
-  padding: 0 0 1.125rem;
+  padding: 0 0 1.5rem;
+}
+
+.minimal-hero-eyebrow {
+  margin: 0 0 0.75rem;
+  color: var(--accent-strong);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.minimal-hero-subrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.875rem;
+  max-width: 46rem;
+}
+
+.minimal-hero-date {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+
+.minimal-sources-pill {
+  margin: 0;
+  max-width: 100%;
+  padding: 0.45rem 0.85rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
 }
 
 .minimal-eyebrow {
@@ -401,7 +447,6 @@
 
 .minimal-hero p {
   max-width: 40rem;
-  margin-top: 0.625rem;
   color: var(--muted);
 }
 
@@ -625,6 +670,7 @@
 .minimal-badge-later { color: var(--muted); background: var(--surface-soft); border: 1px solid var(--border); }
 .minimal-badge-jira { color: var(--sky-foreground); background: var(--sky-soft); border: 1px solid color-mix(in srgb, var(--sky) 25%, transparent); }
 .minimal-badge-confidence { color: var(--good); background: var(--success-soft-surface); padding: 0 0.625rem; }
+.minimal-badge-done { color: var(--good); background: var(--success-soft-surface); }
 
 .minimal-more > summary {
   width: max-content;
@@ -1609,5 +1655,675 @@ summary {
 
   .reveal-init {
     opacity: 1;
+  }
+}
+
+/* ── Human-readable morning brief ──────────────────────────────────────────
+   A quiet bento layout: two work items maximum, with semantic alerts.
+   The numbered markers encode actual execution order — they are not decoration.
+─────────────────────────────────────────────────────────────────────────── */
+.brief-page {
+  padding: 2.5rem 0 5rem;
+}
+
+.brief-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.brief-header h1 {
+  max-width: 46rem;
+  margin: 0.35rem 0 0;
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  font-weight: 680;
+  line-height: 1.02;
+  letter-spacing: -0.05em;
+}
+
+.brief-eyebrow,
+.brief-kicker,
+.brief-pillar-label {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.brief-date {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.brief-header-actions {
+  display: flex;
+  max-width: 36rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.brief-sources-badge {
+  margin: 0;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.brief-change-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent-soft-surface) 62%, var(--surface));
+}
+
+.brief-change-alert p:last-child {
+  margin: 0.2rem 0 0;
+  font-size: 0.9375rem;
+  font-weight: 550;
+  line-height: 1.45;
+}
+
+.brief-change-mark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.65rem;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.brief-bento {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.brief-bento-primary {
+  grid-column: span 8;
+}
+
+.brief-bento-meetings {
+  display: grid;
+  grid-column: span 4;
+  gap: 1.25rem;
+}
+
+.brief-bento-secondary {
+  grid-column: span 7;
+  align-self: start;
+}
+
+.brief-focus-card,
+.brief-prep-card,
+.brief-empty {
+  height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  background: var(--surface);
+}
+
+.brief-focus-card {
+  position: relative;
+  padding: 1.35rem;
+  overflow: hidden;
+}
+
+/* The only card allowed to visually dominate the page — everything else stays quiet. */
+.brief-focus-primary {
+  padding: 2.25rem;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(in srgb, var(--pink) 9%, transparent),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 78% 0%,
+      color-mix(in srgb, var(--sky) 14%, transparent),
+      transparent 32%
+    ),
+    var(--surface);
+  box-shadow: 0 28px 64px -40px color-mix(in srgb, var(--accent) 48%, transparent);
+}
+
+.brief-focus-primary::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 1.5rem;
+  left: 0;
+  height: 4px;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(90deg, var(--action-primary), var(--accent) 62%, var(--pink));
+}
+
+.brief-focus-primary .brief-order {
+  width: 2.4rem;
+  height: 2.4rem;
+  background: linear-gradient(135deg, var(--action-primary), var(--accent));
+  color: var(--accent-contrast);
+  font-size: 0.95rem;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.brief-focus-topline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brief-order {
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--accent-soft-surface) 84%, var(--surface));
+  color: var(--accent-strong);
+  font-size: 0.875rem;
+  font-weight: 850;
+}
+
+.brief-badge-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.brief-status-badge,
+.brief-key-badge {
+  display: inline-flex;
+  min-height: 1.65rem;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.brief-status-accent {
+  background: var(--accent-soft-surface);
+  color: var(--accent-strong);
+}
+
+.brief-status-good {
+  background: var(--success-soft-surface);
+  color: var(--good);
+}
+
+.brief-status-warning {
+  background: var(--waiting-soft-surface);
+  color: var(--waiting);
+}
+
+.brief-status-danger {
+  background: var(--danger-soft-surface);
+  color: var(--danger);
+}
+
+.brief-status-neutral,
+.brief-key-badge {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+.brief-key-badge {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.brief-updated {
+  color: var(--muted-soft);
+  font-size: 0.72rem;
+}
+
+.brief-focus-heading {
+  margin-top: 1.35rem;
+}
+
+.brief-focus-heading a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.brief-focus-heading h2 {
+  max-width: 46rem;
+  margin: 0;
+  font-size: clamp(1.5rem, 2.6vw, 2.35rem);
+  font-weight: 690;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+.brief-focus-heading a:hover h2 {
+  color: var(--accent-strong);
+}
+
+.brief-focus-heading > p {
+  max-width: 48rem;
+  margin: 0.8rem 0 0;
+  color: var(--muted);
+  font-size: 0.975rem;
+  line-height: 1.65;
+}
+
+.brief-pillars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.6rem;
+}
+
+.brief-pillar {
+  min-width: 0;
+  padding: 1.2rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 1.125rem;
+  background: var(--surface);
+}
+
+.brief-pillar-action {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--action-primary), var(--accent));
+  box-shadow: 0 18px 36px -26px color-mix(in srgb, var(--accent) 75%, transparent);
+}
+
+.brief-pillar-done {
+  border-color: color-mix(in srgb, var(--accent) 25%, var(--border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent-soft-surface) 76%, var(--surface)),
+      color-mix(in srgb, var(--pink-soft) 46%, var(--surface))
+    );
+}
+
+.brief-pillar-evidence {
+  grid-column: 1 / -1;
+  background: color-mix(in srgb, var(--sky-soft) 50%, var(--surface));
+}
+
+.brief-pillar-label {
+  margin-bottom: 0.85rem;
+  color: var(--accent-strong);
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+}
+
+.brief-pillar-action .brief-pillar-label {
+  color: color-mix(in srgb, var(--accent-contrast) 78%, transparent);
+}
+
+.brief-action-copy,
+.brief-pillar p:not(.brief-pillar-label),
+.brief-pillar ul {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.brief-action-copy {
+  color: var(--accent-contrast);
+  font-size: 0.95rem;
+  font-weight: 680;
+  line-height: 1.58;
+}
+
+.brief-pillar ul {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0;
+  list-style: none;
+}
+
+.brief-pillar li {
+  position: relative;
+  padding-left: 1rem;
+}
+
+.brief-pillar-done li {
+  color: var(--foreground);
+  font-weight: 560;
+  line-height: 1.55;
+}
+
+.brief-pillar li::before {
+  content: "";
+  position: absolute;
+  top: 0.53rem;
+  left: 0;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.brief-source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent-strong);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.brief-source-link:hover {
+  text-decoration: underline;
+}
+
+.brief-evidence-quote {
+  display: -webkit-box;
+  margin-top: 0.55rem !important;
+  overflow: hidden;
+  color: var(--muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.brief-evidence-missing {
+  color: var(--danger);
+}
+
+.brief-focus-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.brief-open-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent-strong);
+  font-size: 0.85rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.brief-open-task:hover {
+  gap: 0.5rem;
+}
+
+/* Secondary tasks stay quiet by design: badge, headline, two-line summary.
+   Everything else is one click away on the task detail page. */
+.brief-secondary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 1.125rem;
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.brief-secondary-card-link {
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.brief-secondary-card-link:hover {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  transform: translateY(-1px);
+}
+
+.brief-secondary-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.brief-secondary-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 640;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+
+.brief-secondary-reason {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  flex: 1;
+}
+
+.brief-secondary-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.1rem;
+  color: var(--muted-soft);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.brief-secondary-card-link:hover .brief-secondary-more {
+  color: var(--accent-strong);
+}
+
+.brief-prep-card {
+  padding: 1rem;
+}
+
+.brief-prep-card ul {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.brief-prep-card li {
+  color: var(--foreground);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.brief-prep-card li span {
+  display: block;
+  margin-bottom: 0.1rem;
+  color: var(--muted-soft);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brief-section-heading h2 {
+  margin: 0.25rem 0 0;
+  font-size: 1.1rem;
+  line-height: 1.25;
+}
+
+.brief-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.75rem 0.8rem;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 0.75rem;
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+.brief-alert p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.brief-alert strong {
+  color: var(--foreground);
+}
+
+.brief-alert-blocked {
+  border-left-color: var(--danger);
+  background: var(--danger-soft-surface);
+}
+
+.brief-empty {
+  display: grid;
+  min-height: 18rem;
+  align-content: center;
+  padding: 2rem;
+}
+
+.brief-empty h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.brief-empty p {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+}
+
+.brief-source-details {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.brief-source-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.brief-source-details > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.brief-source-details a,
+.brief-source-details span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+
+.brief-source-details a:hover {
+  border-color: var(--border-strong);
+  color: var(--accent-strong);
+}
+
+.brief-footnote {
+  margin: 1.5rem 0 0;
+  color: var(--muted-soft);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+@media (max-width: 960px) {
+  .brief-bento-primary,
+  .brief-bento-secondary {
+    grid-column: span 7;
+  }
+
+  .brief-bento-meetings {
+    grid-column: span 5;
+  }
+
+  .brief-pillars {
+    grid-template-columns: 1fr;
+  }
+
+  .brief-pillar-evidence {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .brief-page {
+    padding-top: 1rem;
+  }
+
+  .brief-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .brief-header-actions {
+    justify-content: flex-start;
+  }
+
+  .brief-bento-primary,
+  .brief-bento-meetings,
+  .brief-bento-secondary {
+    grid-column: 1 / -1;
+  }
+
+  .brief-focus-card {
+    padding: 1.35rem;
+  }
+
+  .brief-pillars {
+    gap: 0.8rem;
+    margin-top: 1.25rem;
+  }
+
+  .brief-pillar {
+    padding: 1.05rem;
+  }
+
+  .brief-focus-footer {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
