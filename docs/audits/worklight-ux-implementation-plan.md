@@ -1,9 +1,19 @@
 # Worklight UX implementation plan
 
-Status: implementation-ready  
+Status: Release A and B implemented (22 July 2026)  
 Source audit: [`worklight-today-flow-ux-audit.md`](./worklight-today-flow-ux-audit.md)  
 Architecture companion: [`../architecture/worklight-accuracy-implementation-plan.md`](../architecture/worklight-accuracy-implementation-plan.md)  
 Prepared: 22 July 2026
+
+### Implementation status
+
+| Release | Status | Notes |
+| --- | --- | --- |
+| A (UX-A01–A08) | Shipped | Automated gate: lint, test, build pass |
+| B (UX-B01–B04) | Shipped | Migration `0014_release_b_ux` applied locally |
+| C (UX-C01) | Deferred | Requires separate architecture decision |
+
+Manual verification (light/dark, mobile, keyboard) from §5 remains open.
 
 ## 1. How to execute this document
 
@@ -667,9 +677,9 @@ Add or extend behavior tests for the public claims using existing pure helpers.
 
 Release A is complete only when all checks pass:
 
-- [ ] `npm run lint`
-- [ ] `npm test`
-- [ ] `npm run build`
+- [x] `npm run lint`
+- [x] `npm test`
+- [x] `npm run build`
 - [ ] Today desktop light
 - [ ] Today desktop dark
 - [ ] Today mobile light at 390 × 844
