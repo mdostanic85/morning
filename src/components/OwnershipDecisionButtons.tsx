@@ -24,10 +24,38 @@ export function OwnershipDecisionButtons({ taskId, compact = false }: OwnershipD
         body: JSON.stringify({ action }),
       });
       if (!res.ok) throw new Error("Ownership action failed.");
-      Toast.toast.success(action === "confirm_mine" ? "Marked as yours." : "Removed from Today.");
+      // task-detail-ux-audit F14: this write has no confirmation step (by
+      // design — it's a local-only decision), but it does make the task
+      // disappear from Today, so give the user a short recovery window
+      // instead of a silent, irreversible removal.
+      Toast.toast.success(action === "confirm_mine" ? "Marked as yours." : "Removed from Today.", {
+        timeout: 8000,
+        actionProps: {
+          children: "Undo",
+          onClick: () => void runUndo(),
+        },
+      });
       router.refresh();
     } catch {
       Toast.toast.danger("Could not update ownership. Try again.");
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  async function runUndo() {
+    setPendingAction("undo");
+    try {
+      const res = await fetch(`/api/work-tasks/${taskId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "undo_ownership" }),
+      });
+      if (!res.ok) throw new Error("Undo failed.");
+      Toast.toast.success("Restored to Unclear.");
+      router.refresh();
+    } catch {
+      Toast.toast.danger("Could not undo. Try again.");
     } finally {
       setPendingAction(null);
     }

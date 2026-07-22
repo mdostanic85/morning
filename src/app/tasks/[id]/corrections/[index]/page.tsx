@@ -54,34 +54,36 @@ export default async function CorrectionDetailPage({
     <div className="mx-auto w-full max-w-[77.5rem] py-8 pb-20">
       <nav className="flex flex-wrap items-center gap-2 text-sm font-medium text-muted">
         <Link href="/" className="text-accent-strong hover:underline">Today</Link>
-        <span>/</span>
+        <span aria-hidden="true">/</span>
         <Link href={`/tasks/${task.id}`} className="text-accent-strong hover:underline">{task.title}</Link>
-        <span>/</span>
+        <span aria-hidden="true">/</span>
         <strong className="text-foreground">Outcome {String(criterionIndex + 1).padStart(2, "0")}</strong>
       </nav>
 
-      <header className="mt-7 grid gap-6 border-b border-border pb-7 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+      <header className="mt-6 grid gap-6 border-b border-border pb-7 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
         <div>
           <AppBadge tone="danger">Required outcome</AppBadge>
-          <h1 className="ft-screen-title mt-4 max-w-4xl font-display">{criterion}</h1>
-          <p className="ft-screen-lead mt-4 max-w-3xl text-muted">
+          {/* A done criterion is a working sentence, not a headline — same
+              30px task-title scale as the task detail page (audit F5). */}
+          <h1 className="ft-task-title mt-3 max-w-4xl text-balance font-display">{criterion}</h1>
+          <p className="ft-task-lead mt-3 max-w-3xl text-pretty text-muted">
             Complete this outcome as part of {task.title}.
           </p>
         </div>
         <Link
           href={`/tasks/${task.id}`}
-          className="inline-flex min-h-11 items-center gap-2 rounded-[14px] border border-border-strong bg-surface px-4 text-sm font-semibold text-accent-strong"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border-strong bg-surface px-4 text-sm font-semibold text-accent-strong"
         >
-          <ArrowLeft className="size-4" /> Back to task
+          <ArrowLeft aria-hidden="true" className="size-4" /> Back to task
         </Link>
       </header>
 
-      <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,.6fr)] lg:items-start">
+      <div className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,.6fr)] lg:items-start">
         <main className="grid min-w-0 gap-6 [overflow-wrap:anywhere]">
-          <section className="rounded-[20px] border border-border bg-surface p-6">
+          <section className="rounded-2xl border border-border bg-surface p-6">
             {hasLinkedEvidence ? (
               <>
-                <p className="ft-section-label text-accent-strong">Evidence for this outcome</p>
+                <p className="ft-task-micro-label text-accent-strong">Evidence for this outcome</p>
                 <div className="mt-4 grid gap-4">
                   {linkedEvidence.map((entry) => {
                     const sourceTitle =
@@ -90,10 +92,10 @@ export default async function CorrectionDetailPage({
                     return (
                       <article
                         key={entry.id}
-                        className="rounded-[14px] border border-border bg-surface-soft/40 p-4"
+                        className="rounded-xl border border-border bg-surface-soft/40 p-4"
                       >
-                        <strong className="text-sm">{sourceTitle}</strong>
-                        <blockquote className="mt-3 border-l-2 border-border-strong pl-3 text-sm leading-relaxed text-muted">
+                        <strong className="ft-task-card-title text-foreground">{sourceTitle}</strong>
+                        <blockquote className="ft-task-body mt-3 border-l-2 border-border-strong pl-3 text-muted">
                           “{excerpt}”
                         </blockquote>
                         {entry.url ? (
@@ -101,9 +103,11 @@ export default async function CorrectionDetailPage({
                             href={entry.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-accent-strong"
+                            className="ft-task-caption mt-3 inline-flex items-center gap-1.5 font-semibold text-accent-strong"
                           >
-                            Open original source <ExternalLink className="size-4" />
+                            Open original source
+                            <ExternalLink aria-hidden="true" className="size-4" />
+                            <span className="sr-only"> (opens in a new tab)</span>
                           </a>
                         ) : null}
                       </article>
@@ -113,44 +117,44 @@ export default async function CorrectionDetailPage({
               </>
             ) : (
               <>
-                <p className="ft-section-label text-accent-strong">Evidence not linked to this outcome</p>
+                <p className="ft-task-micro-label text-accent-strong">Evidence not linked to this outcome</p>
                 {taskHasEvidence ? (
                   <>
-                    <p className="mt-4 text-sm leading-relaxed text-muted">
+                    <p className="ft-task-body mt-4 text-muted">
                       Worklight has task-level evidence, but it cannot verify which source supports this
                       specific outcome.
                     </p>
                     <div className="mt-5 flex flex-wrap gap-3">
                       <Link
                         href={`/tasks/${task.id}#task-evidence`}
-                        className="inline-flex min-h-11 items-center rounded-[14px] bg-accent px-4 text-sm font-semibold text-accent-foreground"
+                        className="link-btn-primary link-btn-md motion-btn"
                       >
                         Review task evidence
                       </Link>
                       <Link
                         href={`/tasks/${task.id}`}
-                        className="inline-flex min-h-11 items-center rounded-[14px] border border-border-strong bg-surface px-4 text-sm font-semibold text-accent-strong"
+                        className="inline-flex min-h-11 items-center rounded-lg border border-border-strong bg-surface px-4 text-sm font-semibold text-accent-strong"
                       >
                         Back to task
                       </Link>
                     </div>
 
                     <details className="mt-6 border-t border-border pt-5">
-                      <summary className="cursor-pointer text-sm font-semibold text-accent-strong">
+                      <summary className="ft-task-caption cursor-pointer font-semibold text-accent-strong">
                         Task evidence
                       </summary>
-                      <p className="mt-2 text-sm text-muted">
+                      <p className="ft-task-body mt-2 text-muted">
                         These sources support the task generally, not necessarily this outcome.
                       </p>
                       <div className="mt-4 grid gap-4">
                         {taskEvidence.map((entry) => (
                           <article
                             key={entry.evidence.id}
-                            className="rounded-[14px] border border-border bg-surface-soft/40 p-4"
+                            className="rounded-xl border border-border bg-surface-soft/40 p-4"
                           >
-                            <strong className="text-sm">{entry.sourceTitle}</strong>
+                            <strong className="ft-task-card-title text-foreground">{entry.sourceTitle}</strong>
                             {entry.excerpt ? (
-                              <blockquote className="mt-3 border-l-2 border-border-strong pl-3 text-sm leading-relaxed text-muted">
+                              <blockquote className="ft-task-body mt-3 border-l-2 border-border-strong pl-3 text-muted">
                                 “{entry.excerpt}”
                               </blockquote>
                             ) : null}
@@ -160,7 +164,7 @@ export default async function CorrectionDetailPage({
                     </details>
                   </>
                 ) : (
-                  <p className="mt-4 text-sm leading-relaxed text-muted">
+                  <p className="ft-task-body mt-4 text-muted">
                     No source is attached to this task yet. Review the task before acting on this outcome.
                   </p>
                 )}
@@ -168,21 +172,21 @@ export default async function CorrectionDetailPage({
             )}
           </section>
 
-          <section className="rounded-[20px] border border-border bg-surface p-6">
-            <p className="ft-section-label text-accent-strong">Next action for this task</p>
-            <p className="mt-4 text-sm leading-relaxed text-muted">{task.nextAction}</p>
+          <section className="rounded-2xl border border-border bg-surface p-6">
+            <p className="ft-task-micro-label text-accent-strong">Next action for this task</p>
+            <p className="ft-task-lead mt-3 text-pretty text-foreground">{task.nextAction}</p>
           </section>
         </main>
 
-        <aside className="grid min-w-0 gap-4 [overflow-wrap:anywhere] lg:sticky lg:top-24">
-          <section className="rounded-[20px] border border-good/35 bg-success-soft-surface p-6">
-            <span className="ft-section-label text-good">Expected result</span>
-            <strong className="mt-2 block text-lg leading-relaxed">{criterion}</strong>
+        <aside className="grid min-w-0 gap-4 [overflow-wrap:anywhere] lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+          <section className="rounded-2xl border border-good/35 bg-success-soft-surface p-6">
+            <span className="ft-task-micro-label block text-good">Expected result</span>
+            <strong className="ft-task-body mt-2 block font-semibold text-foreground">{criterion}</strong>
           </section>
-          <section className="rounded-[20px] border border-border bg-surface p-6">
-            <span className="ft-section-label text-accent-strong">Task</span>
-            <strong className="mt-2 block text-lg leading-snug">{task.title}</strong>
-            <p className="mt-2 text-sm text-muted">{task.reason}</p>
+          <section className="rounded-2xl border border-border bg-surface p-6">
+            <span className="ft-task-micro-label block text-accent-strong">Task</span>
+            <strong className="ft-task-card-title mt-2 block text-foreground">{task.title}</strong>
+            <p className="ft-task-body mt-2 text-muted">{task.reason}</p>
           </section>
         </aside>
       </div>

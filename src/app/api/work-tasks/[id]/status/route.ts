@@ -49,6 +49,20 @@ export async function PATCH(
     return NextResponse.json({ task });
   }
 
+  // task-detail-ux-audit F14: gives the ownership-decision toast an undo
+  // window. Both `confirm_mine` and `not_mine` are only ever offered while
+  // a task is "unclear" (OwnershipDecisionButtons only renders in that
+  // state), so restoring that exact precondition is always the correct
+  // undo — no need to remember which of the two actions was taken.
+  if (action === "undo_ownership") {
+    const task = await updateWorkTask(taskId, {
+      ownershipDecision: null,
+      status: "unclear",
+      statusManuallySet: false,
+    });
+    return NextResponse.json({ task });
+  }
+
   if (action === "resolve_conflict") {
     const decision = body?.decision;
     const summary = typeof body?.summary === "string" ? body.summary.trim() : "";

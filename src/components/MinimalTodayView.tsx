@@ -344,7 +344,7 @@ export function MinimalTodayView({
                 className="minimal-card-arrow"
                 aria-label={`Open ${primary.title}`}
               >
-                <ArrowRight className="size-5" />
+                <ArrowRight aria-hidden="true" className="size-5" />
               </Link>
 
               <div className="minimal-urgent-content">

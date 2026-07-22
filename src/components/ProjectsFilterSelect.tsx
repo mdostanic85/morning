@@ -51,7 +51,7 @@ export function ProjectsFilterSelect({ activeFilter, counts }: ProjectsFilterSel
  {(state) => (state.isPlaceholder ? "Filter projects" : state.defaultChildren)}
  </Select.Value>
  <Select.Indicator className="text-muted">
- <ChevronDownIcon className="size-4" />
+ <ChevronDownIcon aria-hidden="true" className="size-4" />
  </Select.Indicator>
  </Select.Trigger>
  <Select.Popover

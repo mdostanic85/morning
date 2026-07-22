@@ -13,7 +13,7 @@ export function BackToTodayButton({
 
   return (
     <Button type="button" variant="secondary" onPress={() => router.push("/")}>
-      <ArrowLeft data-slot="icon" className="size-4" />
+      <ArrowLeft data-slot="icon" aria-hidden="true" className="size-4" />
       {label}
     </Button>
   );

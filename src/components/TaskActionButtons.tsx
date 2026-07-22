@@ -34,9 +34,17 @@ interface TaskActionButtonsProps {
  referenceLinks?: { label: string; url: string }[];
  latestVerificationReport?: VerificationReport | null;
  latestSyncReviewReport?: SyncReviewReport | null;
- embedded?: boolean;
- layout?: "stack" | "focus" | "detail";
- status?: WorkTaskStatus;
+  embedded?: boolean;
+  layout?: "stack" | "focus" | "detail";
+  /**
+   * Only meaningful when `layout === "detail"`. The detail page renders the
+   * contextual primary CTA inline under "Next action" in the main column
+   * (task-detail-ux-audit F2) and keeps status/queue/Jira controls in the
+   * sticky aside (F4) — two mount points fed by two instances of this
+   * component so each slot can live in its own place in the page tree.
+   */
+  detailSlot?: "primary" | "panel";
+  status?: WorkTaskStatus;
  figmaFrameUrl?: string | null;
  githubRepo?: string | null;
  localRepoPath?: string | null;
@@ -60,9 +68,10 @@ export function TaskActionButtons({
  referenceLinks = [],
  latestVerificationReport = null,
  latestSyncReviewReport = null,
- embedded = false,
- layout = "stack",
- status = "next",
+  embedded = false,
+  layout = "stack",
+  detailSlot = "panel",
+  status = "next",
  figmaFrameUrl = null,
  githubRepo = null,
  localRepoPath = null,
@@ -230,143 +239,165 @@ export function TaskActionButtons({
  : "mt-6 space-y-4 border-t border-border/50 pt-5"
  }
  >
- {isDetailLayout ? (
- <div className="space-y-5">
- <section className="space-y-3">
- <div>
- <h3 className="text-sm font-semibold text-foreground">Task status</h3>
- <p className="mt-1 text-sm text-muted">
- Changes here update Worklight only. Jira stays unchanged.
- </p>
- </div>
- <p className="text-sm font-medium text-accent-strong">{localStatusLabel(status)}</p>
+        {isDetailLayout && detailSlot === "primary" ? (
+          hasTask ? (
+            (() => {
+              const primaryCta = resolveFocusPrimaryCta({
+                status,
+                figmaFrameUrl,
+                githubRepo,
+                localRepoPath,
+                linkedJiraUrl,
+                referenceLinks,
+              });
+              if (primaryCta.href) {
+                // `--action-primary` is the app's only filled-CTA color
+                // (globals.css color roles) — `link-btn-primary` is the
+                // shared anchor-as-button class that carries it.
+                return (
+                  <a
+                    href={primaryCta.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="link-btn-primary link-btn-md motion-btn h-11 w-full text-[15px]"
+                  >
+                    {primaryCta.label}
+                    <span className="sr-only"> (opens in a new tab)</span>
+                  </a>
+                );
+              }
+              // No external work link to open. On this page (unlike the
+              // Today focus card) there is no "#redosled" execution
+              // section to scroll to, so the fallback CTA must perform a
+              // real local action instead of a no-op scroll. Reuse the
+              // existing status-update mechanism rather than inventing a
+              // second start-task implementation.
+              if (status !== "now") {
+                return (
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="h-11 w-full text-[15px]"
+                    onClick={() => runStatusAction("start")}
+                    isDisabled={isLoading}
+                  >
+                    {pendingAction === "start" ? (
+                      <Loader2Icon className="size-4 animate-spin" aria-hidden />
+                    ) : null}
+                    Start work
+                  </Button>
+                );
+              }
+              // Task is already in progress and has no external link to
+              // open — there is no further action "Continue work" could
+              // perform here, so render nothing rather than a button
+              // that looks actionable but silently does nothing.
+              return null;
+            })()
+          ) : null
+        ) : isDetailLayout ? (
+          <div className="space-y-5">
+            <section className="space-y-3">
+              <div>
+                <h3 className="ft-task-card-title text-foreground">Task status</h3>
+                <p className="ft-task-caption mt-1 text-muted">
+                  Changes here update Worklight only. Jira stays unchanged.
+                </p>
+              </div>
+              <p className="ft-task-caption font-semibold text-accent-strong">{localStatusLabel(status)}</p>
 
- {hasTask ? (
- <div className="grid gap-2.5">
- {(() => {
- const primaryCta = resolveFocusPrimaryCta({
- status,
- figmaFrameUrl,
- githubRepo,
- localRepoPath,
- linkedJiraUrl,
- referenceLinks,
- });
- if (primaryCta.href) {
- return (
- <a
- href={primaryCta.href}
- target="_blank"
- rel="noreferrer"
- className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground"
- >
- {primaryCta.label}
- </a>
- );
- }
- if (primaryCta.scrollTargetId) {
- return (
- <Button
- type="button"
- size="lg"
- className="h-11 w-full"
- onClick={() => {
- document.getElementById(primaryCta.scrollTargetId ?? "")?.scrollIntoView({ behavior: "smooth" });
- }}
- >
- {primaryCta.label}
- </Button>
- );
- }
- return null;
- })()}
+              {hasTask ? (
+                <div className="grid gap-2.5">
+                  {/* Demoted, outline-tier — the contextual primary CTA
+                      above (main column, F2) is the page's only filled
+                      button; this panel never competes with it (F4). */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setDoneConfirmOpen(true)}
+                    isDisabled={isLoading}
+                    className="h-11 w-full border-good/40 text-good hover:border-good/60 hover:bg-good/10"
+                  >
+                    {pendingAction === "done" ? (
+                      <Loader2Icon className="size-4 animate-spin" aria-hidden />
+                    ) : null}
+                    Mark done in Worklight
+                  </Button>
 
- <Button
- type="button"
- size="lg"
- onClick={() => setDoneConfirmOpen(true)}
- isDisabled={isLoading}
- className="h-11 w-full border border-good/40 bg-good/[0.12] text-good hover:border-good/60 hover:bg-good/20"
- >
- {pendingAction === "done" ? (
- <Loader2Icon className="size-4 animate-spin" aria-hidden />
- ) : null}
- Mark done in Worklight
- </Button>
+                  <details className="rounded-xl border border-border bg-surface-soft/40 px-4 py-3">
+                    <summary className="ft-task-caption cursor-pointer font-semibold text-accent-strong">
+                      Change queue position
+                    </summary>
+                    <div className="mt-3 grid gap-2">
+                      {QUEUE_POSITION_ACTIONS.map((item) => (
+                        <Button
+                          key={item.action}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-start"
+                          onClick={() => runStatusAction(item.action)}
+                          isDisabled={isLoading}
+                        >
+                          {item.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </details>
 
- <details className="rounded-xl border border-border bg-surface-soft/40 px-4 py-3">
- <summary className="cursor-pointer text-sm font-semibold text-accent-strong">
- Change queue position
- </summary>
- <div className="mt-3 grid gap-2">
- {QUEUE_POSITION_ACTIONS.map((item) => (
- <Button
- key={item.action}
- type="button"
- variant="outline"
- size="sm"
- className="w-full justify-start"
- onClick={() => runStatusAction(item.action)}
- isDisabled={isLoading}
- >
- {item.label}
- </Button>
- ))}
- </div>
- </details>
+                  <details className="rounded-xl border border-border bg-surface-soft/40 px-4 py-3">
+                    <summary className="ft-task-caption cursor-pointer font-semibold text-accent-strong">
+                      More actions
+                    </summary>
+                    <div className="mt-3 grid gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={() => setVerifyOpen(true)}
+                        isDisabled={isLoading}
+                      >
+                        Check delivery against criteria
+                      </Button>
+                      {showDelete ? (
+                        <Button
+                          type="button"
+                          variant="danger-soft"
+                          size="sm"
+                          className="w-full justify-start"
+                          onClick={() => setDeleteConfirmOpen(true)}
+                          isDisabled={isLoading}
+                        >
+                          Remove from Worklight
+                        </Button>
+                      ) : null}
+                    </div>
+                  </details>
+                </div>
+              ) : null}
+            </section>
 
- <details className="rounded-xl border border-border bg-surface-soft/40 px-4 py-3">
- <summary className="cursor-pointer text-sm font-semibold text-accent-strong">
- More actions
- </summary>
- <div className="mt-3 grid gap-2">
- <Button
- type="button"
- variant="outline"
- size="sm"
- className="w-full justify-start"
- onClick={() => setVerifyOpen(true)}
- isDisabled={isLoading}
- >
- Check delivery against criteria
- </Button>
- {showDelete ? (
- <Button
- type="button"
- variant="danger-soft"
- size="sm"
- className="w-full justify-start"
- onClick={() => setDeleteConfirmOpen(true)}
- isDisabled={isLoading}
- >
- Remove from Worklight
- </Button>
- ) : null}
- </div>
- </details>
- </div>
- ) : null}
- </section>
-
- {hasJiraStatusControl && jiraKey ? (
- <section className="space-y-3 border-t border-border pt-5">
- <div>
- <h3 className="text-sm font-semibold text-foreground">Jira status · {jiraKey}</h3>
- <p className="mt-1 text-sm text-muted">This changes Jira after you confirm.</p>
- </div>
- <JiraStatusDropdown
- taskId={effectiveTaskId}
- linkedJiraKey={jiraKey}
- disabled={isLoading}
- embedded
- buttonSize="default"
- className="h-11 w-full text-[15px]"
- detailLayout
- />
- </section>
- ) : null}
- </div>
- ) : isFocusLayout ? (
+            {hasJiraStatusControl && jiraKey ? (
+              <section className="space-y-3 border-t border-border pt-5">
+                <div>
+                  <h3 className="ft-task-card-title text-foreground">Jira status · {jiraKey}</h3>
+                  <p className="ft-task-caption mt-1 text-muted">This changes Jira after you confirm.</p>
+                </div>
+                <JiraStatusDropdown
+                  taskId={effectiveTaskId}
+                  linkedJiraKey={jiraKey}
+                  disabled={isLoading}
+                  embedded
+                  buttonSize="default"
+                  className="h-11 w-full text-[15px]"
+                  detailLayout
+                />
+              </section>
+            ) : null}
+          </div>
+        ) : isFocusLayout ? (
  <div className="space-y-3">
  {ensurePending && !hasTask ? (
  <div className="flex h-12 items-center justify-center rounded-lg border border-border/70 bg-surface-soft/40 text-sm text-muted">
@@ -640,33 +671,43 @@ export function TaskActionButtons({
  </Modal.Backdrop>
  </Modal>
 
- <AnimatePresence>
- {syncReviewReport ? (
- <motion.div
- key="sync-review-report"
- initial={{ opacity: 0, y: 8 }}
- animate={{ opacity: 1, y: 0 }}
- exit={{ opacity: 0, y: 8 }}
- transition={{ duration: 0.2 }}
- >
- <SyncReviewSummary report={syncReviewReport} />
- </motion.div>
- ) : null}
- </AnimatePresence>
+        {/* The detail page's "primary" slot only ever renders the CTA
+            button above (task-detail-ux-audit F2/F4) — the report/summary
+            panels below belong with the "Check delivery" control, which
+            only exists in the "panel" slot. Suppressing them here avoids
+            duplicating a potentially large report under the Next action
+            CTA in the main column. */}
+        {!(isDetailLayout && detailSlot === "primary") ? (
+          <>
+            <AnimatePresence>
+              {syncReviewReport ? (
+                <motion.div
+                  key="sync-review-report"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <SyncReviewSummary report={syncReviewReport} />
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
 
- <AnimatePresence>
- {verificationReport ? (
- <motion.div
- key="verification-report"
- initial={{ opacity: 0, y: 8 }}
- animate={{ opacity: 1, y: 0 }}
- exit={{ opacity: 0, y: 8 }}
- transition={{ duration: 0.2 }}
- >
- <VerificationReportSummary report={verificationReport} />
- </motion.div>
- ) : null}
- </AnimatePresence>
+            <AnimatePresence>
+              {verificationReport ? (
+                <motion.div
+                  key="verification-report"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <VerificationReportSummary report={verificationReport} />
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </>
+        ) : null}
  </div>
  );
 }

@@ -169,7 +169,7 @@ export function EvidencePanel({
  if (onViewSources) onViewSources();
  else setOpen(true);
  }}
- aria-label={`View sources (${items.length} items)`}
+ aria-label={`View sources (${items.length} ${items.length === 1 ? "item" : "items"})`}
  >
  <span>View sources ({items.length})</span>
  <ChevronDownIcon className="size-3.5" aria-hidden />

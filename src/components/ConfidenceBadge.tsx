@@ -22,19 +22,29 @@ function toneForBand(band: ReturnType<typeof confidenceBand>): AppBadgeTone {
   }
 }
 
-/** `level` is a 0..1 confidence score, as produced by extraction/classification jobs. */
+/**
+ * `level` is a 0..1 confidence score, as produced by extraction/classification jobs.
+ *
+ * `showExplanation` renders `CONFIDENCE_EXPLANATION` as visible caption text
+ * instead of relying on the `title` attribute alone (task-detail-ux-audit
+ * F10 — hover-only text is invisible on touch and unreachable by keyboard
+ * focus). Off by default so existing compact usages (Today list, task
+ * cards) are unaffected.
+ */
 export function ConfidenceBadge({
   level,
   reviewHref,
+  showExplanation = false,
 }: {
   level: number | null | undefined;
   reviewHref?: string | null;
+  showExplanation?: boolean;
 }) {
   const band = confidenceBand(level);
   const label = formatConfidenceLabel(level);
   const needsReview = confidenceNeedsReview(level);
 
-  return (
+  const badgeRow = (
     <div className="inline-flex flex-wrap items-center gap-2" title={CONFIDENCE_EXPLANATION}>
       <AppBadge tone={toneForBand(band)} className="px-2.5">
         {label}
@@ -44,7 +54,16 @@ export function ConfidenceBadge({
           Review evidence
         </Link>
       ) : null}
-      <span className="sr-only">{CONFIDENCE_EXPLANATION}</span>
+      {showExplanation ? null : <span className="sr-only">{CONFIDENCE_EXPLANATION}</span>}
+    </div>
+  );
+
+  if (!showExplanation) return badgeRow;
+
+  return (
+    <div className="inline-flex flex-col items-start gap-1">
+      {badgeRow}
+      <p className="ft-task-caption text-muted-soft">{CONFIDENCE_EXPLANATION}</p>
     </div>
   );
 }
