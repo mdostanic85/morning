@@ -1062,7 +1062,7 @@ export function SyncMyDayButton({
  className={cn(
  status === "syncing"
  ? "sync-sweeping border border-border-strong text-foreground"
- : ""
+ : "sync-day-cta"
  )}
  onClick={() => void runSync()}
  isDisabled={status === "syncing"}
