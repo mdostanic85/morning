@@ -12,6 +12,7 @@ import {
 } from "@/lib/tasks/sourceAuthority";
 import {
   claimAwareScoreAdjustment,
+  isFreshOpenJiraUpdate,
   isNewJiraAssignment,
 } from "@/lib/tasks/claimAwareRanking";
 import { isJiraDoneMetadata } from "@/lib/tasks/canonicalKey";
@@ -125,6 +126,10 @@ function newestEvidenceAgeDays(sourceDates: string[], now: number = Date.now()):
   return (now - newest) / (1000 * 60 * 60 * 24);
 }
 
+/**
+ * Newest evidence wins. Weights are intentionally large so a brand-new open
+ * ticket outranks months-old In Progress leftovers and stale meeting noise.
+ */
 function evidenceRecencyWeight(sourceDates: string[]): { score: number; note: string | null } {
   if (sourceDates.length === 0) return { score: 0, note: null };
   const newest = sourceDates
@@ -133,8 +138,10 @@ function evidenceRecencyWeight(sourceDates: string[]): { score: number; note: st
     .sort((a, b) => b - a)[0];
   if (newest == null) return { score: 0, note: null };
   const ageHours = (Date.now() - newest) / (1000 * 60 * 60);
-  if (ageHours <= 48) return { score: 60, note: "Fresh signal in last 48h" };
-  if (ageHours <= 168) return { score: 30, note: "Recent signal this week" };
+  if (ageHours < 0) return { score: 0, note: null };
+  if (ageHours <= 24) return { score: 420, note: "Fresh signal in last 24h" };
+  if (ageHours <= 48) return { score: 280, note: "Fresh signal in last 48h" };
+  if (ageHours <= 168) return { score: 90, note: "Recent signal this week" };
   return { score: 0, note: null };
 }
 
@@ -178,6 +185,7 @@ export interface WorkTaskForRanking {
   doneCriteria: string[];
   priorityScore: number | null;
   dueDate: string | null;
+  owner: string | null;
   waitingOn: string | null;
   statusManuallySet: boolean;
   evidence: { sourceItemId: number; quote: string | null; summary: string }[];
@@ -326,16 +334,32 @@ export function rankWorkTask(
     (source) => source.sourceType === "jira" && isJiraDoneMetadata(source.metadata)
   );
   const jiraStatus = jiraSnapshot?.status ?? jiraStatusFromSource ?? null;
+  const jiraSource = allSources.find((source) => source.sourceType === "jira");
+  const jiraUpdatedAt =
+    jiraSnapshot?.updatedAt ??
+    (typeof jiraSource?.metadata?.updated === "string"
+      ? jiraSource.metadata.updated
+      : null) ??
+    jiraSource?.sourceDate ??
+    null;
+  const jiraAssigneeFromSource =
+    typeof jiraSource?.metadata?.assignee === "string" ? jiraSource.metadata.assignee : null;
   const newAssignment = isNewJiraAssignment({
-    jiraUpdatedAt: jiraSnapshot?.updatedAt ?? null,
+    jiraUpdatedAt,
     today,
-    assignee: jiraSnapshot?.assignee ?? null,
+    assignee: jiraSnapshot?.assignee ?? jiraAssigneeFromSource,
     myName: attendance?.myName ?? null,
+    taskOwner: task.owner,
+  });
+  const freshOpenUpdate = isFreshOpenJiraUpdate({
+    jiraUpdatedAt,
+    jiraStatus: jiraDoneFromSource ? jiraStatus ?? "Done" : jiraStatus,
   });
   const claimAdjust = claimAwareScoreAdjustment({
     forceInclude,
     jiraStatus: jiraDoneFromSource ? jiraStatus ?? "Done" : jiraStatus,
     newAssignment,
+    freshOpenUpdate,
   });
   score += claimAdjust.scoreDelta;
   forceInclude = claimAdjust.forceInclude;
@@ -408,8 +432,11 @@ export function rankJiraIssue(issue: JiraPendingSnapshot, today: string): Ranked
   if (jWeight > 0) explanation.push(`Jira priority: ${issue.priority}`);
 
   const updatedAgeHours = (Date.now() - new Date(issue.updatedAt).getTime()) / (1000 * 60 * 60);
-  if (updatedAgeHours <= 48) {
-    score += 40;
+  if (updatedAgeHours >= 0 && updatedAgeHours <= 24) {
+    score += 280;
+    explanation.push("Updated in Jira in the last 24h");
+  } else if (updatedAgeHours > 24 && updatedAgeHours <= 72) {
+    score += 180;
     explanation.push("Recently updated in Jira");
   }
 

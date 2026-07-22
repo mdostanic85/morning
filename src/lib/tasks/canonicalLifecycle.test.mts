@@ -18,7 +18,7 @@ import {
   claimAwareScoreAdjustment,
   isNewJiraAssignment,
 } from "./claimAwareRanking.ts";
-import { rankWorkTask } from "./priorityRank.ts";
+import { rankWorkTask, rankWorkTasks } from "./priorityRank.ts";
 import type { SourceItem } from "../../domain/sourceItem.ts";
 
 describe("canonicalKey", () => {
@@ -151,12 +151,25 @@ describe("linkedJiraRetrieval", () => {
 
 describe("claimAwareRanking", () => {
   it("boosts new assignment and demotes Done forceInclude", () => {
+    const nowMs = Date.parse("2026-07-20T18:00:00.000Z");
     assert.equal(
       isNewJiraAssignment({
         jiraUpdatedAt: "2026-07-20T13:05:00.000Z",
         today: "2026-07-20",
         assignee: "Milos Dostanic",
         myName: "Milos Dostanic",
+        nowMs,
+      }),
+      true
+    );
+    // Still "new" the next morning within the 72h window.
+    assert.equal(
+      isNewJiraAssignment({
+        jiraUpdatedAt: "2026-07-20T13:05:00.000Z",
+        today: "2026-07-21",
+        assignee: "Milos Dostanic",
+        myName: "Milos Dostanic",
+        nowMs: Date.parse("2026-07-21T08:00:00.000Z"),
       }),
       true
     );
@@ -174,6 +187,15 @@ describe("claimAwareRanking", () => {
       newAssignment: true,
     });
     assert.ok(assigned.scoreDelta > 0);
+
+    const freshOpen = claimAwareScoreAdjustment({
+      forceInclude: false,
+      jiraStatus: "To Do",
+      newAssignment: false,
+      freshOpenUpdate: true,
+    });
+    assert.ok(freshOpen.scoreDelta > 0);
+    assert.ok(freshOpen.notes.some((note) => note.includes("Recently updated open Jira")));
   });
 });
 
@@ -208,6 +230,7 @@ describe("priorityRank", () => {
         doneCriteria: ["Canvas screens shipped"],
         priorityScore: null,
         dueDate: null,
+        owner: null,
         waitingOn: null,
         statusManuallySet: true,
         evidence: [{ sourceItemId: 502, quote: null, summary: "UATL-367 Jira Done" }],
@@ -221,5 +244,116 @@ describe("priorityRank", () => {
       !ranked.explanation.some((line) => line.includes("You explicitly set its queue position"))
     );
     assert.ok(ranked.score < 100, `expected a demoted score, got ${ranked.score}`);
+  });
+
+  it("ranks freshly updated open Jira work above stale In Progress leftovers", () => {
+    const freshAt = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+    const freshSource: SourceItem = {
+      id: 801,
+      projectId: 18,
+      sourceType: "jira",
+      sourceExternalId: "UATL-380",
+      title: "UATL-380: DESIGN - Banner for Part Search",
+      body: "Assignee: Milos Dostanic\nStatus: To Do",
+      author: null,
+      sourceDate: freshAt,
+      url: null,
+      metadata: {
+        status: "To Do",
+        assignee: "Milos Dostanic",
+        updated: freshAt,
+      },
+      createdAt: freshAt,
+    };
+    const staleSource: SourceItem = {
+      id: 802,
+      projectId: 18,
+      sourceType: "jira",
+      sourceExternalId: "UATL-233",
+      title: "UATL-233: Design Debt",
+      body: "Assignee: Milos Dostanic\nStatus: In Progress",
+      author: null,
+      sourceDate: "2026-07-10T11:46:45.647Z",
+      url: null,
+      metadata: { status: "In Progress", assignee: "Milos Dostanic" },
+      createdAt: "2026-07-10T11:46:45.647Z",
+    };
+    const sourceById = new Map<number, SourceItem>([
+      [801, freshSource],
+      [802, staleSource],
+    ]);
+
+    const ranked = rankWorkTasks(
+      [
+        {
+          id: 468,
+          projectId: 18,
+          title: "Design Part Search Banner",
+          status: "later",
+          reason: "Draft concept images for each module.",
+          nextAction: "Draft concept images",
+          doneCriteria: ["Banner concepts ready"],
+          priorityScore: null,
+          dueDate: null,
+          owner: "Milos Dostanic",
+          waitingOn: null,
+          statusManuallySet: false,
+          evidence: [{ sourceItemId: 801, quote: null, summary: "UATL-380" }],
+        },
+        {
+          id: 200,
+          projectId: 18,
+          title: "Chip away at design debt",
+          status: "later",
+          reason: "Long-running design debt ticket.",
+          nextAction: "Pick next debt item",
+          doneCriteria: ["Debt reduced"],
+          priorityScore: null,
+          dueDate: null,
+          owner: "Milos Dostanic",
+          waitingOn: null,
+          statusManuallySet: false,
+          evidence: [{ sourceItemId: 802, quote: null, summary: "UATL-233" }],
+        },
+      ],
+      new Date().toISOString().slice(0, 10),
+      sourceById,
+      [
+        {
+          key: "UATL-380",
+          title: "DESIGN - Banner for Part Search",
+          status: "To Do",
+          priority: "Medium",
+          assignee: "Milos Dostanic",
+          updatedAt: freshAt,
+          dueDate: null,
+          excerpt: "",
+          url: null,
+        },
+        {
+          key: "UATL-233",
+          title: "Design Debt",
+          status: "In Progress",
+          priority: "Medium",
+          assignee: "Milos Dostanic",
+          updatedAt: staleSource.sourceDate,
+          dueDate: null,
+          excerpt: "",
+          url: null,
+        },
+      ],
+      { myName: "Milos Dostanic" }
+    );
+
+    assert.equal(ranked[0]?.taskId, 468);
+    assert.ok(
+      ranked[0]?.explanation.some(
+        (line) =>
+          line.includes("New formal Jira assignment") ||
+          line.includes("Recently updated open Jira") ||
+          line.includes("Fresh signal")
+      )
+    );
+    assert.ok((ranked[0]?.score ?? 0) > (ranked[1]?.score ?? 0));
   });
 });

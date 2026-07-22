@@ -122,6 +122,7 @@ function toWorkTaskForRanking(task: WorkTaskWithEvidence): WorkTaskForRanking {
     doneCriteria: task.doneCriteria,
     priorityScore: task.priorityScore,
     dueDate: task.dueDate,
+    owner: task.owner,
     waitingOn: task.waitingOn,
     statusManuallySet: task.statusManuallySet,
     evidence: task.evidence.map((item) => ({

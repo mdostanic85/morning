@@ -138,7 +138,9 @@ export function jiraStatusFocusWeight(status: string | null | undefined): {
     return { score: 130, note: `Needs your action in Jira (${status})` };
   }
   if (/to do|open|selected for development|backlog/i.test(normalized)) {
-    return { score: 35, note: null };
+    // Open work that still needs a first move — recency/new-assignment boosts
+    // decide whether it outranks stale In Progress, but it must not start near zero.
+    return { score: 90, note: `Open in Jira (${status})` };
   }
   if (/block/i.test(normalized)) {
     return { score: -100, note: `Blocked in Jira (${status})` };

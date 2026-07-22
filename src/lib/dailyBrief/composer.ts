@@ -12,7 +12,7 @@ import {
   issueKeyFromCanonicalKey,
   isJiraDoneMetadata,
 } from "@/lib/tasks/canonicalKey";
-import { claimAwareScoreAdjustment, isNewJiraAssignment } from "@/lib/tasks/claimAwareRanking";
+import { claimAwareScoreAdjustment, isFreshOpenJiraUpdate, isNewJiraAssignment } from "@/lib/tasks/claimAwareRanking";
 import { rankWorkTasks, type WorkTaskForRanking } from "@/lib/tasks/priorityRank";
 import type { AttendanceContext } from "@/lib/tasks/sourceAuthority";
 import { buildCoverageWarnings, buildMeetingPrep } from "@/lib/dailyBrief/coverage";
@@ -210,13 +210,22 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
       const newAssignment = isNewJiraAssignment({
         jiraUpdatedAt: pending?.updatedAt ?? jiraSource?.sourceDate ?? null,
         today: input.today,
-        assignee: pending?.assignee ?? null,
+        assignee:
+          pending?.assignee ??
+          (typeof jiraSource?.metadata?.assignee === "string"
+            ? jiraSource.metadata.assignee
+            : null),
         myName: input.myName ?? input.attendance?.myName ?? null,
+        taskOwner: task?.owner ?? null,
       });
       const adjustment = claimAwareScoreAdjustment({
         forceInclude: entry.forceInclude,
         jiraStatus,
         newAssignment,
+        freshOpenUpdate: isFreshOpenJiraUpdate({
+          jiraUpdatedAt: pending?.updatedAt ?? jiraSource?.sourceDate ?? null,
+          jiraStatus,
+        }),
       });
       return {
         ...entry,
