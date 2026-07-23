@@ -767,7 +767,7 @@ function SyncOverlay({
  "h-full rounded-full transition-[width] duration-700 ease-out",
  networkError
  ? "bg-danger/70"
- : "bg-[linear-gradient(90deg,var(--action-primary),var(--accent),var(--sky))]"
+                    : "bg-[linear-gradient(90deg,var(--sync-grad-1),var(--sync-grad-2),var(--sync-grad-4))]"
  )}
  style={{ width: `${Math.round(progress * 100)}%` }}
  />

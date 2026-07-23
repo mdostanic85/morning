@@ -1,4 +1,7 @@
-import { isTranscriptSource } from "@/lib/tasks/sourceAuthority";
+import {
+  isTranscriptSource,
+  TASK_SOURCE_FRESHNESS_WINDOW_MS,
+} from "@/lib/tasks/sourceAuthority";
 import { jiraKeyForTask, topicOverlapScore } from "@/lib/tasks/transcriptTaskMerge";
 
 /**
@@ -56,6 +59,21 @@ export interface PlannedEvidenceAdoption {
 /** Shared domain tokens required between a source and the Jira anchor. */
 const MIN_SOURCE_OVERLAP = 2;
 
+function sourceTime(dateValue: string | null | undefined): number {
+  if (!dateValue) return 0;
+  const time = new Date(dateValue).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function newestEvidenceTime(task: AnchorEvidenceTask): number {
+  let newest = 0;
+  for (const item of task.evidence) {
+    const time = sourceTime(item.sourceDate);
+    if (time > newest) newest = time;
+  }
+  return newest;
+}
+
 function anchorTopicText(task: AnchorEvidenceTask): string {
   // Strip the Jira key so overlap is about domain language, not the key.
   const title = task.title.replace(/\b[A-Z][A-Z0-9]+-\d+\b:?\s*/g, " ");
@@ -111,6 +129,19 @@ export function planJiraAnchorEvidenceAdoption(input: {
       if (scored.length > 1 && scored[0].score === scored[1].score) continue;
 
       const anchor = scored[0].anchor;
+      // Only adopt sources that are fresh relative to the anchor's newest
+      // signal. A stale standup transcript gives the anchor no freshness boost
+      // (the whole point of adoption) and is exactly the contamination the
+      // relevance prune removes — so never re-attach it here.
+      const anchorNewest = newestEvidenceTime(anchor);
+      const itemTime = sourceTime(item.sourceDate);
+      if (
+        anchorNewest > 0 &&
+        itemTime > 0 &&
+        anchorNewest - itemTime > TASK_SOURCE_FRESHNESS_WINDOW_MS
+      ) {
+        continue;
+      }
       if (anchor.evidence.some((existing) => existing.sourceItemId === item.sourceItemId)) {
         continue;
       }

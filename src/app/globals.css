@@ -23,15 +23,16 @@
    HeroUI semantic variables are mapped onto our own tokens so that the
    primitives automatically inherit the Worklight identity.
 
-   Light theme follows Space Inch brand colors (https://www.spaceinch.com/):
-   SI blue #5852f2, logo blue #1d79f3, pearl/off-white surfaces, SI pink #f659f3.
+   Light theme follows the reference brand palette:
+   navy #0b2f67, blue #0f63b6, cyan #24a6d8, ink #102033, line #dbe4ef,
+   soft #f5f8fc, green #14835c, amber #b97210, red #bd3c3c, purple #6c54b7.
 
    COLOR ROLES — one rule, enforced everywhere:
-   --action-primary (#1d79f3 light / #3f6fa8 dark)
+   --action-primary (#0f63b6 light / #3f6fa8 dark)
        The one filled CTA blue. Used by HeroUI Button variant="primary",
        the brand-mark, and the active nav pill. Nowhere else filled.
-   --accent (#5852f2 light / #aaa5ff dark)
-       Brand violet-blue highlight. Chips, soft surfaces, focus rings, links,
+   --accent (#0f63b6 light / #aaa5ff dark)
+       Brand blue highlight. Chips, soft surfaces, focus rings, links,
        selection dots, decorative rails. NEVER a filled clickable button.
    --good / --danger / --waiting
        Semantic status only. Never repurposed for primary actions.
@@ -39,38 +40,38 @@
        Evidence chips and tag variants only.
 ─────────────────────────────────────────────────────────────────────────── */
 :root {
-  /* ── App palette – Space Inch light brand ── */
+  /* ── App palette – reference brand (navy / blue / cyan) ── */
   color-scheme: light;
-  --background: #fcfcfc;
-  --foreground: #1e1e1f;
+  --background: #f7f9fc;
+  --foreground: #102033;
   --surface: #ffffff;
   --surface-foreground: var(--foreground);
   --surface-raised: #ffffff;
-  --surface-soft: #f0f4f7;
+  --surface-soft: #f5f8fc;
   --surface-secondary: var(--surface-soft);
   --surface-secondary-foreground: var(--foreground);
   --surface-tertiary: color-mix(in srgb, var(--surface-raised) 82%, var(--foreground));
   --surface-tertiary-foreground: var(--foreground);
   --overlay: #ffffff;
   --overlay-foreground: var(--foreground);
-  --muted: #55545d;
-  --muted-soft: #73727b;
-  --border: #e0e0e0;
-  --border-strong: #c7b8fa;
-  --accent: #5852f2;
-  --accent-strong: #4741d4;
+  --muted: #627083;
+  --muted-soft: #8492a3;
+  --border: #dbe4ef;
+  --border-strong: #b9cbe0;
+  --accent: #0f63b6;
+  --accent-strong: #0b2f67;
   --accent-contrast: #ffffff;
-  --warm: #785810;
-  --good: #247e61;
-  --danger: #b84e53;
+  --warm: #b97210;
+  --good: #14835c;
+  --danger: #bd3c3c;
   --danger-foreground: #ffffff;
   --success: var(--good);
   --success-foreground: #ffffff;
   --warning: var(--waiting);
   --warning-foreground: #ffffff;
-  --action-primary: #1d79f3;
-  --action-primary-hover: #1666d0;
-  --action-primary-active: #1256b0;
+  --action-primary: #0f63b6;
+  --action-primary-hover: #0d5599;
+  --action-primary-active: #0b4a86;
   --action-primary-foreground: #ffffff;
   --default: var(--surface-soft);
   --default-foreground: var(--foreground);
@@ -84,25 +85,32 @@
   --separator: var(--border);
   --focus: var(--accent);
   --link: var(--accent);
-  --backdrop: rgba(30, 30, 31, 0.34);
+  --backdrop: rgba(16, 32, 51, 0.34);
   --now: var(--accent);
-  --waiting: #785810;
-  --tomorrow: #7253f2;
+  --waiting: #b97210;
+  --tomorrow: #6c54b7;
   --unclear: var(--danger);
   --accent-foreground: var(--accent-contrast);
-  --accent-soft-surface: #d7d9ff;
-  --danger-soft-surface: #fff8f7;
-  --success-soft-surface: #eaf8f3;
-  --waiting-soft-surface: #fff4e8;
+  --accent-soft-surface: #e4eefb;
+  --danger-soft-surface: #fbecec;
+  --success-soft-surface: #e6f4ee;
+  --waiting-soft-surface: #fbf1e0;
+  /* Sync my day keeps its original multi-hue gradient regardless of theme. */
+  --sync-grad-1: #1d79f3;
+  --sync-grad-2: #5852f2;
+  --sync-grad-3: #f659f3;
+  --sync-grad-4: #7cb1f8;
+  --sync-sweep-2: #d7d9ff;
+  --sync-sweep-3: #f1f6fc;
   --control-height: 2.75rem;
   --tag-height: 1.5rem;
   --tag-padding-x: 0.625rem;
   --tag-font-size: 14px;
   /* Hard floor for all readable UI text — never go below this. */
   --font-size-min: 14px;
-  --radius: 1rem;
-  --surface-radius: 1rem;
-  --today-card-radius: 1rem;
+  --radius: 1.375rem;
+  --surface-radius: 1.375rem;
+  --today-card-radius: 1.375rem;
   --today-grid-gap: 1.125rem;
   --today-section-gap: 2.25rem;
   --today-card-padding: 1.5rem;
@@ -117,27 +125,27 @@
   --motion-slow: 520ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.16, 1.35, 0.3, 1);
-  --sky: #7cb1f8;
-  --sky-soft: #f1f6fc;
-  --mint: #70d2b0;
-  --mint-soft: #ecfbf6;
-  --sun: #ffd66b;
-  --sun-soft: #fff9df;
-  --pink: #f659f3;
-  --pink-soft: #fde7fc;
-  --orange: #ff7448;
-  --orange-soft: #fff2ef;
-  --sky-foreground: #1d79f3;
-  --mint-foreground: #17694e;
-  --pink-foreground: #b12cae;
-  --sun-foreground: #75500a;
+  --sky: #24a6d8;
+  --sky-soft: #eaf6fb;
+  --mint: #2f9f78;
+  --mint-soft: #e6f5ef;
+  --sun: #e0a52e;
+  --sun-soft: #fbf1da;
+  --pink: #6c54b7;
+  --pink-soft: #ece8f7;
+  --orange: #cf6a3a;
+  --orange-soft: #fbeee6;
+  --sky-foreground: #0f63b6;
+  --mint-foreground: #14835c;
+  --pink-foreground: #55429b;
+  --sun-foreground: #8a5a10;
   --shadow: none;
   --shadow-soft: none;
   --surface-shadow: none;
-  --glow-dawn: rgba(29, 121, 243, 0.12);
-  --glow-sky: rgba(88, 82, 242, 0.12);
-  --button-shadow: 0 10px 24px rgba(30, 30, 31, 0.1);
-  --panel-hover-shadow: 0 18px 44px rgba(30, 30, 31, 0.07);
+  --glow-dawn: rgba(15, 99, 182, 0.12);
+  --glow-sky: rgba(36, 166, 216, 0.12);
+  --button-shadow: 0 10px 24px rgba(16, 32, 51, 0.1);
+  --panel-hover-shadow: 0 18px 44px rgba(16, 32, 51, 0.07);
   --button-shine: rgba(255, 255, 255, 0.26);
   --focus-spotlight: rgba(255, 255, 255, 0.56);
   --gradient-surface: linear-gradient(180deg, var(--surface-raised), var(--surface-soft));
@@ -251,21 +259,28 @@
   --panel-hover-shadow: 0 18px 48px rgba(0, 0, 0, 0.3);
   --button-shine: rgba(255, 255, 255, 0.14);
   --focus-spotlight: rgba(170, 165, 255, 0.09);
+  /* Sync my day keeps the dark scheme's original gradient hues. */
+  --sync-grad-1: var(--action-primary);
+  --sync-grad-2: var(--accent);
+  --sync-grad-3: var(--pink);
+  --sync-grad-4: var(--sky);
+  --sync-sweep-2: var(--accent-soft-surface);
+  --sync-sweep-3: var(--sky-soft);
 }
 
 /* ── Minimal Today typography — font styles lifted from the reference HTML ── */
 .ft-eyebrow {
   font-size: 14px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .ft-hero-title {
   font-size: clamp(28px, 3.8vw, 44px);
-  font-weight: 650;
+  font-weight: 700;
   line-height: 1.08;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
 }
 
 .ft-hero-lead {
@@ -280,9 +295,9 @@
 
 .ft-display {
   font-size: clamp(32px, 3vw, 36px);
-  font-weight: 650;
+  font-weight: 700;
   line-height: 1.08;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
 }
 
 .ft-body-lg {
@@ -769,7 +784,7 @@
   --text-sm: 0.875rem;
   --text-sm--line-height: 1.25rem;
 
-  /* Radius scale — max 16px (1rem) across all tiers */
+  /* Radius scale — reference 22px primary; softer tiers derive from it */
   --radius-sm: calc(var(--radius) * 0.5);
   --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
@@ -881,7 +896,7 @@ body {
 
   .eyebrow {
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 800;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--muted);
@@ -1486,7 +1501,7 @@ summary {
     --button-bg-pressed: transparent;
     background: transparent;
     color: var(--action-primary-foreground);
-    box-shadow: 0 14px 32px -18px color-mix(in srgb, var(--accent) 52%, transparent);
+    box-shadow: 0 14px 32px -18px color-mix(in srgb, var(--sync-grad-2) 52%, transparent);
   }
   button[data-slot="button"].sync-day-cta::before {
     content: "";
@@ -1496,11 +1511,11 @@ summary {
     border-radius: inherit;
     background: linear-gradient(
       90deg,
-      var(--action-primary),
-      var(--accent),
-      var(--pink),
-      var(--sky),
-      var(--action-primary)
+      var(--sync-grad-1),
+      var(--sync-grad-2),
+      var(--sync-grad-3),
+      var(--sync-grad-4),
+      var(--sync-grad-1)
     );
     background-size: 200% 100%;
     background-position: 0% 50%;
@@ -1509,12 +1524,12 @@ summary {
   button[data-slot="button"].sync-day-cta:hover,
   button[data-slot="button"].sync-day-cta[data-hovered] {
     background: transparent;
-    box-shadow: 0 18px 36px -16px color-mix(in srgb, var(--accent) 58%, transparent);
+    box-shadow: 0 18px 36px -16px color-mix(in srgb, var(--sync-grad-2) 58%, transparent);
   }
 
   /* Sync button sweeping gradient while syncing. */
   .sync-sweeping {
-    background: linear-gradient(90deg, var(--surface), var(--accent-soft-surface), var(--sky-soft), var(--surface));
+    background: linear-gradient(90deg, var(--surface), var(--sync-sweep-2), var(--sync-sweep-3), var(--surface));
     background-size: 240% 100%;
     animation: sync-sweep 1s linear infinite;
   }
@@ -1961,6 +1976,19 @@ summary {
   line-height: 1.2;
 }
 
+.brief-pillar-label-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.brief-pillar-label-row .brief-pillar-label {
+  margin-bottom: 0;
+}
+
 .brief-pillar-action .brief-pillar-label {
   color: color-mix(in srgb, var(--accent-contrast) 78%, transparent);
 }
@@ -2099,22 +2127,6 @@ summary {
   flex: 1;
 }
 
-.brief-secondary-next {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  color: var(--foreground);
-  font-size: var(--font-size-min);
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-}
-
-.brief-secondary-next-label {
-  color: var(--accent-strong);
-  font-weight: 700;
-}
-
 .brief-secondary-more {
   display: inline-flex;
   align-items: center;
@@ -2136,24 +2148,6 @@ summary {
 
 .brief-secondary-title-link:hover .brief-secondary-title {
   color: var(--accent-strong);
-}
-
-.brief-secondary-actions-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-top: 0.35rem;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--accent-strong);
-  font-size: var(--font-size-min);
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.brief-secondary-actions-toggle:hover {
-  text-decoration: underline;
 }
 
 .brief-secondary-actions {

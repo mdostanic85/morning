@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { evidence as evidenceTable } from "@/db/tables";
 import { isPostgresDatabase } from "@/db/dialect";
@@ -42,6 +42,12 @@ export async function getEvidenceForTask(taskId: number): Promise<Evidence[]> {
 
 export async function deleteEvidence(id: number): Promise<void> {
   await execute(db.delete(evidenceTable).where(eq(evidenceTable.id, id)));
+}
+
+export async function deleteEvidenceByIds(ids: number[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  await execute(db.delete(evidenceTable).where(inArray(evidenceTable.id, ids)));
+  return ids.length;
 }
 
 export async function replaceEvidenceForTaskSource(

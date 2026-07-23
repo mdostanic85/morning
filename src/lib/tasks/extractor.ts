@@ -84,6 +84,7 @@ function toMergeCandidates(tasks: WorkTask[]): MergeCandidateTask[] {
     nextAction: task.nextAction,
     status: task.status,
     projectId: task.projectId,
+    owner: task.owner,
   }));
 }
 
@@ -267,6 +268,7 @@ export async function extractTasksFromSourceItem(
       source: sourceItem,
       extracted,
       existingTasks: mergeCandidates,
+      myName: currentUserName,
     });
     // Collapse only when multiple extracts resolve to the same open task.
     // Genuinely new items stay separate even if titles look similar.

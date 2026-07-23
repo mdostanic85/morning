@@ -3,20 +3,24 @@
 import { Tooltip } from "@heroui/react/tooltip";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
 
-function bucket(value: number): { label: string; tone: AppBadgeTone } {
-  if (value >= 0.7) return { label: "High", tone: "good" };
-  if (value >= 0.4) return { label: "Med", tone: "warning" };
-  return { label: "Low", tone: "danger" };
+function bucket(value: number): { tone: AppBadgeTone } {
+  if (value >= 0.7) return { tone: "good" };
+  if (value >= 0.4) return { tone: "warning" };
+  return { tone: "danger" };
 }
 
-/** `level` is a 0..1 confidence score, as produced by extraction/classification jobs. */
+/**
+ * Extraction/source confidence — never place next to priority/status badges.
+ * Keep the label about trust (“Source confidence”), not importance.
+ */
 export function ConfidenceBadge({ level }: { level: number }) {
-  const { label, tone } = bucket(level);
+  const { tone } = bucket(level);
+  const percent = Math.round(level * 100);
   return (
     <Tooltip delay={400}>
       <Tooltip.Trigger>
         <AppBadge tone={tone} className="px-2.5">
-          {label} · {Math.round(level * 100)}%
+          Source confidence {percent}%
         </AppBadge>
       </Tooltip.Trigger>
       <Tooltip.Content
@@ -25,8 +29,8 @@ export function ConfidenceBadge({ level }: { level: number }) {
         className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background"
       >
         <Tooltip.Arrow />
-        How confident the AI is that this task was correctly extracted from the source. Low = needs
-        your review.
+        How sure the system is that this task was read correctly from the source — not how
+        important it is. Low means review the evidence before acting.
       </Tooltip.Content>
     </Tooltip>
   );

@@ -1,5 +1,6 @@
 import { extractJiraKeyFromTitle } from "@/lib/tasks/resolveFocusTask";
 import { isTranscriptSource } from "@/lib/tasks/sourceAuthority";
+import { classifyTaskOwnership } from "@/lib/filters/ownerFilter";
 
 /** Open queue statuses that can receive transcript merges as the "active" anchor. */
 const ACTIVE_MERGE_STATUSES = new Set(["now", "next", "later"]);
@@ -47,6 +48,8 @@ export interface MergeCandidateTask {
   nextAction: string;
   status: string;
   projectId: number | null;
+  /** Used only to block cross-owner exact-title dedupe (EV-06) — never required elsewhere. */
+  owner?: string | null;
 }
 
 export interface ExtractedTaskForMerge {
@@ -131,6 +134,46 @@ function findTaskByJiraKey(
   return ranked[0]?.task ?? null;
 }
 
+/** Strips a leading "KEY · "/"KEY: "/"KEY - " Jira-key prefix so titles that
+ * only differ by that prefix compare as identical. */
+function normalizeTitleForDedupe(title: string): string {
+  return title
+    .replace(/^[A-Z][A-Z0-9]+-\d+\s*[·:\-–]\s*/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * EV-06: two tasks that describe the same work but were created from
+ * different sources (e.g. a transcript before the Jira ticket existed, then
+ * the Jira sync itself) often only differ by a Jira-key title prefix. An
+ * exact title match (after stripping that prefix) is a much stronger signal
+ * than topic overlap — it is the real incident behind task #468 ("Design
+ * Part Search Banner") and #487 ("UATL-380 · Design Part Search Banner")
+ * both surfacing as if they were unrelated. Still blocked when the existing
+ * task explicitly belongs to someone else, so an identical title from a
+ * different person's task never silently merges.
+ */
+export function findTaskByExactTitleMatch(
+  tasks: MergeCandidateTask[],
+  title: string,
+  myName: string | null
+): MergeCandidateTask | null {
+  const normalized = normalizeTitleForDedupe(title);
+  if (!normalized) return null;
+  return (
+    tasks.find((task) => {
+      if (normalizeTitleForDedupe(task.title) !== normalized) return false;
+      const ownership = classifyTaskOwnership(
+        { owner: task.owner ?? null, title: task.title, reason: task.reason, nextAction: task.nextAction },
+        myName
+      );
+      return ownership !== "other";
+    }) ?? null
+  );
+}
+
 function significantTokens(text: string): Set<string> {
   const tokens = (text.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []).filter(
     (token) => !STOP_WORDS.has(token) && !/^\d+$/.test(token)
@@ -151,9 +194,83 @@ export function topicOverlapScore(a: string, b: string): number {
   return shared;
 }
 
+export interface RelevanceCheckExtract {
+  title: string;
+  reason: string;
+  nextAction: string;
+  owner?: string | null;
+}
+
+export interface RelevanceCheckResult {
+  relevant: boolean;
+  reason: string;
+}
+
 /**
- * When a transcript does not name a Jira key, prefer the single active open
- * task that clearly shares domain language with the meeting / extract.
+ * EV-00 shared relevance predicate (see
+ * docs/architecture/evidence-relevance-fix-plan.md). A source/extract is only
+ * relevant to a task when:
+ *  (a) it shares the task's Jira key, OR
+ *  (b) it explicitly names the current user as the owner of this specific
+ *      work AND clears a minimum domain-topic overlap with the task.
+ *
+ * Same project alone, recency alone, or a single/incidental shared word are
+ * never sufficient. This guards every place that would otherwise trust an
+ * LLM `existingTaskId` hint or a topic-only anchor at face value — the
+ * mechanism that previously dumped 40+ unrelated Gmail rows and a different
+ * daily's action item onto UATL-380 ("Design Part Search Banner").
+ */
+export function isExtractRelevantToTask(input: {
+  extract: RelevanceCheckExtract;
+  /** Raw source text (title + body) used to scan for Jira keys / topic overlap. */
+  sourceText: string;
+  target: Pick<MergeCandidateTask, "title" | "reason" | "nextAction">;
+  myName: string | null;
+}): RelevanceCheckResult {
+  const { extract, sourceText, target, myName } = input;
+
+  const targetKey = jiraKeyForTask({ title: target.title });
+  if (targetKey) {
+    const extractText = `${sourceText}\n${extract.title}\n${extract.reason}\n${extract.nextAction}`;
+    if (extractJiraKeysFromText(extractText).includes(targetKey)) {
+      return { relevant: true, reason: `shares Jira key ${targetKey}` };
+    }
+  }
+
+  const ownership = classifyTaskOwnership(
+    {
+      owner: extract.owner,
+      title: extract.title,
+      reason: extract.reason,
+      nextAction: extract.nextAction,
+    },
+    myName
+  );
+  if (ownership !== "mine") {
+    return { relevant: false, reason: "not explicitly the user's own work" };
+  }
+
+  const overlap = topicOverlapScore(
+    sourceText,
+    `${target.title}\n${target.reason}\n${target.nextAction}`
+  );
+  if (overlap >= 2) {
+    return { relevant: true, reason: `explicit ownership, topic overlap ${overlap}` };
+  }
+  return {
+    relevant: false,
+    reason: `explicit ownership but topic overlap ${overlap} is too weak`,
+  };
+}
+
+/**
+ * When a transcript does not name a Jira key, find the active open task that
+ * most clearly shares domain language with the meeting / extract. Purely a
+ * topic-scoring helper — callers must still confirm the result against
+ * `isExtractRelevantToTask` (explicit ownership) before merging on it. No
+ * status shortcut: being the sole "now"/"next" task is never itself a reason
+ * to win — it must be the strongest (or only) topical match among all open
+ * tasks, so a prominent task can't become a magnet for unrelated items.
  */
 export function findOnlyActiveTopicAnchor(
   tasks: MergeCandidateTask[],
@@ -161,10 +278,6 @@ export function findOnlyActiveTopicAnchor(
 ): MergeCandidateTask | null {
   const active = tasks.filter((task) => ACTIVE_MERGE_STATUSES.has(task.status));
   if (active.length === 0) return null;
-
-  const focusActive = active.filter(
-    (task) => task.status === "now" || task.status === "next"
-  );
 
   const scored = active
     .map((task) => ({
@@ -178,19 +291,6 @@ export function findOnlyActiveTopicAnchor(
 
   const withOverlap = scored.filter((entry) => entry.score > 0);
 
-  // Sole now/next task + any domain overlap → that is the work being discussed.
-  if (focusActive.length === 1) {
-    const sole = focusActive[0];
-    const soleScore =
-      scored.find((entry) => entry.task.id === sole.id)?.score ?? 0;
-    if (soleScore >= 1) return sole;
-  }
-
-  // Sole active open task (including later) with solid overlap.
-  if (active.length === 1 && (scored[0]?.score ?? 0) >= 1) {
-    return active[0];
-  }
-
   if (withOverlap.length === 0) return null;
   if (withOverlap.length === 1) return withOverlap[0].task;
 
@@ -203,8 +303,47 @@ export function findOnlyActiveTopicAnchor(
 }
 
 /**
+ * Confirms an LLM `existingTaskId` hint against the shared relevance
+ * predicate before it is trusted. Returns the merge resolution when the hint
+ * is confirmed relevant, otherwise `null` so the caller falls through to the
+ * next resolution strategy (e.g. a new task).
+ */
+function resolveExistingTaskIdHint(input: {
+  extracted: ExtractedTaskForMerge;
+  existingTasks: MergeCandidateTask[];
+  haystack: string;
+  myName: string | null;
+  mode: TranscriptMergeMode;
+  reasonPrefix: string;
+}): TranscriptMergeResolution | null {
+  const { extracted, existingTasks, haystack, myName, mode, reasonPrefix } = input;
+  if (extracted.existingTaskId == null) return null;
+
+  const target = existingTasks.find((task) => task.id === extracted.existingTaskId);
+  if (!target) return null;
+
+  const check = isExtractRelevantToTask({
+    extract: extracted,
+    sourceText: haystack,
+    target,
+    myName,
+  });
+  if (!check.relevant) return null;
+
+  return {
+    taskId: extracted.existingTaskId,
+    mode,
+    reason: `${reasonPrefix} (${check.reason})`,
+  };
+}
+
+/**
  * Deterministic merge target for transcript extractions.
- * LLM existingTaskId is a hint; Jira key + only-active topic win.
+ * LLM `existingTaskId` is only a candidate — it must be confirmed by the
+ * shared relevance predicate (shared Jira key, or explicit ownership +
+ * topic overlap) before it is trusted. Jira key match wins outright; a
+ * topic-only anchor must also clear that same ownership confirmation.
+ * See docs/architecture/evidence-relevance-fix-plan.md (EV-00/01/02).
  */
 export function resolveTranscriptMergeTarget(input: {
   source: {
@@ -215,22 +354,10 @@ export function resolveTranscriptMergeTarget(input: {
   };
   extracted: ExtractedTaskForMerge;
   existingTasks: MergeCandidateTask[];
+  /** Current user's name, used to confirm explicit-ownership relevance. */
+  myName?: string | null;
 }): TranscriptMergeResolution {
-  const { source, extracted, existingTasks } = input;
-
-  if (!isTranscriptSource(source)) {
-    if (
-      extracted.existingTaskId != null &&
-      existingTasks.some((task) => task.id === extracted.existingTaskId)
-    ) {
-      return {
-        taskId: extracted.existingTaskId,
-        mode: "full",
-        reason: "non-transcript existingTaskId",
-      };
-    }
-    return { taskId: null, mode: "full", reason: "non-transcript new work" };
-  }
+  const { source, extracted, existingTasks, myName = null } = input;
 
   const haystack = [
     source.title ?? "",
@@ -240,19 +367,43 @@ export function resolveTranscriptMergeTarget(input: {
     extracted.nextAction,
   ].join("\n");
 
+  if (!isTranscriptSource(source)) {
+    const hinted = resolveExistingTaskIdHint({
+      extracted,
+      existingTasks,
+      haystack,
+      myName,
+      mode: "full",
+      reasonPrefix: "non-transcript existingTaskId",
+    });
+    if (hinted) return hinted;
+    // EV-06: a Jira sync (or other non-transcript source) landing on a task
+    // that was already created earlier from a transcript, before the ticket
+    // existed, must not spawn a duplicate — same title text is the strongest
+    // available signal here, stronger than any topic-overlap heuristic.
+    const titleMatch = findTaskByExactTitleMatch(existingTasks, extracted.title, myName);
+    if (titleMatch) {
+      return { taskId: titleMatch.id, mode: "full", reason: "exact title match (dedupe)" };
+    }
+    return { taskId: null, mode: "full", reason: "non-transcript new work" };
+  }
+
   // waiting / unclear stay as their own queue items unless the LLM already
   // pointed at an existing task — otherwise Sofija-owned grooming would get
   // swallowed into the user's design ticket.
   if (extracted.status !== "actionable") {
-    if (
-      extracted.existingTaskId != null &&
-      existingTasks.some((task) => task.id === extracted.existingTaskId)
-    ) {
-      return {
-        taskId: extracted.existingTaskId,
-        mode: "evidence",
-        reason: "llm existingTaskId (non-actionable)",
-      };
+    const hinted = resolveExistingTaskIdHint({
+      extracted,
+      existingTasks,
+      haystack,
+      myName,
+      mode: "evidence",
+      reasonPrefix: "llm existingTaskId (non-actionable)",
+    });
+    if (hinted) return hinted;
+    const titleMatch = findTaskByExactTitleMatch(existingTasks, extracted.title, myName);
+    if (titleMatch) {
+      return { taskId: titleMatch.id, mode: "evidence", reason: "exact title match (dedupe)" };
     }
     return { taskId: null, mode: "full", reason: "no merge for non-actionable" };
   }
@@ -271,24 +422,38 @@ export function resolveTranscriptMergeTarget(input: {
     };
   }
 
-  if (
-    extracted.existingTaskId != null &&
-    existingTasks.some((task) => task.id === extracted.existingTaskId)
-  ) {
-    return {
-      taskId: extracted.existingTaskId,
-      mode: "full",
-      reason: "llm existingTaskId",
-    };
-  }
+  const hinted = resolveExistingTaskIdHint({
+    extracted,
+    existingTasks,
+    haystack,
+    myName,
+    mode: "full",
+    reasonPrefix: "llm existingTaskId",
+  });
+  if (hinted) return hinted;
 
+  // Topic-only anchor: still requires explicit ownership confirmation — a
+  // sole prominent task must never become a magnet for unrelated items.
   const anchor = findOnlyActiveTopicAnchor(existingTasks, haystack);
   if (anchor) {
-    return {
-      taskId: anchor.id,
-      mode: "full",
-      reason: "only-active topic anchor",
-    };
+    const check = isExtractRelevantToTask({
+      extract: extracted,
+      sourceText: haystack,
+      target: anchor,
+      myName,
+    });
+    if (check.relevant) {
+      return {
+        taskId: anchor.id,
+        mode: "full",
+        reason: `only-active topic anchor (${check.reason})`,
+      };
+    }
+  }
+
+  const titleMatch = findTaskByExactTitleMatch(existingTasks, extracted.title, myName);
+  if (titleMatch) {
+    return { taskId: titleMatch.id, mode: "full", reason: "exact title match (dedupe)" };
   }
 
   return { taskId: null, mode: "full", reason: "genuinely new work" };

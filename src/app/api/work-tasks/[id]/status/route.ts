@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { getWorkTaskById, updateWorkTask } from "@/services/workTasks";
+import { getUserProfile } from "@/services/userProfile";
+import { NOT_MINE_NOTE } from "@/lib/filters/ownerFilter";
 import type { WorkTaskPatch, WorkTaskStatus } from "@/domain/workTask";
 
 const ACTION_TO_STATUS: Record<string, WorkTaskStatus> = {
   start: "now",
+  // "This is mine" — confirmed ownership queues the task as up-next.
+  mine: "next",
   done: "done",
   snooze: "tomorrow",
   skip: "later",
@@ -12,8 +16,19 @@ const ACTION_TO_STATUS: Record<string, WorkTaskStatus> = {
 };
 
 function noteNotMine(reason: string): string {
-  const note = "Not mine: user marked this as not their responsibility.";
-  return reason.includes(note) ? reason : `${reason} (${note})`;
+  return reason.includes(NOT_MINE_NOTE) ? reason : `${reason} (${NOT_MINE_NOTE})`;
+}
+
+/** Undo a prior "Not mine" note when the user reclaims the task. */
+function stripNotMine(reason: string): string {
+  return reason
+    .split(`(${NOT_MINE_NOTE})`)
+    .join("")
+    .split(NOT_MINE_NOTE)
+    .join("")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 export async function PATCH(
@@ -47,6 +62,17 @@ export async function PATCH(
   if (action === "not_mine") {
     patch.reason = noteNotMine(existing.reason);
     patch.waitingOn = null;
+  }
+
+  if (action === "mine") {
+    // Confirming ownership sets the user as owner so the classifier reads it
+    // as "mine" everywhere, clears any waiting/blocked state, and undoes a
+    // prior "Not mine" decision.
+    const profile = await getUserProfile();
+    const myName = profile?.name?.trim() || null;
+    if (myName) patch.owner = myName;
+    patch.waitingOn = null;
+    patch.reason = stripNotMine(existing.reason);
   }
 
   if (action === "waiting" && !existing.waitingOn) {

@@ -9,8 +9,14 @@ import type { ConnectionProvider } from "@/lib/connectors/providers";
 import { getLatestFinishedSyncRun } from "@/services/syncRuns";
 import { resolveFocusLinkedTaskId } from "@/lib/tasks/resolveFocusTask";
 import { getTodayMeetings } from "@/lib/calendar/todayMeetings";
-import { filterQueueByOwners, myOwnerFilter, taskEligibleForBriefPriority } from "@/lib/filters/ownerFilter";
+import {
+  classifyTaskOwnership,
+  filterQueueByOwners,
+  myOwnerFilter,
+  taskEligibleForBriefPriority,
+} from "@/lib/filters/ownerFilter";
 import { filterTasksForTodayView } from "@/lib/tasks/taskVisibility";
+import { humanizeReason } from "@/lib/tasks/humanizeReason";
 import { HumanReadableTodayView } from "@/components/HumanReadableTodayView";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +56,48 @@ export default async function TodayPage() {
 
   const myName = profile?.name?.trim() || null;
   const queue = filterQueueByOwners(rawQueue, myOwnerFilter(myName), myName);
+
+  // The stored daily brief is only recomputed on sync, so reconcile its
+  // "Needs your input" list against live task state — a task the user just
+  // claimed ("This is mine" → queued) or disowned ("Not mine") must drop out
+  // of this bucket immediately, without waiting for the next sync.
+  const liveTaskById = new Map(
+    OPEN_QUEUE_STATUSES.flatMap((status) => rawQueue[status]).map((task) => [task.id, task] as const)
+  );
+  const reconciledBrief = dailyBrief
+    ? {
+        ...dailyBrief,
+        blockedWaiting: dailyBrief.blockedWaiting
+          .filter((item) => {
+            if (item.taskId == null) return true;
+            const task = liveTaskById.get(item.taskId);
+            if (!task) return false;
+            if ((task.status === "now" || task.status === "next") && !task.waitingOn) return false;
+            return (
+              classifyTaskOwnership(
+                {
+                  owner: task.owner,
+                  title: task.title,
+                  reason: task.reason,
+                  nextAction: task.nextAction,
+                },
+                myName
+              ) !== "other"
+            );
+          })
+          .map((item) => {
+            // Show the task's own description (its "why"), clamped to two lines
+            // on the card — prefer the live task so edits reflect immediately.
+            const task = item.taskId != null ? liveTaskById.get(item.taskId) : null;
+            return {
+              ...item,
+              description: task
+                ? humanizeReason(task.reason, task.title)
+                : item.description,
+            };
+          }),
+      }
+    : null;
 
   const connectedProviderLabels = connections
     .filter((connection) => connection.status === "connected")
@@ -157,7 +205,7 @@ export default async function TodayPage() {
       profileReady={Boolean(profile?.name?.trim())}
       meetings={todayMeetings.meetings}
       calendarConnected={todayMeetings.calendarConnected}
-      dailyBrief={dailyBrief}
+      dailyBrief={reconciledBrief}
       failedProviderLabels={failedProviderLabels}
     />
   );

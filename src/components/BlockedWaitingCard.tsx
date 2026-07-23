@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ChevronDown, Clock3 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, Clock3, Loader2Icon } from "lucide-react";
+import { Toast } from "@heroui/react/toast";
+import { Button } from "@heroui/react/button";
 import type { DailyBriefV2 } from "@/domain/dailyBrief";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
-import { TaskActionButtons } from "@/components/TaskActionButtons";
-import { cn } from "@/lib/utils";
+
+type TriageAction = "mine" | "not_mine";
 
 function StatusBadge({
   label,
@@ -24,24 +27,40 @@ function StatusBadge({
   );
 }
 
-/** Ownership-unclear items say "confirm this is yours"; waiting items name what they're blocked on. */
-function blockedWaitingActionCopy(reason: string): string {
-  if (/^waiting on/i.test(reason)) return "Follow up, then mark done";
-  return "Confirm this is yours, or mark it not mine";
-}
-
 /**
- * Same visual family as `SecondaryTaskCard` (`brief-secondary-*` classes),
- * but interactive: "Show actions" expands the same confirmation-gated
- * `TaskActionButtons` used on the task detail page, so a blocked/unclear
- * item can actually be resolved right here instead of only linking away.
+ * A "Needs your input" item, kept deliberately simple: a status badge, the
+ * title, one sentence of context, and a single ownership decision — confirm
+ * it's yours (queues it) or mark it not yours (removes it). Both write only to
+ * the local task via the status API — no external system is touched.
  */
 export function BlockedWaitingCard({ item }: { item: DailyBriefV2["blockedWaiting"][number] }) {
-  const [expanded, setExpanded] = useState(false);
+  const router = useRouter();
+  const [pending, setPending] = useState<TriageAction | null>(null);
   const isWaiting = /^waiting on/i.test(item.reason);
   const badge = isWaiting
     ? { label: "Waiting", tone: "warning" as AppBadgeTone, Icon: Clock3 }
     : { label: "Clarify ownership", tone: "warning" as AppBadgeTone, Icon: AlertTriangle };
+
+  async function triage(action: TriageAction) {
+    if (item.taskId == null || pending != null) return;
+    setPending(action);
+    try {
+      const res = await fetch(`/api/work-tasks/${item.taskId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) throw new Error("Task update failed.");
+      Toast.toast.success(
+        action === "mine" ? "Added to your queue." : "Removed — marked not yours."
+      );
+      router.refresh();
+    } catch {
+      Toast.toast.danger("Could not update the task. Try again.");
+    } finally {
+      setPending(null);
+    }
+  }
 
   return (
     <div className="brief-secondary-card">
@@ -58,37 +77,35 @@ export function BlockedWaitingCard({ item }: { item: DailyBriefV2["blockedWaitin
         <h3 className="brief-secondary-title">{item.title}</h3>
       )}
 
-      <p className="brief-secondary-reason">{item.reason}</p>
-      <p className="brief-secondary-next">
-        <span className="brief-secondary-next-label">Action: </span>
-        {blockedWaitingActionCopy(item.reason)}
-      </p>
+      <p className="brief-secondary-reason">{item.description?.trim() || item.reason}</p>
 
       {item.taskId != null ? (
-        <>
-          <button
+        <div className="brief-secondary-actions">
+          <Button
             type="button"
-            className="brief-secondary-actions-toggle"
-            onClick={() => setExpanded((value) => !value)}
-            aria-expanded={expanded}
+            size="sm"
+            variant="primary"
+            onClick={() => triage("mine")}
+            isDisabled={pending != null}
           >
-            {expanded ? "Hide actions" : "Show actions"}
-            <ChevronDown
-              className={cn("size-3.5 transition-transform", expanded && "rotate-180")}
-              aria-hidden
-            />
-          </button>
-          {expanded ? (
-            <div className="brief-secondary-actions">
-              <TaskActionButtons
-                taskId={item.taskId}
-                linkedJiraKey={item.jiraKey}
-                embedded
-                showDelete={false}
-              />
-            </div>
-          ) : null}
-        </>
+            {pending === "mine" ? (
+              <Loader2Icon className="size-3.5 animate-spin" aria-hidden />
+            ) : null}
+            This is mine
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => triage("not_mine")}
+            isDisabled={pending != null}
+          >
+            {pending === "not_mine" ? (
+              <Loader2Icon className="size-3.5 animate-spin" aria-hidden />
+            ) : null}
+            Not mine
+          </Button>
+        </div>
       ) : null}
     </div>
   );

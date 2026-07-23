@@ -208,18 +208,24 @@ function SecondaryTaskCard({ task }: { task: MinimalTask }) {
           </p>
         ) : null}
         {task.evidence[0] ? (
-          <p className="mt-1 line-clamp-1 text-xs text-muted-soft">
-            Evidence: {task.evidence[0].sourceTitle}
-            {task.evidence[0].quote ? ` — “${task.evidence[0].quote}”` : ""}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <p className="line-clamp-1 min-w-0 flex-1 text-xs text-muted-soft">
+              Evidence: {task.evidence[0].sourceTitle}
+              {task.evidence[0].quote ? ` — “${task.evidence[0].quote}”` : ""}
+            </p>
+            {confidenceBadge(task) ? (
+              <AppBadge tone="good">{confidenceBadge(task)}</AppBadge>
+            ) : null}
+          </div>
+        ) : confidenceBadge(task) ? (
+          <div className="mt-1">
+            <AppBadge tone="good">{confidenceBadge(task)}</AppBadge>
+          </div>
         ) : null}
         <div className="mt-2 flex flex-wrap gap-1.5">
           <AppBadge tone={label === "Unclear" ? "warning" : label === "Waiting" ? "warning" : "neutral"}>
             {label}
           </AppBadge>
-          {confidenceBadge(task) ? (
-            <AppBadge tone="good">{confidenceBadge(task)}</AppBadge>
-          ) : null}
         </div>
       </div>
       <ArrowRight

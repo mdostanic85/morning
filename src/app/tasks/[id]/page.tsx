@@ -1,13 +1,24 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { AlertTriangle, ArrowRight, ExternalLink } from "lucide-react";
 import { getWorkTaskById } from "@/services/workTasks";
 import { getSourceItems } from "@/services/sourceItems";
-import { AppBadge } from "@/components/AppBadge";
+import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
 import { BackToTodayButton } from "@/components/BackToTodayButton";
 import { TaskActionButtons } from "@/components/TaskActionButtons";
+import { buildTaskSupportingSources } from "@/lib/tasks/taskSupportingSources";
 
 export const dynamic = "force-dynamic";
+
+/** Tone for a Jira status pill, matching the JiraStatusDropdown color language. */
+function jiraStatusTone(status: string): AppBadgeTone {
+  const normalized = status.toLowerCase();
+  if (/done|closed|resolved|complete/.test(normalized)) return "good";
+  if (/in progress|in development|doing|active/.test(normalized)) return "accent";
+  if (/review|qa|ready for/.test(normalized)) return "warning";
+  if (/block/.test(normalized)) return "danger";
+  return "neutral";
+}
 
 function confidenceLabel(value: number | null): string {
  if (value == null) return "Not scored";
@@ -47,6 +58,7 @@ export default async function TaskDetailPage({
   );
   const linkedJiraKey = task.title.match(/^([A-Z][A-Z0-9]+-\d+)\b/)?.[1] ?? null;
   const confidence = task.confidence == null ? null : Math.round(task.confidence * 100);
+  const supporting = buildTaskSupportingSources({ task, sourceById });
 
  return (
  <div className="mx-auto w-full max-w-[77.5rem] py-8 pb-20">
@@ -57,17 +69,14 @@ export default async function TaskDetailPage({
  <header className="border-b border-border pb-7">
  <div className="flex flex-wrap gap-2">
  <AppBadge tone={task.status === "waiting" || task.status === "unclear" ? "warning" : "danger"}>
- {task.status === "waiting" ? "Waiting" : task.status === "unclear" ? "Verify" : "Priority"}
+ {task.status === "waiting" ? "Waiting" : task.status === "unclear" ? "Needs your input" : "Do first"}
  </AppBadge>
  {isJiraTask ? <AppBadge tone="sky">Jira</AppBadge> : null}
- {confidence != null ? (
- <AppBadge tone="good">Source confidence {confidence}%</AppBadge>
- ) : null}
  </div>
  <h1 className="ft-screen-title mt-4 max-w-4xl font-display">{task.title}</h1>
  <div className="mt-4 max-w-3xl">
  <strong className="block text-sm uppercase tracking-[0.08em] text-accent-strong">
- What you are doing
+ Why this matters
  </strong>
  <p className="ft-screen-lead mt-2 text-muted">{task.reason}</p>
  </div>
@@ -206,33 +215,104 @@ export default async function TaskDetailPage({
  </div>
  </section>
 
- <section className="rounded-[20px] border border-border bg-surface p-6">
- <h2 className="ft-panel-subtitle font-display">Supporting sources</h2>
- <div className="mt-4 grid gap-2.5">
- {task.evidence.length > 0 ? task.evidence.map((item) => {
- const content = (
- <>
- <span className="grid size-9 place-items-center rounded-xl bg-accent-soft-surface text-xs font-bold text-accent-strong">EV</span>
- <span className="min-w-0">
- <strong className="block truncate text-sm">{sourceById.get(item.sourceItemId)?.title ?? "Source evidence"}</strong>
- <small className="mt-1 line-clamp-2 text-sm text-muted">{item.quote || item.summary}</small>
- </span>
- {item.url ? <ExternalLink className="size-4 text-accent-strong" /> : null}
- </>
- );
- const className = "grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] border border-border bg-surface p-3";
- return item.url ? (
- <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className={className}>{content}</a>
- ) : (
- <div key={item.id} className={className}>{content}</div>
- );
- }) : (
- <p className="rounded-[14px] border border-danger/35 bg-danger-soft-surface p-4 text-sm text-muted">
- No source evidence is attached. Verify this task before acting.
- </p>
- )}
- </div>
- </section>
+            <section className="rounded-[20px] border border-border bg-surface p-6">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="ft-panel-subtitle font-display">Supporting sources</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  {supporting.conflicts.length > 0 ? (
+                    <AppBadge tone="danger" icon={<AlertTriangle className="size-3.5" aria-hidden />}>
+                      {supporting.conflicts.length === 1
+                        ? "Conflict"
+                        : `${supporting.conflicts.length} conflicts`}
+                    </AppBadge>
+                  ) : null}
+                  {confidence != null ? (
+                    <AppBadge tone="good">Source confidence {confidence}%</AppBadge>
+                  ) : null}
+                </div>
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                The Jira ticket is what proves this task exists; newer meeting notes add or
+                refine its details. When they disagree, the newest meeting guidance wins.
+              </p>
+
+              {supporting.conflicts.map((conflict) => (
+                <div
+                  key={conflict.summary}
+                  className="mt-4 rounded-[14px] border border-danger/35 bg-danger-soft-surface p-4"
+                >
+                  <AppBadge tone="danger" icon={<AlertTriangle className="size-3.5" aria-hidden />}>
+                    Conflict
+                  </AppBadge>
+                  <p className="mt-2 text-sm leading-relaxed text-foreground">
+                    <strong>{conflict.summary}.</strong> {conflict.detail}
+                  </p>
+                </div>
+              ))}
+
+              <div className="mt-4 grid gap-2.5">
+                {supporting.groups.length > 0 ? (
+                  supporting.groups.map((group) => (
+                    <article
+                      key={group.sourceItemId}
+                      className={`rounded-[14px] border p-4 ${
+                        group.inConflict
+                          ? "border-danger/40 bg-danger-soft-surface/40"
+                          : "border-border bg-surface"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <AppBadge tone={group.sourceType === "jira" ? "sky" : "neutral"}>
+                            {group.label}
+                          </AppBadge>
+                          {group.isAnchor ? <AppBadge tone="accent">Proof of task</AppBadge> : null}
+                          {group.jiraStatus ? (
+                            <AppBadge tone={jiraStatusTone(group.jiraStatus)}>
+                              {group.jiraStatus}
+                            </AppBadge>
+                          ) : null}
+                          {group.isLatest ? <AppBadge tone="mint">Latest update</AppBadge> : null}
+                          {group.inConflict ? <AppBadge tone="danger">Conflict</AppBadge> : null}
+                        </div>
+                        <span className="text-xs font-medium text-muted-soft">
+                          {meetingDate(group.sourceDate)}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-baseline justify-between gap-3">
+                        <strong className="text-sm [overflow-wrap:anywhere]">{group.title}</strong>
+                        {group.url ? (
+                          <a
+                            href={group.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent-strong"
+                          >
+                            Open <ExternalLink className="size-3.5" />
+                          </a>
+                        ) : null}
+                      </div>
+                      {group.quotes.length > 0 ? (
+                        <ul className="mt-3 grid gap-2">
+                          {group.quotes.map((quote) => (
+                            <li
+                              key={quote.id}
+                              className="border-l-2 border-border-strong pl-3 text-sm leading-relaxed text-muted"
+                            >
+                              “{quote.text}”
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </article>
+                  ))
+                ) : (
+                  <p className="rounded-[14px] border border-danger/35 bg-danger-soft-surface p-4 text-sm text-muted">
+                    No source evidence is attached. Verify this task before acting.
+                  </p>
+                )}
+              </div>
+            </section>
  </main>
 
  <aside className="grid min-w-0 gap-4 [overflow-wrap:anywhere] lg:sticky lg:top-24">
@@ -262,10 +342,10 @@ export default async function TaskDetailPage({
 
             {/* WL-12: corrections reachable from Today → task detail, using the existing write-confirmation pattern (TaskActionButtons already gates Done/Delete behind a confirm dialog). */}
             <section className="rounded-[20px] border border-border bg-surface p-6">
-              <h2 className="ft-panel-subtitle font-display">Corrections</h2>
+              <h2 className="ft-panel-subtitle font-display">Change status</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Adjust status if this isn&rsquo;t right — nothing here writes to Jira or any
-                external system without a separate confirmation.
+                Start work, or update status if this isn&rsquo;t right. Nothing here writes to Jira
+                without a separate confirmation.
               </p>
               <div className="mt-4">
                 <TaskActionButtons

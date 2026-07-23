@@ -21,6 +21,7 @@ import { ReasonText } from "./ReasonText";
 import { FocusExecution } from "./FocusExecution";
 import { DecisionTrail } from "./DecisionTrail";
 import { BlockersCard, buildBlockerEntries, type BlockerEntry } from "./BlockersCard";
+import { ConfidenceBadge } from "./ConfidenceBadge";
 import {
  resolveFocusPrimaryCta,
  resolveFocusSecondaryActions,
@@ -79,12 +80,6 @@ function dueDateLabel(value: string | null | undefined): string | null {
  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function confidenceLabel(value: number): string {
- if (value >= 0.75) return "High";
- if (value >= 0.5) return "Medium";
- return "Low";
-}
-
 const QUICK_ICON_TONES = [
  "bg-accent/10 text-accent-strong",
  "bg-sky-soft text-sky-foreground",
@@ -92,30 +87,17 @@ const QUICK_ICON_TONES = [
  "bg-pink-soft text-pink-foreground",
 ];
 
-/** Gradient AI-conclusion block + inline extraction confidence with load bar. */
+/** Gradient AI-conclusion block — confidence lives next to evidence, not here. */
 function PriorityConclusion({ item }: { item: DailyFocusData }) {
  const explanation = priorityExplanationForDisplay(
  item.priorityExplanation || item.reason
  );
  return (
- <div className="accent-soft-gradient relative z-1 mt-6 grid gap-4 overflow-hidden rounded-2xl border border-border-strong p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
- <div>
- <strong className="block text-[16px] font-semibold text-foreground">AI conclusion</strong>
+ <div className="accent-soft-gradient relative z-1 mt-6 overflow-hidden rounded-2xl border border-border-strong p-5">
+ <strong className="block text-[16px] font-semibold text-foreground">Why this first</strong>
  <p className="mt-1.5 text-[15px] leading-relaxed text-muted">
  {explanation}
  </p>
- </div>
- {item.confidence != null ? (
- <div className="min-w-24 sm:pl-5 sm:text-right">
- <strong className="block font-display text-[28px] leading-none tracking-tight">
- {confidenceLabel(item.confidence)}
- </strong>
- <span className="mt-1 block text-sm font-semibold text-muted">
- extraction confidence
- </span>
- </div>
- ) : null}
- <span className="confidence-bar" aria-hidden />
  </div>
  );
 }
@@ -239,7 +221,7 @@ function FocusPrimaryControls({
  className="w-full sm:w-auto"
  onClick={onOpenExplanation}
  >
- Why this priority?
+ Why this first?
  </Button>
 
  <Button
@@ -251,6 +233,8 @@ function FocusPrimaryControls({
  >
  View evidence
  </Button>
+
+ {item.confidence != null ? <ConfidenceBadge level={item.confidence} /> : null}
 
  {secondaryLinks.map((link) => (
  <a
@@ -408,7 +392,7 @@ function ContextQuickPanel({ item }: { item: DailyFocusData }) {
 
  {hasTaskActions ? (
  <div className="mt-5 space-y-3 border-t border-border/70 pt-4">
- <p className="eyebrow text-foreground/70">Complete when ready</p>
+ <p className="eyebrow text-foreground/70">Task controls</p>
  <TaskActionButtons
  taskId={item.linkedTaskId}
  linkedJiraKey={item.linkedJiraKey}

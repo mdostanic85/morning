@@ -49,12 +49,12 @@ export interface TaskCardProps {
 }
 
 const STATUS_DESCRIPTION: Record<WorkTaskStatus, string> = {
- now: "Currently in focus — you are actively working on this",
+ now: "In focus — you are actively working on this",
  next: "Up next when your current focus clears",
- later: "On the radar but not urgent today",
- waiting: "Blocked — waiting on someone else or an external event",
- tomorrow: "Scheduled to start tomorrow",
- unclear: "Needs your decision before work can begin",
+ later: "On the radar but not for today",
+ waiting: "Blocked — waiting on someone else",
+ tomorrow: "Scheduled for tomorrow",
+ unclear: "Needs your input before work can begin",
  done: "Completed",
 };
 
@@ -206,21 +206,11 @@ export function TaskCard({
  ) : null}
  </div>
  </div>
-
- <div className="shrink-0">
- {confidence != null ? (
- <ConfidenceBadge level={confidence} />
- ) : (
- <AppBadge tone="neutral" className="border-border/50 text-muted-soft">
- —
- </AppBadge>
- )}
- </div>
  </div>
 
  <section className="mt-6 space-y-5">
  <div>
- <p className="eyebrow text-foreground/70">What you are doing</p>
+ <p className="eyebrow text-foreground/70">Why this matters</p>
  {status === "unclear" ? (
  <p className="mt-2 rounded-xl border border-unclear/25 bg-unclear/8 px-4 py-3 text-[14px] font-medium leading-relaxed text-unclear">
  <span className="font-semibold">Unclear — </span>
@@ -246,7 +236,7 @@ export function TaskCard({
  primary ? "px-6 py-5" : "px-5 py-4"
  )}
  >
- <p className="eyebrow text-accent">What to do now</p>
+ <p className="eyebrow text-accent">Next action</p>
  <p
  className={cn(
  "mt-2 font-medium leading-snug",
@@ -280,7 +270,12 @@ export function TaskCard({
  )}
  </div>
 
- <div>
+ <div className="space-y-2">
+ {confidence != null ? (
+ <div className="flex justify-end">
+ <ConfidenceBadge level={confidence} />
+ </div>
+ ) : null}
  <EvidencePanel items={evidence} defaultOpen={primary} />
  </div>
 

@@ -124,10 +124,10 @@ Overall: ~95% of the design considered nailed on first pass.
 
 Actionable items clearly attributed to **Lucas on Granola**, ordered by impact on Today:
 
-1. [ ] **UX writing pass** on all Today / task labels (skill or dedicated prompt).  
-2. [ ] Rename **“Needs your attention”** → **“Needs your input”** (or stronger ownership-confirm wording).  
-3. [ ] **Reposition confidence %** next to source/accuracy — not next to priority.  
-4. [ ] Split **status (dropdown)** from **primary CTA**; trim action clutter.  
+1. [x] **UX writing pass** on all Today / task labels (skill or dedicated prompt).  
+2. [x] Rename **“Needs your attention”** → **“Needs your input”** (or stronger ownership-confirm wording).  
+3. [x] **Reposition confidence %** next to source/accuracy — not next to priority.  
+4. [x] Split **status (dropdown)** from **primary CTA**; trim action clutter.  
 5. [ ] Demo/video: **problem-first**, short, exec-oriented script.  
 6. [ ] (BOM) Design ticket: malformed vs missing vs good + consequence copy for skip.
 

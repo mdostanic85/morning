@@ -3,11 +3,27 @@ import { describe, it } from "node:test";
 import {
   extractJiraKeysFromText,
   findOnlyActiveTopicAnchor,
+  findTaskByExactTitleMatch,
+  isExtractRelevantToTask,
   mergeTaskTitle,
   pickPrimaryExtractedTask,
   resolveTranscriptMergeTarget,
   type MergeCandidateTask,
 } from "./transcriptTaskMerge";
+
+const MILOS = "Milos Dostanic";
+
+/** UATL-380 golden fixture: the real "Design Part Search Banner" task. */
+const uatl380Banner: MergeCandidateTask = {
+  id: 487,
+  title: "UATL-380 · Design Part Search Banner",
+  reason:
+    "The task is to design a part search banner for all modules, as described in Jira ticket UATL-380.",
+  nextAction:
+    "Create a new Figma frame for the unified search banner design, incorporating James' previous images as a reference.",
+  status: "now",
+  projectId: 1,
+};
 
 const uatl367: MergeCandidateTask = {
   id: 371,
@@ -16,6 +32,21 @@ const uatl367: MergeCandidateTask = {
   nextAction: "Review the Jira issue UATL-367",
   status: "next",
   projectId: 1,
+};
+
+/** Real incident (EV-06): task #468 was created from a Hydra Daily transcript
+ * the day before Jira issue UATL-380 existed, so it never got a Jira key in
+ * its title. The next day's Jira sync then created #487 as a duplicate
+ * instead of recognizing it as the same work. */
+const designBannerPreJira: MergeCandidateTask = {
+  id: 468,
+  title: "Design Part Search Banner",
+  reason:
+    "The task is to design a part search banner for all modules. Matt Pettit requested to draft concept images for each module to stack side by side as one wide banner.",
+  nextAction: "Create a new Figma frame for the unified search banner design.",
+  status: "later",
+  projectId: 1,
+  owner: "Milos Dostanic",
 };
 
 const otherLater: MergeCandidateTask = {
@@ -98,7 +129,32 @@ describe("transcriptTaskMerge", () => {
     assert.equal(resolution.taskId, null);
   });
 
-  it("uses the only active now/next topic anchor without a Jira key", () => {
+  it("uses the only active now/next topic anchor when ownership is explicit", () => {
+    const resolution = resolveTranscriptMergeTarget({
+      source: {
+        sourceType: "granola",
+        title: "Content File Mgr - Review",
+        body: "Finish remaining Content File Manager screens, then ping for review",
+      },
+      extracted: {
+        title: "Finish remaining Content File Manager screens",
+        reason: "Review feedback",
+        nextAction: "Finish remaining screens",
+        status: "actionable",
+        existingTaskId: null,
+        owner: "Milos",
+      },
+      existingTasks: [uatl367, otherLater],
+      myName: MILOS,
+    });
+    assert.equal(resolution.taskId, 371);
+    assert.equal(resolution.mode, "full");
+    assert.match(resolution.reason, /topic anchor/i);
+  });
+
+  it("does NOT topic-anchor-merge on overlap alone without explicit ownership (EV-02)", () => {
+    // Same strong topical overlap as above, but nothing marks it as the
+    // user's own work (no owner field, no first-person language).
     const resolution = resolveTranscriptMergeTarget({
       source: {
         sourceType: "granola",
@@ -113,9 +169,9 @@ describe("transcriptTaskMerge", () => {
         existingTaskId: null,
       },
       existingTasks: [uatl367, otherLater],
+      myName: MILOS,
     });
-    assert.equal(resolution.taskId, 371);
-    assert.equal(resolution.mode, "full");
+    assert.equal(resolution.taskId, null);
   });
 
   it("does not topic-merge waiting items without a Jira key", () => {
@@ -172,5 +228,233 @@ describe("transcriptTaskMerge", () => {
       },
     ]);
     assert.match(primary.nextAction, /Finish remaining/);
+  });
+
+  // --- UATL-380 golden fixture (docs/architecture/evidence-relevance-fix-plan.md) ---
+  // Real incident: task #487 "Design Part Search Banner" accumulated 59
+  // evidence rows; only the Jira ticket itself and one on-topic daily were
+  // genuinely relevant. Everything else rode in on a blindly-trusted LLM
+  // `existingTaskId` hint or a topic-only anchor.
+
+  describe("EV-01: guards the existingTaskId hint", () => {
+    it("does not merge an unrelated Gmail extract onto the banner just because the LLM hinted at it", () => {
+      const resolution = resolveTranscriptMergeTarget({
+        source: {
+          sourceType: "gmail",
+          title:
+            "Mapping: ako fajl vec ima vecinu od ovih kolona moramo da olaksamo useru",
+          body:
+            "Mi trebamo sami inteligentno da uradimo mapiranje a korisnik samo da pregleda i ako mu izgleda ok, da ide dalje.",
+        },
+        extracted: {
+          title: "Simplify column mapping for non-technical users",
+          reason:
+            "The mapping process should be simplified for users who are not technically savvy.",
+          nextAction: "Auto-map columns and only ask the user to review and approve.",
+          status: "actionable",
+          // The LLM extractor hinted at the prominent "now" task even though
+          // this extract has nothing to do with it.
+          existingTaskId: uatl380Banner.id,
+        },
+        existingTasks: [uatl380Banner],
+        myName: MILOS,
+      });
+      assert.equal(resolution.taskId, null);
+    });
+
+    it("does not merge a different daily's action item onto the banner via the hint alone", () => {
+      // "Share prototype branch name for cross-module guidance" — a real
+      // Milos action item, but from a different meeting and about a
+      // different feature (cross-module guidance, not the search banner).
+      const resolution = resolveTranscriptMergeTarget({
+        source: {
+          sourceType: "granola",
+          title: "Hydra Daily",
+          body: "Next Steps:\n- Share prototype branch name for cross-module guidance (Milos)\n  Post the branch link so Matt can spin it up.",
+        },
+        extracted: {
+          title: "Share prototype branch name for cross-module guidance",
+          reason: "Matt needs the branch to review actual interactions.",
+          nextAction: "Post the branch link so Matt can spin it up.",
+          status: "actionable",
+          existingTaskId: uatl380Banner.id,
+          owner: "Milos",
+        },
+        existingTasks: [uatl380Banner],
+        myName: MILOS,
+      });
+      assert.equal(resolution.taskId, null);
+    });
+
+    it("still merges the real banner daily onto UATL-380 (regression guard)", () => {
+      const resolution = resolveTranscriptMergeTarget({
+        source: {
+          sourceType: "granola",
+          title: "Hydra Daily",
+          body: "Working on banner design for the new unified search page. One sample done, plan to create 2-3 more banner mockups for selection, using James' previous images as loose guardrails only.",
+        },
+        extracted: {
+          title: "Create 2-3 more banner mockups for unified search page",
+          reason:
+            "Milos is working on a banner design for the new unified search page and needs 2-3 more mockups for selection.",
+          nextAction:
+            "Use James' previous images as loose guardrails only, not constraints.",
+          status: "actionable",
+          existingTaskId: uatl380Banner.id,
+          owner: "Milos",
+        },
+        existingTasks: [uatl380Banner],
+        myName: MILOS,
+      });
+      assert.equal(resolution.taskId, uatl380Banner.id);
+      assert.equal(resolution.mode, "full");
+    });
+  });
+
+  describe("EV-02: topic-only anchoring requires explicit ownership", () => {
+    it("does not anchor an unrelated extract onto the sole active task without a hint", () => {
+      const resolution = resolveTranscriptMergeTarget({
+        source: {
+          sourceType: "granola",
+          title: "Hydra Daily",
+          body: "Christian has not been attending the daily; someone to follow up on what's going on.",
+        },
+        extracted: {
+          title: "Follow up with Christian on daily attendance",
+          reason: "Christian has not been attending the daily.",
+          nextAction: "Sync with Christian on his attendance and role.",
+          status: "actionable",
+          existingTaskId: null,
+        },
+        existingTasks: [uatl380Banner],
+        myName: MILOS,
+      });
+      assert.equal(resolution.taskId, null);
+    });
+  });
+
+  describe("EV-06: exact-title dedupe across sources", () => {
+    it("merges a Jira sync onto an already-existing task with the same title instead of duplicating it (real incident: #468/#487)", () => {
+      const resolution = resolveTranscriptMergeTarget({
+        source: {
+          sourceType: "jira",
+          title: "UATL-380: DESIGN - Banner for Part Search",
+          body: "Design a part search banner for all modules.",
+        },
+        extracted: {
+          title: "UATL-380 · Design Part Search Banner",
+          reason:
+            "The task is to design a part search banner for all modules, as described in Jira ticket UATL-380.",
+          nextAction:
+            "Create a new Figma frame for the unified search banner design, incorporating James' previous images as a reference.",
+          status: "actionable",
+          existingTaskId: null,
+          owner: "Milos Dostanic",
+        },
+        existingTasks: [designBannerPreJira],
+        myName: MILOS,
+      });
+      assert.equal(resolution.taskId, designBannerPreJira.id);
+      assert.equal(resolution.mode, "full");
+      assert.match(resolution.reason, /exact title match/i);
+    });
+
+    it("does not dedupe-merge onto an identically-titled task that explicitly belongs to someone else", () => {
+      const someoneElsesTask: MergeCandidateTask = {
+        ...designBannerPreJira,
+        owner: "Someone Else",
+      };
+      const resolution = resolveTranscriptMergeTarget({
+        source: {
+          sourceType: "jira",
+          title: "UATL-380: DESIGN - Banner for Part Search",
+          body: "Design a part search banner for all modules.",
+        },
+        extracted: {
+          title: "UATL-380 · Design Part Search Banner",
+          reason: "The task is to design a part search banner for all modules.",
+          nextAction: "Create a new Figma frame for the unified search banner design.",
+          status: "actionable",
+          existingTaskId: null,
+          owner: "Milos Dostanic",
+        },
+        existingTasks: [someoneElsesTask],
+        myName: MILOS,
+      });
+      assert.equal(resolution.taskId, null);
+    });
+
+    it("findTaskByExactTitleMatch ignores a leading Jira-key prefix when comparing titles", () => {
+      const match = findTaskByExactTitleMatch(
+        [designBannerPreJira],
+        "UATL-380 · Design Part Search Banner",
+        MILOS
+      );
+      assert.equal(match?.id, designBannerPreJira.id);
+    });
+  });
+
+  describe("isExtractRelevantToTask (EV-00 shared predicate)", () => {
+    const target = uatl380Banner;
+
+    it("is relevant when the extract shares the task's Jira key", () => {
+      const result = isExtractRelevantToTask({
+        extract: {
+          title: "Update banner ticket",
+          reason: "Status update",
+          nextAction: "Comment on UATL-380",
+          owner: null,
+        },
+        sourceText: "Jira comment on UATL-380",
+        target,
+        myName: null,
+      });
+      assert.equal(result.relevant, true);
+    });
+
+    it("is relevant when ownership is explicit and topic overlap clears the bar", () => {
+      const result = isExtractRelevantToTask({
+        extract: {
+          title: "Create more banner mockups",
+          reason: "Milos is drafting banner concept images for each module",
+          nextAction: "Draft banner concept images for each module",
+          owner: "Milos",
+        },
+        sourceText: "Banner concept images for each module, stacked into one banner",
+        target,
+        myName: MILOS,
+      });
+      assert.equal(result.relevant, true);
+    });
+
+    it("is not relevant on ownership alone without topic overlap", () => {
+      const result = isExtractRelevantToTask({
+        extract: {
+          title: "Simplify column mapping",
+          reason: "Milos is simplifying the mapping process for users",
+          nextAction: "Auto-map columns for the user",
+          owner: "Milos",
+        },
+        sourceText: "Column mapping needs to be simplified for non-technical users",
+        target,
+        myName: MILOS,
+      });
+      assert.equal(result.relevant, false);
+    });
+
+    it("is not relevant on topic overlap alone without explicit ownership", () => {
+      const result = isExtractRelevantToTask({
+        extract: {
+          title: "Banner concept images needed",
+          reason: "The banner concept images for each module need drafting",
+          nextAction: "Draft banner concept images",
+          owner: null,
+        },
+        sourceText: "Banner concept images for each module",
+        target,
+        myName: MILOS,
+      });
+      assert.equal(result.relevant, false);
+    });
   });
 });

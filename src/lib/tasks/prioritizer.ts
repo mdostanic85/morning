@@ -46,6 +46,7 @@ import {
   reconcileJiraWorkItems,
   reconcileSelfReportedCompletion,
 } from "@/services/jiraWorkItemReconciliation";
+import { pruneIrrelevantTaskEvidence } from "@/services/evidenceRelevancePrune";
 
 const RECENT_SOURCE_LIMIT = 8;
 const SOURCE_EXCERPT_LENGTH = 360;
@@ -245,6 +246,10 @@ export async function rebuildTodayQueue(options?: {
   // Close tasks whose own freshest evidence self-reports the work is done
   // (e.g. today's meeting notes saying the design is finalized).
   await reconcileSelfReportedCompletion();
+  // Remove stale / off-topic evidence that earlier syncs, adoption, or merges
+  // wrongly attached to Jira-anchored tasks, so ranking below reads only the
+  // sources that genuinely justify each task.
+  await pruneIrrelevantTaskEvidence();
 
   const today = options?.today ?? localDateString();
   const [queue, allProjects, sourceItems, previousDailyMemory, profile] = await Promise.all([

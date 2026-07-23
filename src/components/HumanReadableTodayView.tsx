@@ -226,7 +226,13 @@ function StatusBadge({
   );
 }
 
-function EvidenceRow({ entry }: { entry: AttentionEntry }) {
+function EvidenceRow({
+  entry,
+  confidence,
+}: {
+  entry: AttentionEntry;
+  confidence: number | null | undefined;
+}) {
   const evidence = entry.task?.evidence[0] ?? null;
   const sourceLink = entry.item?.sourceLinks[0] ?? null;
   const label = evidence?.sourceTitle ?? sourceLink?.label ?? null;
@@ -235,7 +241,10 @@ function EvidenceRow({ entry }: { entry: AttentionEntry }) {
 
   return (
     <div className="brief-pillar brief-pillar-evidence">
-      <p className="brief-pillar-label">Evidence</p>
+      <div className="brief-pillar-label-row">
+        <p className="brief-pillar-label">Evidence</p>
+        {confidence != null ? <ConfidenceBadge level={confidence} /> : null}
+      </div>
       {label ? (
         <div>
           {url ? (
@@ -283,9 +292,6 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
         <div className="brief-badge-row">
           <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
           {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
-          {entry.task?.confidence != null ? (
-            <ConfidenceBadge level={entry.task.confidence} />
-          ) : null}
           {updated ? <span className="brief-updated">{updated}</span> : null}
         </div>
       </div>
@@ -316,18 +322,18 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
           </ul>
         </div>
 
-        <EvidenceRow entry={entry} />
+        <EvidenceRow entry={entry} confidence={entry.task?.confidence} />
       </div>
 
       <div className="brief-focus-footer">
         {entry.task ? (
           <WhyThisButton whyFirst={whyFirst} evidence={entry.task.evidence} />
         ) : (
-          <span className="text-sm text-muted">Needs a linked task before execution.</span>
+          <span className="text-sm text-muted">Link a task before you can start work here.</span>
         )}
         {href ? (
           <Link href={href} className="button button--primary button--sm shrink-0">
-            Open task
+            Start this task
             <ArrowRight aria-hidden />
           </Link>
         ) : null}
@@ -352,7 +358,6 @@ function SecondaryTaskCard({
 }) {
   const title = entry.item?.title ?? entry.task?.title ?? "Unresolved work";
   const reason = humanizeReason(entry.item?.reason ?? entry.task?.reason, title);
-  const nextAction = entry.item?.nextAction ?? entry.task?.nextAction ?? null;
   const badge = statusBadge(entry, brief, index);
   const key = jiraKey(entry);
   const href = entry.task ? `/tasks/${entry.task.id}` : null;
@@ -368,12 +373,6 @@ function SecondaryTaskCard({
       </div>
       <h3 className="brief-secondary-title">{title}</h3>
       <p className="brief-secondary-reason">{reason}</p>
-      {nextAction ? (
-        <p className="brief-secondary-next">
-          <span className="brief-secondary-next-label">Next: </span>
-          {nextAction}
-        </p>
-      ) : null}
     </>
   );
 
@@ -385,7 +384,7 @@ function SecondaryTaskCard({
     <Link href={href} className="brief-secondary-card brief-secondary-card-link">
       {body}
       <span className="brief-secondary-more">
-        More details
+        Open details
         <ArrowRight className="size-3.5" aria-hidden />
       </span>
     </Link>
@@ -433,7 +432,7 @@ export function HumanReadableTodayView({
             <span className="brief-date-sep" aria-hidden>
               ·
             </span>
-            <span className="brief-date-meta">Morning operational brief</span>
+            <span className="brief-date-meta">What to do first today</span>
           </p>
         </div>
         <div className="brief-header-actions">
@@ -506,7 +505,7 @@ export function HumanReadableTodayView({
 
           {(dailyBrief?.sourceConflicts.length ?? 0) > 0 || visibleBlockedWaiting.length > 0 ? (
             <div className="brief-next-stack">
-              <p className="brief-kicker brief-kicker-attention">Needs your attention</p>
+              <p className="brief-kicker brief-kicker-attention">Needs your input</p>
               {dailyBrief?.sourceConflicts.map((conflict) => (
                 <ConflictCard key={conflict.summary} conflict={conflict} />
               ))}
@@ -524,8 +523,7 @@ export function HumanReadableTodayView({
       </main>
 
       <p className="brief-footnote">
-        Up to three priorities, and only when ownership is clear. Empty is better than a forced
-        guess.
+        Up to three items — only work that is clearly yours. Empty beats a forced guess.
       </p>
     </div>
   );

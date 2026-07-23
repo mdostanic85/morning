@@ -58,6 +58,9 @@ export const dailyBriefV2Schema = z.object({
       title: z.string(),
       jiraKey: z.string().nullable(),
       reason: z.string(),
+      // The task's own description (its "why"), shown on the card. `reason`
+      // stays the triage label (waiting/ownership) that drives the badge.
+      description: z.string().nullable().default(null),
       evidenceIds: z.array(z.number().int()),
       // Nullable + defaulted so a brief cached before this field existed
       // still parses (see buildDailyBrief.ts's safeParse fallback).

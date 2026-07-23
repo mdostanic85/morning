@@ -334,6 +334,11 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
   // blockers on this brief.
   const blockedWaiting = activeTasks
     .filter((task) => {
+      // Work the user actively queued (e.g. "This is mine" → next) is no
+      // longer "needs your input" — it belongs in the ranked queue.
+      if ((task.status === "now" || task.status === "next") && !task.waitingOn) {
+        return false;
+      }
       const ownership = classifyTaskOwnership(
         {
           owner: task.owner,
@@ -356,6 +361,8 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
     .map((task) => ({
       title: task.title,
       jiraKey: composerJiraKey(task),
+      // The task's own description — shown on the card, clamped to two lines.
+      description: task.reason?.trim() || null,
       reason: task.waitingOn
         ? `Waiting on ${task.waitingOn}`
         : classifyTaskOwnership(

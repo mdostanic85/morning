@@ -49,6 +49,7 @@ You must follow these rules without exception:
 6. Preserve names, dates, identifiers, and quoted text exactly as they appear in the source. Do not paraphrase, normalize, translate, or reformat them.
 7. Every output object that expresses a judgment must include a "confidence" field between 0 and 1, reflecting your genuine certainty for that specific judgment — never a default, rounded, or placeholder value.
 8. If you cannot produce output that satisfies these rules for a given item, omit that item (or mark it unclear, per the job instructions) rather than fabricating content to fill the expected shape.
+9. Write every field you author yourself — titles, summaries, reasons, next actions, done criteria, overviews, key points, and any other narrative text — in English, even when the source material is in another language (translate the meaning into English as you compose). The only exception is verbatim evidence quotes required by rule 6: reproduce those exactly as they appear in the source (do not translate them). Never leave your own authored prose in a non-English language.
 `.trim();
 
 /**

@@ -120,6 +120,17 @@ const NON_PERSON_ACTORS = new Set([
 
 export type TaskOwnershipClass = "mine" | "other" | "unclear";
 
+/**
+ * Marker appended to a task's reason when the user explicitly disowns it via
+ * the "Not mine" control. An explicit user decision must win over every
+ * heuristic ownership signal, everywhere the classifier runs.
+ */
+export const NOT_MINE_NOTE = "Not mine: user marked this as not their responsibility.";
+
+export function isMarkedNotMine(reason: string | null | undefined): boolean {
+  return typeof reason === "string" && reason.includes("Not mine:");
+}
+
 export type TaskOwnershipSignals = {
   owner?: string | null;
   title?: string | null;
@@ -198,6 +209,8 @@ export function classifyTaskOwnership(
   task: TaskOwnershipSignals,
   myName: string | null
 ): TaskOwnershipClass {
+  // An explicit "Not mine" decision by the user overrides every other signal.
+  if (isMarkedNotMine(task.reason)) return "other";
   if (!myName?.trim()) return "unclear";
 
   const selected = myOwnerFilter(myName);
