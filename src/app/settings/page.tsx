@@ -8,6 +8,7 @@ import { getUserProfile } from "@/services/userProfile";
 import { getProjects } from "@/services/projects";
 import { listIngestionRules } from "@/services/ingestionRules";
 import { ConnectionCard } from "@/components/ConnectionCard";
+import { GoogleConnectionPanel } from "@/components/GoogleConnectionPanel";
 import { GitHubConnectionSettings } from "@/components/GitHubConnectionSettings";
 import type { ConnectionTransport } from "@/domain/connection";
 import { Tabs } from "@heroui/react/tabs";
@@ -39,33 +40,31 @@ export default async function SettingsPage({
  ? null
  : `To enable direct API Connect, add ${vars} to .env.local (create the OAuth app at ${url}), then restart the dev server. MCP Connect works without these.`;
 
- const connectionCards = [
- {
- provider: "gmail",
- label: "Gmail",
- description:
- "Read-only Gmail sync for Gemini, Google Meet, meeting notes, and transcripts.",
- authType: "oauth" as const,
- setupHint: oauthSetupHint(
- hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"),
- "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET",
- "console.cloud.google.com"
- ),
- },
- {
- provider: "calendar",
- label: "Google Calendar",
- description:
- "Read-only sync for today’s meetings on your primary calendar. Powers the Today meetings panel.",
- authType: "oauth" as const,
- setupHint: oauthSetupHint(
- hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"),
- "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET",
- "console.cloud.google.com"
- ),
- },
- {
- provider: "jira",
+  const googleSetupHint = oauthSetupHint(
+    hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"),
+    "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET",
+    "console.cloud.google.com"
+  );
+  const googleProviders = [
+    { provider: "gmail", label: "Gmail" },
+    { provider: "calendar", label: "Google Calendar" },
+    { provider: "drive", label: "Google Drive" },
+  ] as const;
+  const googleSources = googleProviders.map(({ provider, label }) => {
+    const connection = connectionByProvider.get(provider);
+    return {
+      provider,
+      label,
+      status: connection?.status ?? "disconnected",
+      lastSync:
+        typeof connection?.metadata?.lastSync === "string" ? connection.metadata.lastSync : null,
+    };
+  });
+  const googleAllConnected = googleSources.every((s) => s.status === "connected");
+
+  const connectionCards = [
+    {
+      provider: "jira",
  label: "Jira",
  description:
  "Read-only sync for issues assigned to you (any column) plus recent issues where you’re mentioned.",
@@ -145,8 +144,12 @@ export default async function SettingsPage({
  patFallback?: boolean;
  }[];
 
- const connectedCount = connections.filter((c) => c.status === "connected").length;
- const activeKeyCount = statuses.filter((s) => s.configured && s.enabled).length;
+  const nonGoogleConnectedCount = connectionCards.filter(
+    (card) => connectionByProvider.get(card.provider)?.status === "connected"
+  ).length;
+  const connectedCount = nonGoogleConnectedCount + (googleAllConnected ? 1 : 0);
+  const totalSources = connectionCards.length + 1;
+  const activeKeyCount = statuses.filter((s) => s.configured && s.enabled).length;
 
  return (
  <div className="space-y-6">
@@ -162,7 +165,7 @@ export default async function SettingsPage({
  </div>
  <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
  <span className="text-sm font-semibold text-foreground">
- {connectedCount}/{connectionCards.length} sources
+                {connectedCount}/{totalSources} sources
  </span>
  <span className="text-sm text-muted-soft">
  {activeKeyCount}/{statuses.length} model keys
@@ -192,8 +195,8 @@ export default async function SettingsPage({
  <Tabs.Tab id="connections" className="flex-1">
  Connections
  <span className="tabular-nums text-muted-soft">
- {connectedCount}/{connectionCards.length}
- </span>
+                {connectedCount}/{totalSources}
+              </span>
  <Tabs.Indicator />
  </Tabs.Tab>
           <Tabs.Tab id="transcript" className="flex-1">
@@ -219,12 +222,17 @@ export default async function SettingsPage({
  </Tabs.ListContainer>
 
  {/* ── Connections ─────────────────────────────────────────────────── */}
- <Tabs.Panel id="connections" className="space-y-4">
- <p className="text-sm leading-relaxed text-muted">
- Connect read-only sources. Pull fresh data with{" "}
- <span className="font-medium text-foreground">Sync my day</span> on Today.
- </p>
- <div className="flex flex-col gap-4">
+          <Tabs.Panel id="connections" className="space-y-4">
+            <p className="text-sm leading-relaxed text-muted">
+              Connect read-only sources. Pull fresh data with{" "}
+              <span className="font-medium text-foreground">Sync my day</span> on Today.
+            </p>
+            <GoogleConnectionPanel
+              sources={googleSources}
+              configured={hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET")}
+              setupHint={googleSetupHint}
+            />
+            <div className="flex flex-col gap-4">
  {connectionCards.map((card) => {
  const connection = connectionByProvider.get(card.provider);
  const lastSync =

@@ -42,7 +42,7 @@ export function HydraReportView({ report, evidence, status }: { report: HydraRep
  return (
  <div className="space-y-4">
  <section className="relative overflow-hidden rounded-surface border border-accent/25 bg-surface p-6 sm:p-8">
- <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-warm via-accent to-transparent" />
+ <div className="absolute inset-y-0 left-0 w-1 bg-[linear-gradient(180deg,var(--gradient-magenta),var(--gradient-violet),var(--gradient-indigo),var(--gradient-blue),var(--gradient-cyan),transparent)]" />
  <div className="flex flex-wrap items-center justify-between gap-3">
  <p className="eyebrow text-accent">Today first</p>
  <HydraRunStatus status={status} compact />

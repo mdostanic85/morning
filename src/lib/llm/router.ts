@@ -126,6 +126,11 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
     provider: "openai",
     model: "gpt-5.4",
     maxTokens: 4096,
+    // If OpenAI is off/unavailable for chat, fall back to Groq.
+    fallbacks: [
+      { provider: "groq", model: GROQ_70B, maxTokens: 4096 },
+      { ...GROQ_8B_FALLBACK },
+    ],
   },
   priority_planning: {
     provider: "groq",

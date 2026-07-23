@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  isSourceRelevantToTask,
+  isQuoteRelevantToTask,
   planEvidenceRelevancePrune,
   taskDomainText,
   type PruneSourceInfo,
@@ -14,85 +14,97 @@ const domain = taskDomainText({
   nextAction: "Create 2-3 banner mockups for the unified search page.",
 });
 
-describe("isSourceRelevantToTask", () => {
+describe("isQuoteRelevantToTask", () => {
   it("keeps the Jira anchor regardless of freshness or overlap", () => {
-    const decision = isSourceRelevantToTask({
+    const decision = isQuoteRelevantToTask({
       taskKey: "UATL-380",
       domain,
       newestSourceTime: NEWEST,
-      group: {
-        sourceItemId: 250,
+      source: {
         sourceType: "jira",
         sourceExternalId: "UATL-380",
         sourceDate: "2026-01-01T00:00:00.000Z",
-        quotesText: "anything",
       },
+      quoteText: "anything",
     });
     assert.equal(decision.relevant, true);
   });
 
-  it("keeps a fresh source whose quotes overlap the task domain", () => {
-    const decision = isSourceRelevantToTask({
+  it("keeps a fresh quote that overlaps the task domain", () => {
+    const decision = isQuoteRelevantToTask({
       taskKey: "UATL-380",
       domain,
       newestSourceTime: NEWEST,
-      group: {
-        sourceItemId: 254,
+      source: {
         sourceType: "granola",
         sourceExternalId: null,
         sourceDate: "2026-07-22T14:22:00.000Z",
-        quotesText: "Create 2-3 more banner mockups for unified search page",
       },
+      quoteText: "Create 2-3 more banner mockups for unified search page",
     });
     assert.equal(decision.relevant, true);
   });
 
-  it("drops a fresh source whose quotes are off-topic", () => {
-    const decision = isSourceRelevantToTask({
+  it("drops a fresh quote that is off-topic", () => {
+    const decision = isQuoteRelevantToTask({
       taskKey: "UATL-380",
       domain,
       newestSourceTime: NEWEST,
-      group: {
-        sourceItemId: 248,
+      source: {
         sourceType: "granola",
         sourceExternalId: null,
         sourceDate: "2026-07-22T09:00:00.000Z",
-        quotesText: "I think that when I first saw the high 92% confidence score",
       },
+      quoteText: "I think that when I first saw the high 92% confidence score",
     });
     assert.equal(decision.relevant, false);
   });
 
-  it("drops a source older than the freshness window", () => {
-    const decision = isSourceRelevantToTask({
+  it("drops a quote older than the freshness window", () => {
+    const decision = isQuoteRelevantToTask({
       taskKey: "UATL-380",
       domain,
       newestSourceTime: NEWEST,
-      group: {
-        sourceItemId: 54,
+      source: {
         sourceType: "gmail",
         sourceExternalId: null,
         sourceDate: "2026-06-09T09:00:00.000Z",
-        quotesText: "banner mockups unified search", // overlaps, but stale
       },
+      quoteText: "banner mockups unified search", // overlaps, but stale
     });
     assert.equal(decision.relevant, false);
   });
 
-  it("keeps a source that cites the ticket key even when off-topic", () => {
-    const decision = isSourceRelevantToTask({
+  it("keeps a quote that itself cites the ticket key even when off-topic", () => {
+    const decision = isQuoteRelevantToTask({
       taskKey: "UATL-380",
       domain,
       newestSourceTime: NEWEST,
-      group: {
-        sourceItemId: 300,
+      source: {
         sourceType: "gmail",
         sourceExternalId: null,
         sourceDate: "2026-07-22T09:00:00.000Z",
-        quotesText: "Following up on UATL-380 with the team",
       },
+      quoteText: "Following up on UATL-380 with the team",
     });
     assert.equal(decision.relevant, true);
+  });
+
+  it("drops an off-topic sibling quote even when it shares the source with a key-citing line", () => {
+    // The key-citing sibling ("Following up on UATL-380") does NOT rescue this
+    // line — each quote is judged on its own.
+    const decision = isQuoteRelevantToTask({
+      taskKey: "UATL-380",
+      domain,
+      newestSourceTime: NEWEST,
+      source: {
+        sourceType: "granola",
+        sourceExternalId: null,
+        sourceDate: "2026-07-22T09:00:00.000Z",
+      },
+      quoteText: "The confidence percentage sits in the wrong spot on the card",
+    });
+    assert.equal(decision.relevant, false);
   });
 });
 
@@ -126,6 +138,33 @@ describe("planEvidenceRelevancePrune", () => {
     assert.deepEqual(
       pruned.map((p) => p.evidenceId).sort((a, b) => a - b),
       [3, 4]
+    );
+  });
+
+  it("prunes an off-topic row but keeps an on-topic row from the SAME source", () => {
+    const pruned = planEvidenceRelevancePrune({
+      tasks: [
+        {
+          id: 487,
+          title: "UATL-380 · Design Part Search Banner",
+          reason: "Design a unified search banner shown across every module.",
+          nextAction: "Create 2-3 banner mockups for the unified search page.",
+          evidence: [
+            { id: 1, sourceItemId: 250, quote: "Banner for all modules", summary: "", sourceDate: "2026-07-22T11:03:00.000Z" },
+            // Both lines come from the one "Milos & Lucas sync" meeting (254).
+            { id: 2, sourceItemId: 254, quote: "Create 2-3 more banner mockups for the unified search page", summary: "", sourceDate: "2026-07-22T14:22:00.000Z" },
+            { id: 3, sourceItemId: 254, quote: "when I first saw the high 92% confidence score placement", summary: "", sourceDate: "2026-07-22T14:22:00.000Z" },
+          ],
+        },
+      ],
+      sourceById,
+    });
+
+    // Only the confidence line (row 3) is dropped; the banner line (row 2) and
+    // the Jira anchor (row 1) survive — per-quote, not per-source.
+    assert.deepEqual(
+      pruned.map((p) => p.evidenceId),
+      [3]
     );
   });
 

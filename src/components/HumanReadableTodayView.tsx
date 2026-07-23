@@ -2,11 +2,18 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
+  CalendarDays,
   CheckCircle2,
   CircleDashed,
   Clock3,
   ExternalLink,
+  FileText,
+  GitBranch,
   LockKeyhole,
+  Mail,
+  MessageSquare,
+  PenTool,
+  Ticket,
 } from "lucide-react";
 import type { DailyBriefV2, DailyWorkItem } from "@/domain/dailyBrief";
 import type { SourceType } from "@/domain/sourceItem";
@@ -15,12 +22,15 @@ import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
 import { SyncMyDayButton } from "@/components/SyncMyDayButton";
 import { TodayMeetingsCard } from "@/components/TodayMeetingsCard";
+import { NeedsInputRail } from "@/components/NeedsInputRail";
+import { DismissibleDayChange } from "@/components/DismissibleDayChange";
 import { WhyThisButton } from "@/components/WhyThisButton";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
-import { BlockedWaitingCard } from "@/components/BlockedWaitingCard";
+import { sourceTypeLabel } from "@/lib/tasks/taskSupportingSources";
 import { dedupeBlockedWaiting } from "@/lib/dailyBrief/blockedWaitingDedupe";
 import { humanizeReason } from "@/lib/tasks/humanizeReason";
 import { taskEligibleForBriefPriority } from "@/lib/filters/ownerFilter";
+import { cn } from "@/lib/utils";
 
 export interface HumanReadableTask {
   id: number;
@@ -84,7 +94,9 @@ function evidenceDate(task: HumanReadableTask | null): string | null {
   return times.length ? new Date(Math.max(...times)).toISOString() : task.updatedAt;
 }
 
-const MAX_BLOCKED_WAITING_ITEMS = 3;
+/** Bento side column — at most two "Next up" rows inside the tile. */
+const MAX_NEXT_UP = 2;
+const MAX_ATTENTION = 1 + MAX_NEXT_UP;
 
 function relativeTime(value: string | null): string | null {
   if (!value) return null;
@@ -160,7 +172,7 @@ function resolveAttention(
 
   // Without a brief, only surface clearly owned work — never pad with guesses.
   if (!dailyBrief) {
-    return ownedTasks.slice(0, 3).map((task) => ({ item: null, task }));
+    return ownedTasks.slice(0, MAX_ATTENTION).map((task) => ({ item: null, task }));
   }
 
   const resolved: AttentionEntry[] = [];
@@ -204,7 +216,7 @@ function resolveAttention(
     }
 
     resolved.push({ item, task });
-    if (resolved.length >= 3) break;
+    if (resolved.length >= MAX_ATTENTION) break;
   }
 
   return resolved;
@@ -226,6 +238,30 @@ function StatusBadge({
   );
 }
 
+const SOURCE_ICON: Partial<Record<SourceType, typeof Clock3>> = {
+  jira: Ticket,
+  granola: FileText,
+  drive: FileText,
+  manual_transcript: FileText,
+  confluence: FileText,
+  calendar: CalendarDays,
+  gmail: Mail,
+  figma: PenTool,
+  github: GitBranch,
+  discord: MessageSquare,
+  git: GitBranch,
+};
+
+/** Where this evidence came from — the source system, not just its title. */
+function SourceBadge({ sourceType }: { sourceType: SourceType }) {
+  const Icon = SOURCE_ICON[sourceType] ?? FileText;
+  return (
+    <AppBadge tone="default" icon={<Icon className="size-3.5" aria-hidden />}>
+      {sourceTypeLabel(sourceType)}
+    </AppBadge>
+  );
+}
+
 function EvidenceRow({
   entry,
   confidence,
@@ -233,11 +269,18 @@ function EvidenceRow({
   entry: AttentionEntry;
   confidence: number | null | undefined;
 }) {
-  const evidence = entry.task?.evidence[0] ?? null;
+  const evidenceList = entry.task?.evidence ?? [];
+  // Prefer the evidence that carries a verbatim quote — that is the line that
+  // actually confirms what to do, not just the first attached source.
+  const evidence = evidenceList.find((item) => item.quote?.trim()) ?? evidenceList[0] ?? null;
   const sourceLink = entry.item?.sourceLinks[0] ?? null;
   const label = evidence?.sourceTitle ?? sourceLink?.label ?? null;
   const url = evidence?.url ?? sourceLink?.url ?? null;
-  const quote = evidence?.quote?.trim() || evidence?.summary?.trim() || null;
+  const sourceType = evidence?.sourceType ?? null;
+  // A quote is only a quote when it is verbatim. A summary is a paraphrase and
+  // must never be dressed up in quotation marks (evidence over assertion).
+  const quote = evidence?.quote?.trim() || null;
+  const summary = evidence?.summary?.trim() || null;
 
   return (
     <div className="brief-pillar brief-pillar-evidence">
@@ -245,17 +288,28 @@ function EvidenceRow({
         <p className="brief-pillar-label">Evidence</p>
         {confidence != null ? <ConfidenceBadge level={confidence} /> : null}
       </div>
-      {label ? (
-        <div>
-          {url ? (
-            <a href={url} target="_blank" rel="noreferrer" className="brief-source-link">
-              {label}
-              <ExternalLink className="size-3.5" aria-hidden />
-            </a>
+      {label || sourceType ? (
+        <div className="brief-evidence-body">
+          <div className="brief-evidence-source">
+            {sourceType ? <SourceBadge sourceType={sourceType} /> : null}
+            {url ? (
+              <a href={url} target="_blank" rel="noreferrer" className="brief-source-link">
+                {label}
+                <ExternalLink className="size-3.5" aria-hidden />
+              </a>
+            ) : label ? (
+              <strong className="brief-evidence-title">{label}</strong>
+            ) : null}
+          </div>
+          {quote ? (
+            <blockquote className="brief-evidence-quote">“{quote}”</blockquote>
+          ) : summary ? (
+            <p className="brief-evidence-summary">{summary}</p>
           ) : (
-            <strong>{label}</strong>
+            <p className="brief-evidence-missing">
+              No direct quote confirms this yet. Open the source before acting.
+            </p>
           )}
-          {quote ? <p className="brief-evidence-quote">“{quote}”</p> : null}
         </div>
       ) : (
         <p className="brief-evidence-missing">No source excerpt is available. Clarify before acting.</p>
@@ -343,11 +397,12 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
 }
 
 /**
- * Secondary tasks stay quiet: a badge, the headline, a two-line summary, and
- * — per the app's task-card rule — the next action is always visible even
- * here, never hidden behind the drill-through link alone.
+ * One compact row inside the Next up tile.
+ * Next action and the first done criterion stay visible at this size; the
+ * evidence source is intentionally deferred to the task detail page rather
+ * than repeated in this compact list.
  */
-function SecondaryTaskCard({
+function NextUpRow({
   entry,
   brief,
   index,
@@ -357,49 +412,59 @@ function SecondaryTaskCard({
   index: number;
 }) {
   const title = entry.item?.title ?? entry.task?.title ?? "Unresolved work";
-  const reason = humanizeReason(entry.item?.reason ?? entry.task?.reason, title);
+  const nextAction =
+    entry.item?.nextAction ??
+    entry.task?.nextAction ??
+    "Clarify the requirement before acting.";
   const badge = statusBadge(entry, brief, index);
   const key = jiraKey(entry);
   const href = entry.task ? `/tasks/${entry.task.id}` : null;
-
-  const body = (
-    <>
-      <div className="brief-secondary-badges">
-        <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
-        {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
-        {entry.task?.confidence != null ? (
-          <ConfidenceBadge level={entry.task.confidence} />
-        ) : null}
-      </div>
-      <h3 className="brief-secondary-title">{title}</h3>
-      <p className="brief-secondary-reason">{reason}</p>
-    </>
-  );
-
-  if (!href) {
-    return <div className="brief-secondary-card">{body}</div>;
-  }
+  const confidence = entry.task?.confidence ?? null;
 
   return (
-    <Link href={href} className="brief-secondary-card brief-secondary-card-link">
-      {body}
-      <span className="brief-secondary-more">
-        Open details
-        <ArrowRight className="size-3.5" aria-hidden />
-      </span>
-    </Link>
+    <div className={cn("brief-nextup-row", href && "brief-nextup-row--linked")}>
+      <div className="brief-nextup-row-badges">
+        <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
+        {confidence != null ? <ConfidenceBadge level={confidence} withTooltip={false} /> : null}
+        {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
+      </div>
+      <div className="brief-nextup-body">
+        {href ? (
+          // Stretched link: the whole card opens the task, this anchor just
+          // supplies the accessible label and hit-area (see ::after in CSS).
+          <Link href={href} className="brief-nextup-title brief-nextup-title-link">
+            {title}
+          </Link>
+        ) : (
+          <p className="brief-nextup-title">{title}</p>
+        )}
+        <p className="brief-nextup-action">{nextAction}</p>
+      </div>
+    </div>
   );
 }
 
-/** Same card family as `SecondaryTaskCard`/`BlockedWaitingCard` — a conflict has no single task to resolve it, so it never links anywhere. */
-function ConflictCard({ conflict }: { conflict: DailyBriefV2["sourceConflicts"][number] }) {
+/** Single bounded tile that holds at most MAX_NEXT_UP compact rows. */
+function NextUpTile({
+  entries,
+  brief,
+}: {
+  entries: AttentionEntry[];
+  brief: DailyBriefV2 | null;
+}) {
+  if (entries.length === 0) return null;
   return (
-    <div className="brief-secondary-card">
-      <div className="brief-secondary-badges">
-        <StatusBadge label="Conflict" tone="danger" Icon={AlertTriangle} />
-      </div>
-      <p className="brief-secondary-reason">{conflict.summary}</p>
-    </div>
+    <section className="brief-nextup-tile">
+      <p className="brief-kicker">Next up</p>
+      {entries.map((entry, index) => (
+        <NextUpRow
+          key={entry.task?.id ?? entry.item?.jiraKey ?? entry.item?.title ?? index}
+          entry={entry}
+          brief={brief}
+          index={index + 1}
+        />
+      ))}
+    </section>
   );
 }
 
@@ -416,11 +481,11 @@ export function HumanReadableTodayView({
 }: HumanReadableTodayViewProps) {
   const attention = resolveAttention(tasks, dailyBrief, profileName);
   const primary = attention[0] ?? null;
-  const nextTasks = attention.slice(1);
+  const nextTasks = attention.slice(1, 1 + MAX_NEXT_UP);
   const name = firstName(profileName);
   const dedupedBlockedWaiting = dailyBrief ? dedupeBlockedWaiting(dailyBrief.blockedWaiting) : [];
-  const visibleBlockedWaiting = dedupedBlockedWaiting.slice(0, MAX_BLOCKED_WAITING_ITEMS);
-  const hiddenBlockedWaitingCount = dedupedBlockedWaiting.length - visibleBlockedWaiting.length;
+  const conflicts = dailyBrief?.sourceConflicts ?? [];
+  const hasSideContent = nextTasks.length > 0 || calendarConnected || meetings.length > 0;
 
   return (
     <div className="brief-page">
@@ -459,19 +524,12 @@ export function HumanReadableTodayView({
         </div>
       ) : null}
 
-      {dailyBrief?.dayChange ? (
-        <section className="brief-change-alert">
-          <div className="brief-change-mark" aria-hidden>
-            !
-          </div>
-          <div>
-            <p className="brief-kicker">What changed</p>
-            <p>{dailyBrief.dayChange.text}</p>
-          </div>
-        </section>
-      ) : null}
+      {dailyBrief?.dayChange ? <DismissibleDayChange text={dailyBrief.dayChange.text} /> : null}
 
-      <main className="brief-bento">
+      {/* Full-width attention rail — triage-only, never competes with focus work */}
+      <NeedsInputRail blockedWaiting={dedupedBlockedWaiting} conflicts={conflicts} />
+
+      <main className={`brief-bento${hasSideContent ? "" : " brief-bento--wide"}`}>
         {primary ? (
           <div className="brief-bento-primary">
             <FocusCard entry={primary} brief={dailyBrief} />
@@ -486,44 +544,18 @@ export function HumanReadableTodayView({
           </section>
         )}
 
-        <aside className="brief-bento-side">
-          <TodayMeetingsCard meetings={meetings} calendarConnected={calendarConnected} />
-
-          {nextTasks.length > 0 ? (
-            <div className="brief-next-stack">
-              <p className="brief-kicker">Next up</p>
-              {nextTasks.map((entry, index) => (
-                <SecondaryTaskCard
-                  key={entry.task?.id ?? entry.item?.jiraKey ?? entry.item?.title ?? index}
-                  entry={entry}
-                  brief={dailyBrief}
-                  index={index + 1}
-                />
-              ))}
-            </div>
-          ) : null}
-
-          {(dailyBrief?.sourceConflicts.length ?? 0) > 0 || visibleBlockedWaiting.length > 0 ? (
-            <div className="brief-next-stack">
-              <p className="brief-kicker brief-kicker-attention">Needs your input</p>
-              {dailyBrief?.sourceConflicts.map((conflict) => (
-                <ConflictCard key={conflict.summary} conflict={conflict} />
-              ))}
-              {visibleBlockedWaiting.map((item) => (
-                <BlockedWaitingCard key={item.jiraKey ?? item.title} item={item} />
-              ))}
-              {hiddenBlockedWaitingCount > 0 ? (
-                <p className="brief-conflicts-more">
-                  +{hiddenBlockedWaitingCount} more waiting/unclear — open the task to review.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-        </aside>
+        {hasSideContent ? (
+          <aside className="brief-bento-side">
+            {/* Next up first — work priority above the calendar */}
+            <NextUpTile entries={nextTasks} brief={dailyBrief} />
+            <TodayMeetingsCard meetings={meetings} calendarConnected={calendarConnected} />
+          </aside>
+        ) : null}
       </main>
 
       <p className="brief-footnote">
-        Up to three items — only work that is clearly yours. Empty beats a forced guess.
+        One focus, up to two next-up, and a compact meeting schedule — only work clearly yours.
+        Ambiguous items stay in the attention rail above until you decide.
       </p>
     </div>
   );

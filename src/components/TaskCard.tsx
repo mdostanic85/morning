@@ -139,9 +139,9 @@ export function TaskCard({
  const linkifyOptions = { jiraKey: linkedJiraKey, jiraUrl: linkedJiraUrl };
 
  return (
- <Card
- className={cn(
- "overflow-hidden rounded-surface border ring-0",
+      <Card
+        className={cn(
+          "task-card overflow-hidden rounded-surface border ring-0",
  primary
  ? "border-warm/25 bg-surface-raised"
  : status === "unclear"

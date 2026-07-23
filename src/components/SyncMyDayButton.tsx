@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { SyncWhatsNewPanel } from "./SyncWhatsNewPanel";
 import type { SyncWhatsNew } from "@/lib/imports/syncWhatsNew";
 import type { ConnectionProvider } from "@/lib/connectors/providers";
-import { buildSyncAnimationData, readSyncAnimationColors } from "./syncAnimation";
+import loadingAnimation from "./loadingAnimation.json";
 
 const ACTIVE_SYNC_RUN_KEY = "worklight:activeSyncRunId";
 const POLL_INTERVAL_MS = 2000;
@@ -380,24 +380,8 @@ function humanizeSyncIssue(raw: string): SyncIssueInput {
  };
 }
 
-function buildCompletionSummary(status: SyncStatusResponse): {
- successParts: string[];
- syncIssues: SyncIssueInput[];
-} {
- const successParts: string[] = [];
+function buildCompletionIssues(status: SyncStatusResponse): SyncIssueInput[] {
  const syncIssues: SyncIssueInput[] = [];
-
- const imported = status.providerRuns.reduce(
- (sum, entry) => sum + entry.itemsCreated + entry.itemsUpdated,
- 0
- );
- const unchanged = status.providerRuns.reduce((sum, entry) => sum + entry.itemsUnchanged, 0);
-
- if (imported > 0) {
- successParts.push(`${imported} source item${imported === 1 ? "" : "s"} updated.`);
- } else if (unchanged > 0) {
- successParts.push(`${unchanged} source${unchanged === 1 ? "" : "s"} already up to date.`);
- }
 
  const failed = status.providerRuns.filter((entry) => entry.status === "failed");
  for (const entry of failed) {
@@ -406,9 +390,7 @@ function buildCompletionSummary(status: SyncStatusResponse): {
  );
  }
 
- if (status.syncRun.status === "completed") {
- successParts.push("Queue and briefing refreshed.");
- } else if (status.syncRun.status === "partially_completed") {
+ if (status.syncRun.status === "partially_completed") {
  syncIssues.push(
  humanizeSyncIssue(status.syncRun.errorSummary ?? "Sync completed with issues.")
  );
@@ -418,7 +400,7 @@ function buildCompletionSummary(status: SyncStatusResponse): {
  syncIssues.push(humanizeSyncIssue(status.syncRun.errorSummary ?? "Sync cancelled."));
  }
 
- return { successParts, syncIssues };
+ return syncIssues;
 }
 
 function statusLabel(status: ProviderUiStatus | FinalizeUiStatus): string {
@@ -631,26 +613,15 @@ function SyncActivityAnimation({ mode }: { mode: SyncAnimationMode }) {
  const [reducedMotion, setReducedMotion] = useState(
  () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
  );
- const [animationData, setAnimationData] = useState<ReturnType<typeof buildSyncAnimationData> | null>(
- () => {
- if (typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
- return null;
- }
- return buildSyncAnimationData(readSyncAnimationColors());
- }
- );
 
  useEffect(() => {
  const media = window.matchMedia("(prefers-reduced-motion: reduce)");
- const update = () => {
- setReducedMotion(media.matches);
- setAnimationData(media.matches ? null : buildSyncAnimationData(readSyncAnimationColors()));
- };
+ const update = () => setReducedMotion(media.matches);
  media.addEventListener("change", update);
  return () => media.removeEventListener("change", update);
  }, []);
 
- if (reducedMotion || !animationData || mode !== "running") {
+ if (reducedMotion || mode !== "running") {
  return (
  <span
  aria-hidden
@@ -677,7 +648,7 @@ function SyncActivityAnimation({ mode }: { mode: SyncAnimationMode }) {
 
  return (
  <div aria-hidden className="size-14 shrink-0 overflow-hidden">
- <Lottie animationData={animationData} loop={running} autoplay={running} />
+ <Lottie animationData={loadingAnimation} loop autoplay />
  </div>
  );
 }
@@ -767,7 +738,7 @@ function SyncOverlay({
  "h-full rounded-full transition-[width] duration-700 ease-out",
  networkError
  ? "bg-danger/70"
-                    : "bg-[linear-gradient(90deg,var(--sync-grad-1),var(--sync-grad-2),var(--sync-grad-4))]"
+                   : "bg-[linear-gradient(90deg,var(--sync-grad-1),var(--sync-grad-2),var(--sync-grad-3),var(--sync-grad-4),var(--sync-grad-5))]"
  )}
  style={{ width: `${Math.round(progress * 100)}%` }}
  />
@@ -874,7 +845,6 @@ export function SyncMyDayButton({
 }) {
  const router = useRouter();
  const [status, setStatus] = useState<"idle" | "syncing">("idle");
- const [summary, setSummary] = useState<string | null>(null);
  const [issues, setIssues] = useState<SyncIssue[]>([]);
  const [whatsNew, setWhatsNew] = useState<SyncWhatsNew | null>(null);
  const [liveStatus, setLiveStatus] = useState<SyncStatusResponse | null>(null);
@@ -938,7 +908,6 @@ export function SyncMyDayButton({
  async (existingSyncRunId?: number) => {
  setStatus("syncing");
  setResult(null);
- setSummary(null);
  setIssues([]);
  setWhatsNew(null);
  setNetworkError(null);
@@ -978,16 +947,9 @@ export function SyncMyDayButton({
  // Let the progress bar visibly reach the end before swapping views.
  await new Promise((resolve) => setTimeout(resolve, 450));
 
- const { successParts, syncIssues } = buildCompletionSummary(finalStatus);
+ const syncIssues = buildCompletionIssues(finalStatus);
  const dedupedIssues = dedupeSyncIssues(syncIssues);
 
- setSummary(
- finalStatus.syncRun.status === "cancelled"
- ? null
- : successParts.length > 0
- ? successParts.join(" ")
- : null
- );
  setIssues(finalStatus.syncRun.status === "cancelled" ? [] : dedupedIssues);
 
  if (finalStatus.whatsNew?.hasNew) {
@@ -1011,7 +973,6 @@ export function SyncMyDayButton({
  } catch (err) {
  clearActiveSyncRun();
  setStatus("idle");
- setSummary(null);
  const message = err instanceof Error ? err.message : "Sync failed.";
  const failureIssues = dedupeSyncIssues([humanizeSyncIssue(message)]);
  setIssues(failureIssues);
@@ -1061,7 +1022,7 @@ export function SyncMyDayButton({
  size="lg"
  className={cn(
  status === "syncing"
- ? "sync-sweeping border border-border-strong text-foreground"
+ ? "sync-sweeping"
  : "sync-day-cta"
  )}
  onClick={() => void runSync()}
@@ -1079,11 +1040,6 @@ export function SyncMyDayButton({
  "↻ Sync my day"
  )}
  </Button>
- {summary ? (
- <p className="max-w-lg text-[14px] leading-relaxed text-muted" role="status">
- {summary}
- </p>
- ) : null}
  {issues.length > 0 ? (
  <details className="max-w-lg rounded-xl border border-danger/20 bg-danger/5">
  <summary className="cursor-pointer list-none px-3 py-2 text-[14px] font-semibold text-danger">

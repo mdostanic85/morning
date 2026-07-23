@@ -15,8 +15,10 @@ import type { Evidence, NewEvidence } from "@/domain/evidence";
 import type { VerificationReport } from "@/domain/verificationReport";
 import type { SyncReviewReport } from "@/domain/syncReviewReport";
 import { findTaskIdByJiraKey } from "@/lib/tasks/resolveFocusTask";
+import { jiraKeyForTask } from "@/lib/tasks/transcriptTaskMerge";
+import { isQuoteRelevantToTask, taskDomainText } from "@/lib/tasks/evidenceRelevance";
 import { toEvidence } from "./evidence";
-import { getSourceItemByExternalId, searchSourceItems } from "./sourceItems";
+import { getSourceItemByExternalId, getSourceItemsByIds, searchSourceItems } from "./sourceItems";
 
 function toWorkTask(row: typeof workTasksTable.$inferSelect): WorkTask {
   return {
@@ -84,8 +86,25 @@ function toSyncReviewReport(row: typeof syncReviewReportsTable.$inferSelect): Sy
   };
 }
 
-async function attachContext(tasks: WorkTask[]): Promise<WorkTaskWithEvidence[]> {
+/**
+ * Attaches evidence + reports to tasks. Every UI surface (Today, task detail,
+ * TaskCard's evidence drawer, the AI explanation drawer) reads `task.evidence`
+ * straight from here, so the per-quote relevance safety net lives in this one
+ * place rather than in each component — a Jira-anchored task's evidence never
+ * carries a different task's line just because it shared a source with a
+ * genuinely relevant quote (see `evidenceRelevance.ts`).
+ *
+ * `filterRelevance: false` is for the retroactive prune job only — it must
+ * see the raw, unfiltered rows to find and delete the off-topic ones; the
+ * live filter would otherwise hide them from `task.evidence` before the prune
+ * ever inspects them, and the DB would never self-heal.
+ */
+async function attachContext(
+  tasks: WorkTask[],
+  options: { filterRelevance?: boolean } = {}
+): Promise<WorkTaskWithEvidence[]> {
   if (tasks.length === 0) return [];
+  const { filterRelevance = true } = options;
   const allEvidence = await fetchAll(db.select().from(evidenceTable));
   const allReports = await fetchAll(
     db.select().from(verificationReportsTable).orderBy(desc(verificationReportsTable.createdAt))
@@ -98,6 +117,45 @@ async function attachContext(tasks: WorkTask[]): Promise<WorkTaskWithEvidence[]>
     const list = byTask.get(e.taskId) ?? [];
     list.push(toEvidence(e));
     byTask.set(e.taskId, list);
+  }
+
+  if (filterRelevance) {
+    const referencedSourceIds = [...new Set(allEvidence.map((e) => e.sourceItemId))];
+    const sourceById = new Map(
+      (await getSourceItemsByIds(referencedSourceIds)).map((s) => [s.id, s])
+    );
+    for (const task of tasks) {
+      const taskKey = jiraKeyForTask({ title: task.title });
+      if (!taskKey) continue; // only Jira-anchored tasks get strict per-quote filtering
+      const list = byTask.get(task.id);
+      if (!list || list.length === 0) continue;
+
+      const domain = taskDomainText(task);
+      const newestSourceTime = list.reduce((max, row) => {
+        const t = Date.parse(row.sourceDate);
+        return Number.isFinite(t) ? Math.max(max, t) : max;
+      }, 0);
+
+      const relevant = list.filter((row) => {
+        const source = sourceById.get(row.sourceItemId);
+        const quoteText = (row.quote ?? "").trim() || row.summary.trim();
+        return isQuoteRelevantToTask({
+          taskKey,
+          domain,
+          newestSourceTime,
+          source: {
+            sourceType: source?.sourceType ?? "other",
+            sourceExternalId: source?.sourceExternalId ?? null,
+            sourceDate: source?.sourceDate ?? row.sourceDate,
+          },
+          quoteText,
+        }).relevant;
+      });
+      // Never leave a task with zero evidence just from this safety net — an
+      // empty result means the predicate over-filtered, not that nothing is
+      // relevant (the Jira anchor row alone always passes when it exists).
+      byTask.set(task.id, relevant.length > 0 ? relevant : list);
+    }
   }
 
   const latestReportByTask = new Map<number, VerificationReport>();
@@ -378,6 +436,22 @@ export async function getWorkTasks(): Promise<WorkTaskWithEvidence[]> {
     db.select().from(workTasksTable).where(eq(workTasksTable.reviewStatus, "approved")).orderBy(desc(workTasksTable.updatedAt))
   );
   return await attachContext(rows.map(toWorkTask));
+}
+
+/**
+ * Same task set as `getWorkTasks` (approved, not done), but with evidence
+ * completely unfiltered — for the retroactive relevance prune job only (see
+ * `attachContext`'s `filterRelevance` doc). Never use this for anything that
+ * renders to the user.
+ */
+export async function getWorkTasksWithRawEvidenceForPrune(): Promise<WorkTaskWithEvidence[]> {
+  const rows = await fetchAll(
+    db
+      .select()
+      .from(workTasksTable)
+      .where(and(eq(workTasksTable.reviewStatus, "approved"), ne(workTasksTable.status, "done")))
+  );
+  return await attachContext(rows.map(toWorkTask), { filterRelevance: false });
 }
 
 export async function getOpenTasksForProject(projectId: number): Promise<WorkTaskWithEvidence[]> {

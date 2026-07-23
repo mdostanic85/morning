@@ -20,7 +20,7 @@ import type { SourceItem } from "@/domain/sourceItem";
 import { isJiraDoneMetadata } from "./canonicalKey";
 import { jiraKeyForTask } from "./transcriptTaskMerge";
 import { detectJiraDoneVsOpenTaskConflicts } from "./conflictDetection";
-import { isSourceRelevantToTask, taskDomainText } from "./evidenceRelevance";
+import { isQuoteRelevantToTask, taskDomainText } from "./evidenceRelevance";
 
 export interface SupportingSourceQuote {
   id: number;
@@ -45,6 +45,12 @@ export interface SupportingSourceGroup {
   /** This source participates in a detected conflict. */
   inConflict: boolean;
   quotes: SupportingSourceQuote[];
+  /**
+   * The one sentence from this source's quotes that most concretely describes
+   * what to do for this task — surfaced inline so the user sees the actionable
+   * line without expanding every quote. Null when no quote text exists.
+   */
+  actionSnippet: string | null;
 }
 
 export interface SupportingSourceConflict {
@@ -93,6 +99,74 @@ function sourceTime(dateValue: string | null | undefined): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
+/** Verbs/modals that signal a concrete instruction or requirement in a quote. */
+const ACTION_HINT_RE =
+  /\b(add|adds|update|updates|create|creates|build|builds|implement|implements|fix|fixes|change|changes|remove|removes|display|displays|show|shows|send|sends|handle|handles|replace|replaces|ensure|ensures|make|makes|set|sets|enable|enables|support|supports|need|needs|needed|should|must|require|requires|required|allow|allows|move|moves|rename|refactor|introduce|configure|verify|clarify|simplify|investigate|evaluate|integrate|generate|render|renders|expose|surface|deliver)\b/i;
+
+const SNIPPET_MAX_CHARS = 180;
+
+function snippetTokens(text: string): string[] {
+  return (text.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []).filter(
+    (token) => !/^\d+$/.test(token)
+  );
+}
+
+function splitSentences(text: string): string[] {
+  return text
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((sentence) => sentence.replace(/\s+/g, " ").trim())
+    .filter((sentence) => sentence.length >= 12);
+}
+
+function clampSnippet(sentence: string, max = SNIPPET_MAX_CHARS): string {
+  const clean = sentence.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const slice = clean.slice(0, max);
+  const lastSpace = slice.lastIndexOf(" ");
+  return `${slice.slice(0, lastSpace > 40 ? lastSpace : max).trimEnd()}…`;
+}
+
+/**
+ * Picks the single quote sentence that best describes the concrete work for a
+ * task, scoring each sentence by how many task-domain tokens it shares with the
+ * task's title + next action, plus a bonus for imperative/requirement wording.
+ * Falls back to the first available sentence so a snippet is always shown when
+ * any quote text exists. Pure and unit-testable.
+ */
+export function pickActionSnippet(quotes: string[], actionText: string): string | null {
+  const domain = new Set(snippetTokens(actionText));
+
+  const sentences: string[] = [];
+  for (const quote of quotes) {
+    if (!quote?.trim()) continue;
+    const parts = splitSentences(quote);
+    if (parts.length === 0) sentences.push(quote.replace(/\s+/g, " ").trim());
+    else sentences.push(...parts);
+  }
+  if (sentences.length === 0) return null;
+
+  let best = sentences[0];
+  let bestScore = Number.NEGATIVE_INFINITY;
+  sentences.forEach((sentence, index) => {
+    const seen = new Set<string>();
+    let overlap = 0;
+    for (const token of snippetTokens(sentence)) {
+      if (seen.has(token)) continue;
+      seen.add(token);
+      if (domain.has(token)) overlap += 1;
+    }
+    const actionBonus = ACTION_HINT_RE.test(sentence) ? 2 : 0;
+    // Earlier sentences win ties — the extractor tends to cite the key line first.
+    const score = overlap + actionBonus - index * 0.01;
+    if (score > bestScore) {
+      bestScore = score;
+      best = sentence;
+    }
+  });
+
+  return clampSnippet(best);
+}
+
 interface TaskLike {
   title: string;
   status: string;
@@ -139,6 +213,7 @@ export function buildTaskSupportingSources(input: {
         isLatest: false,
         inConflict: false,
         quotes: [],
+        actionSnippet: null,
       };
       groupsBySource.set(item.sourceItemId, group);
     }
@@ -149,11 +224,15 @@ export function buildTaskSupportingSources(input: {
 
   let groups = [...groupsBySource.values()];
 
-  // Safety net: for a Jira-anchored task, hide sources that don't genuinely
-  // belong to it (stale or off-topic evidence wrongly attached by earlier
-  // syncs/merges). Uses the same predicate as the rebuild-time prune, so what
-  // renders always matches what the DB self-heals to. Non-anchored tasks keep
-  // every source — the anchor is what makes strict filtering safe.
+  // Safety net: for a Jira-anchored task, hide individual quotes that don't
+  // genuinely belong to it (stale or off-topic lines wrongly attached by
+  // earlier syncs/merges). Each quote is judged on its own — an on-topic line
+  // stays while a sibling line about a different task is dropped, even when
+  // both came from the same meeting. Uses the same per-quote predicate as the
+  // rebuild-time prune, so what renders always matches what the DB self-heals
+  // to. Sources left with no relevant quote drop out (the Jira anchor always
+  // stays — it is the task's proof of existence). Non-anchored tasks keep
+  // everything — the anchor is what makes strict filtering safe.
   if (targetKey != null) {
     const domain = taskDomainText({
       title: task.title,
@@ -164,21 +243,24 @@ export function buildTaskSupportingSources(input: {
       (max, group) => Math.max(max, sourceTime(group.sourceDate)),
       0
     );
-    groups = groups.filter((group) => {
+    for (const group of groups) {
       const source = sourceById.get(group.sourceItemId);
-      return isSourceRelevantToTask({
-        taskKey: targetKey,
-        domain,
-        newestSourceTime,
-        group: {
-          sourceItemId: group.sourceItemId,
-          sourceType: group.sourceType,
-          sourceExternalId: source?.sourceExternalId ?? null,
-          sourceDate: group.sourceDate,
-          quotesText: group.quotes.map((q) => q.text).join("\n"),
-        },
-      }).relevant;
-    });
+      group.quotes = group.quotes.filter(
+        (quote) =>
+          isQuoteRelevantToTask({
+            taskKey: targetKey,
+            domain,
+            newestSourceTime,
+            source: {
+              sourceType: group.sourceType,
+              sourceExternalId: source?.sourceExternalId ?? null,
+              sourceDate: group.sourceDate,
+            },
+            quoteText: quote.text,
+          }).relevant
+      );
+    }
+    groups = groups.filter((group) => group.isAnchor || group.quotes.length > 0);
   }
 
   // Mark the single newest-dated source (typically the latest meeting note).
@@ -234,6 +316,16 @@ export function buildTaskSupportingSources(input: {
       sourceItemIds: conflict.evidenceIds,
     };
   });
+
+  // Surface the most action-relevant sentence per source, scored against the
+  // task's own title + next action so it reads as "what to do" for this task.
+  const actionText = `${task.title}\n${task.nextAction}`;
+  for (const group of groups) {
+    group.actionSnippet = pickActionSnippet(
+      group.quotes.map((quote) => quote.text),
+      actionText
+    );
+  }
 
   // Order: the Jira anchor first (proof of existence), then remaining sources
   // newest-first so the freshest guidance is nearest the top.

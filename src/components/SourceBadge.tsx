@@ -8,7 +8,7 @@ const SOURCE_TYPE_LABEL: Record<SourceType, string> = {
   manual_transcript: "Transcript",
   gmail: "Gmail",
   calendar: "Calendar",
-  drive: "Drive",
+  drive: "Gemini",
   jira: "Jira",
   confluence: "Confluence",
   granola: "Granola",

@@ -24,6 +24,10 @@ import {
   classifyTaskOwnership,
   taskEligibleForBriefPriority,
 } from "@/lib/filters/ownerFilter";
+import {
+  latestSignalDate,
+  needsInputItemIsRelevant,
+} from "@/lib/dailyBrief/needsInputRelevance";
 
 export type ComposerTask = WorkTaskForRanking & {
   owner: string | null;
@@ -350,11 +354,33 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
         myName
       );
       if (ownership === "other") return false;
-      if (task.status === "waiting" || task.waitingOn) return true;
-      if (ownership === "unclear") return true;
-      return /unclear|generic|not specified|scope not/i.test(
-        `${task.reason} ${task.nextAction} ${task.title}`
-      );
+
+      const inScope =
+        task.status === "waiting" ||
+        Boolean(task.waitingOn) ||
+        ownership === "unclear" ||
+        /unclear|generic|not specified|scope not/i.test(
+          `${task.reason} ${task.nextAction} ${task.title}`
+        );
+      if (!inScope) return false;
+
+      // Never surface stale items (older than the freshness window) or work
+      // that never names the user. Only explicitly-owned or user-mentioned
+      // items that are recent enough belong in "needs your input".
+      return needsInputItemIsRelevant({
+        ownership,
+        text: [
+          task.title,
+          task.reason,
+          task.nextAction,
+          ...task.evidence.map((item) => `${item.quote ?? ""} ${item.summary}`),
+        ].join("\n"),
+        latestSignalDate: latestSignalDate(
+          task.evidence.map((item) => sourceById.get(item.sourceItemId)?.sourceDate ?? null)
+        ),
+        myName,
+        today: input.today,
+      });
     })
     .filter((task) => task.id !== todayFirst.taskId)
     .slice(0, 5)

@@ -1,6 +1,7 @@
 import type { HydraReport, HydraActionItem, SourceStatus } from "@/domain/hydraReport";
 import type { HydraEvidence } from "@/services/hydra";
 import type { WorkTaskWithEvidence } from "@/services/workTasks";
+import { isTranscriptSource } from "@/lib/tasks/sourceAuthority";
 
 const DAY_MS = 86_400_000;
 const BLOCKER_PATTERN = /\b(blocked|blocker|waiting on|cannot proceed|can't proceed|needs? decision|čeka|blokiran)\b/i;
@@ -52,7 +53,21 @@ export function scoreHydraEvidence(input: {
     score += 80;
     reasons.push("Instruction from Matt or Lucas");
   }
-  if (item.source === "granola" || item.source === "calendar" || item.sourceType.includes("meeting")) {
+  // Meeting transcripts carry equal authority regardless of provider: Granola
+  // and Gemini (Gmail/Drive) notes are the same tier of "action instruction"
+  // evidence. Recency (the recency component below) is what breaks conflicts
+  // between them, not the provider.
+  const isMeetingEvidence =
+    isTranscriptSource({
+      sourceType: item.sourceType,
+      title: item.title,
+      body: item.content,
+      metadata: item.metadata,
+    }) ||
+    item.source === "granola" ||
+    item.source === "calendar" ||
+    item.sourceType.includes("meeting");
+  if (isMeetingEvidence) {
     score += 55;
     reasons.push("Meeting evidence");
   } else if (item.source === "jira") {

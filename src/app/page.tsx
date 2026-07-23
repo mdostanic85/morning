@@ -16,6 +16,10 @@ import {
   taskEligibleForBriefPriority,
 } from "@/lib/filters/ownerFilter";
 import { filterTasksForTodayView } from "@/lib/tasks/taskVisibility";
+import {
+  latestSignalDate,
+  needsInputItemIsRelevant,
+} from "@/lib/dailyBrief/needsInputRelevance";
 import { humanizeReason } from "@/lib/tasks/humanizeReason";
 import { HumanReadableTodayView } from "@/components/HumanReadableTodayView";
 
@@ -64,6 +68,7 @@ export default async function TodayPage() {
   const liveTaskById = new Map(
     OPEN_QUEUE_STATUSES.flatMap((status) => rawQueue[status]).map((task) => [task.id, task] as const)
   );
+  const todayIso = new Date().toISOString().slice(0, 10);
   const reconciledBrief = dailyBrief
     ? {
         ...dailyBrief,
@@ -73,17 +78,31 @@ export default async function TodayPage() {
             const task = liveTaskById.get(item.taskId);
             if (!task) return false;
             if ((task.status === "now" || task.status === "next") && !task.waitingOn) return false;
-            return (
-              classifyTaskOwnership(
-                {
-                  owner: task.owner,
-                  title: task.title,
-                  reason: task.reason,
-                  nextAction: task.nextAction,
-                },
-                myName
-              ) !== "other"
+            const ownership = classifyTaskOwnership(
+              {
+                owner: task.owner,
+                title: task.title,
+                reason: task.reason,
+                nextAction: task.nextAction,
+              },
+              myName
             );
+            if (ownership === "other") return false;
+            // Enforce the same freshness + mention gate as the composer so a
+            // cached brief cannot keep showing stale or never-me items until
+            // the next full sync.
+            return needsInputItemIsRelevant({
+              ownership,
+              text: [
+                task.title,
+                task.reason,
+                task.nextAction,
+                ...task.evidence.map((ev) => `${ev.quote ?? ""} ${ev.summary}`),
+              ].join("\n"),
+              latestSignalDate: latestSignalDate(task.evidence.map((ev) => ev.sourceDate)),
+              myName,
+              today: todayIso,
+            });
           })
           .map((item) => {
             // Show the task's own description (its "why"), clamped to two lines

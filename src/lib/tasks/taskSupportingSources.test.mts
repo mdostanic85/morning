@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Evidence } from "@/domain/evidence";
 import type { SourceItem } from "@/domain/sourceItem";
-import { buildTaskSupportingSources } from "./taskSupportingSources";
+import { buildTaskSupportingSources, pickActionSnippet } from "./taskSupportingSources";
 
 function source(overrides: Partial<SourceItem> & Pick<SourceItem, "id" | "sourceType">): SourceItem {
   return {
@@ -208,5 +208,134 @@ describe("buildTaskSupportingSources", () => {
 
     const ids = result.groups.map((g) => g.sourceItemId).sort((a, b) => a - b);
     assert.deepEqual(ids, [250, 254], "only the Jira anchor and the banner daily remain");
+  });
+
+  it("keeps only the on-topic quote when one source mixes topics", () => {
+    const jira = source({
+      id: 250,
+      sourceType: "jira",
+      sourceExternalId: "UATL-380",
+      title: "UATL-380: DESIGN - Banner for Part Search",
+      sourceDate: "2026-07-22T11:03:00.000Z",
+      metadata: { status: "In Progress" },
+    });
+    // One meeting that discussed both the banner AND the confidence score.
+    const meeting = source({
+      id: 248,
+      sourceType: "granola",
+      title: "Milos & Lucas sync",
+      sourceDate: "2026-07-22T14:22:00.000Z",
+    });
+
+    const result = buildTaskSupportingSources({
+      task: {
+        title: "UATL-380 · Design Part Search Banner",
+        status: "now",
+        reason: "Design a unified search banner shown across every module.",
+        nextAction: "Create 2-3 banner mockups for the unified search page.",
+        evidence: [
+          evidence({ id: 1, sourceItemId: 250, quote: "Banner for all modules" }),
+          evidence({
+            id: 2,
+            sourceItemId: 248,
+            quote: "Create 2-3 more banner mockups for the unified search page",
+            sourceDate: "2026-07-22T14:22:00.000Z",
+          }),
+          evidence({
+            id: 3,
+            sourceItemId: 248,
+            quote: "when I first saw the high 92% confidence score I thought it meant priority",
+            sourceDate: "2026-07-22T14:22:00.000Z",
+          }),
+        ],
+      },
+      sourceById: new Map([
+        [250, jira],
+        [248, meeting],
+      ]),
+    });
+
+    const meetingGroup = result.groups.find((g) => g.sourceItemId === 248)!;
+    assert.deepEqual(
+      meetingGroup.quotes.map((q) => q.text),
+      ["Create 2-3 more banner mockups for the unified search page"],
+      "the confidence-score line is dropped, the banner line stays"
+    );
+  });
+
+  it("attaches the most action-relevant sentence per source as actionSnippet", () => {
+    const daily = source({
+      id: 254,
+      sourceType: "granola",
+      title: "Hydra Daily",
+      sourceDate: "2026-07-22T14:22:00.000Z",
+    });
+
+    const result = buildTaskSupportingSources({
+      task: {
+        title: "Design Part Search Banner",
+        status: "now",
+        reason: "The banner is needed across modules.",
+        nextAction: "Create 2-3 banner mockups for the unified search page.",
+        evidence: [
+          evidence({
+            id: 1,
+            sourceItemId: 254,
+            quote:
+              "We chatted about the weather for a while. Create 2-3 more banner mockups for the unified search page. Lunch is at noon.",
+            sourceDate: "2026-07-22T14:22:00.000Z",
+          }),
+        ],
+      },
+      sourceById: new Map([[254, daily]]),
+    });
+
+    const group = result.groups.find((g) => g.sourceItemId === 254)!;
+    assert.equal(
+      group.actionSnippet,
+      "Create 2-3 more banner mockups for the unified search page.",
+      "picks the sentence that describes the concrete work"
+    );
+  });
+});
+
+describe("pickActionSnippet", () => {
+  const action = "Create 2-3 banner mockups for the unified search page.";
+
+  it("returns null when there are no quotes", () => {
+    assert.equal(pickActionSnippet([], action), null);
+    assert.equal(pickActionSnippet(["   "], action), null);
+  });
+
+  it("selects the sentence with the highest task-domain overlap", () => {
+    const snippet = pickActionSnippet(
+      [
+        "Nice to meet everyone today.",
+        "We should create the banner mockups for the search page.",
+        "See you next week.",
+      ],
+      action
+    );
+    assert.match(snippet ?? "", /banner mockups for the search page/i);
+  });
+
+  it("prefers imperative wording when domain overlap ties", () => {
+    const snippet = pickActionSnippet(
+      ["Some general background about the project.", "Please update the badge counter."],
+      "Badge counter work"
+    );
+    assert.match(snippet ?? "", /update the badge counter/i);
+  });
+
+  it("clamps overly long sentences with an ellipsis", () => {
+    const long = `Update ${"the navigation module ".repeat(20)}badge`;
+    const snippet = pickActionSnippet([long], "Update navigation module badge");
+    assert.ok((snippet?.length ?? 0) <= 181, "snippet is clamped");
+    assert.match(snippet ?? "", /…$/);
+  });
+
+  it("falls back to the first sentence when nothing overlaps", () => {
+    const snippet = pickActionSnippet(["A completely unrelated remark."], "xyzzy plugh");
+    assert.equal(snippet, "A completely unrelated remark.");
   });
 });

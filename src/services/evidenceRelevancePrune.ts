@@ -1,7 +1,7 @@
 import "server-only";
 import { deleteEvidenceByIds } from "@/services/evidence";
 import { getSourceItems } from "@/services/sourceItems";
-import { getWorkTasks } from "@/services/workTasks";
+import { getWorkTasksWithRawEvidenceForPrune } from "@/services/workTasks";
 import {
   planEvidenceRelevancePrune,
   type PruneSourceInfo,
@@ -15,7 +15,10 @@ import {
  * adoption, and duplicate merges keep re-attaching contamination.
  */
 export async function pruneIrrelevantTaskEvidence(): Promise<{ removed: number }> {
-  const [tasks, sources] = await Promise.all([getWorkTasks(), getSourceItems()]);
+  const [tasks, sources] = await Promise.all([
+    getWorkTasksWithRawEvidenceForPrune(),
+    getSourceItems(),
+  ]);
 
   const sourceById = new Map<number, PruneSourceInfo>(
     sources.map((source) => [
@@ -29,21 +32,19 @@ export async function pruneIrrelevantTaskEvidence(): Promise<{ removed: number }
   );
 
   const plan = planEvidenceRelevancePrune({
-    tasks: tasks
-      .filter((task) => task.status !== "done")
-      .map((task) => ({
-        id: task.id,
-        title: task.title,
-        reason: task.reason,
-        nextAction: task.nextAction,
-        evidence: task.evidence.map((item) => ({
-          id: item.id,
-          sourceItemId: item.sourceItemId,
-          quote: item.quote,
-          summary: item.summary,
-          sourceDate: item.sourceDate,
-        })),
+    tasks: tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      reason: task.reason,
+      nextAction: task.nextAction,
+      evidence: task.evidence.map((item) => ({
+        id: item.id,
+        sourceItemId: item.sourceItemId,
+        quote: item.quote,
+        summary: item.summary,
+        sourceDate: item.sourceDate,
       })),
+    })),
     sourceById,
   });
 

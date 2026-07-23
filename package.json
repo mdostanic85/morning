@@ -28,6 +28,7 @@
     "test:person-identity": "tsx --test src/lib/tasks/personIdentity.test.mts",
     "test:extraction-reflect": "tsx --test src/lib/tasks/evidenceVerification.test.mts src/lib/tasks/reflectDecisions.test.mts",
     "test:blocked-waiting-dedupe": "tsx --test src/lib/dailyBrief/blockedWaitingDedupe.test.mts",
+    "test:needs-input-relevance": "tsx --test src/lib/dailyBrief/needsInputRelevance.test.mts",
     "test:source-authority": "tsx --test src/lib/tasks/sourceAuthority.test.mts",
     "test:transcript-merge": "tsx --test src/lib/tasks/transcriptTaskMerge.test.mts",
     "test:jira-anchor-evidence": "tsx --test src/lib/tasks/jiraAnchorEvidence.test.mts",

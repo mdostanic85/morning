@@ -4,15 +4,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toast } from "@heroui/react/toast";
-import { Loader2Icon, ChevronDownIcon, XIcon } from "lucide-react";
+import { Loader2Icon, ChevronDownIcon } from "lucide-react";
 import { Button } from "@heroui/react/button";
-import { TextArea } from "@heroui/react/textarea";
 import { Dropdown } from "@heroui/react/dropdown";
 import { AlertDialog } from "@heroui/react/alert-dialog";
-import { Modal } from "@heroui/react/modal";
 import type { VerificationReport } from "@/domain/verificationReport";
 import type { SyncReviewReport } from "@/domain/syncReviewReport";
-import { JiraStatusDropdown } from "@/components/JiraStatusDropdown";
 import { cn } from "@/lib/utils";
 
 interface FocusTaskSeed {
@@ -32,7 +29,6 @@ interface TaskActionButtonsProps {
   layout?: "stack" | "focus";
   focusExtras?: ReactNode;
   focusTaskSeed?: FocusTaskSeed | null;
-  showJiraStatus?: boolean;
   showDelete?: boolean;
 }
 
@@ -43,7 +39,7 @@ const VERDICT_LABEL: Record<string, string> = {
   cannot_verify: "Cannot verify",
 };
 
-type StatusMenuAction = "done" | "skip" | "snooze" | "waiting" | "verify";
+type StatusMenuAction = "done" | "snooze" | "waiting";
 
 export function TaskActionButtons({
   taskId = null,
@@ -55,7 +51,6 @@ export function TaskActionButtons({
   layout = "stack",
   focusExtras = null,
   focusTaskSeed = null,
-  showJiraStatus = true,
   showDelete = true,
 }: TaskActionButtonsProps) {
   const router = useRouter();
@@ -64,8 +59,6 @@ export function TaskActionButtons({
   const [ensurePending, setEnsurePending] = useState(false);
   const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [verifyOpen, setVerifyOpen] = useState(false);
-  const [deliveryNotes, setDeliveryNotes] = useState("");
   const [verificationReport, setVerificationReport] = useState<VerificationReport | null>(
     latestVerificationReport
   );
@@ -89,8 +82,6 @@ export function TaskActionButtons({
   const jiraKey = linkedJiraKey?.trim().toUpperCase() ?? null;
   const effectiveTaskId = taskId ?? resolvedTaskId;
   const isLoading = pendingAction !== null || ensurePending;
-  const hasJira = Boolean(jiraKey);
-  const hasJiraStatusControl = hasJira && showJiraStatus;
   const hasTask = effectiveTaskId != null;
 
   const isFocusLayout = layout === "focus";
@@ -182,38 +173,9 @@ export function TaskActionButtons({
     }
   }
 
-  async function runVerify() {
-    if (effectiveTaskId == null) return;
-    setPendingAction("verify");
-    try {
-      const res = await fetch(`/api/work-tasks/${effectiveTaskId}/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deliveryNotes: deliveryNotes.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? "Verification failed.");
-      }
-      setVerificationReport(data.report);
-      setVerifyOpen(false);
-      setDeliveryNotes("");
-      Toast.toast.success("Delivery check complete.");
-      router.refresh();
-    } catch (err) {
-      Toast.toast.danger(err instanceof Error ? err.message : "Verification failed.");
-    } finally {
-      setPendingAction(null);
-    }
-  }
-
   function onStatusMenuAction(action: StatusMenuAction) {
     if (action === "done") {
       setDoneConfirmOpen(true);
-      return;
-    }
-    if (action === "verify") {
-      setVerifyOpen(true);
       return;
     }
     void runStatusAction(action);
@@ -248,20 +210,12 @@ export function TaskActionButtons({
             Mark done
           </Dropdown.Item>
           <Dropdown.Item
-            id="skip"
-            textValue="Not for today"
-            className="flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-sm outline-none select-none"
-            onAction={() => onStatusMenuAction("skip")}
-          >
-            Not for today
-          </Dropdown.Item>
-          <Dropdown.Item
             id="snooze"
-            textValue="Move to tomorrow"
+            textValue="Not today"
             className="flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-sm outline-none select-none"
             onAction={() => onStatusMenuAction("snooze")}
           >
-            Move to tomorrow
+            Not today
           </Dropdown.Item>
           <Dropdown.Item
             id="waiting"
@@ -270,14 +224,6 @@ export function TaskActionButtons({
             onAction={() => onStatusMenuAction("waiting")}
           >
             Waiting on someone
-          </Dropdown.Item>
-          <Dropdown.Item
-            id="verify"
-            textValue="Check if done"
-            className="flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-sm outline-none select-none"
-            onAction={() => onStatusMenuAction("verify")}
-          >
-            Check if done…
           </Dropdown.Item>
         </Dropdown.Menu>
       </Dropdown.Popover>
@@ -328,17 +274,6 @@ export function TaskActionButtons({
             {statusMenu}
           </div>
 
-          {hasJiraStatusControl && jiraKey ? (
-            <JiraStatusDropdown
-              taskId={effectiveTaskId}
-              linkedJiraKey={jiraKey}
-              disabled={isLoading}
-              embedded
-              buttonSize="default"
-              className="h-12 w-full text-[15px]"
-            />
-          ) : null}
-
           {focusExtras ? <div>{focusExtras}</div> : null}
 
           {hasTask && showDelete ? (
@@ -375,16 +310,6 @@ export function TaskActionButtons({
           ) : null}
 
           {statusMenu}
-
-          {hasJira && jiraKey ? (
-            <JiraStatusDropdown
-              taskId={taskId}
-              linkedJiraKey={jiraKey}
-              disabled={isLoading}
-              embedded={embedded}
-              className={embeddedBtnClass}
-            />
-          ) : null}
 
           {hasTask && showDelete ? (
             <Button
@@ -457,52 +382,6 @@ export function TaskActionButtons({
           </AlertDialog.Container>
         </AlertDialog.Backdrop>
       </AlertDialog>
-
-      <Modal isOpen={verifyOpen} onOpenChange={setVerifyOpen}>
-        <Modal.Backdrop variant="blur" isDismissable className="bg-background/75">
-          <Modal.Container placement="center" size="sm" className="w-full max-w-none px-4">
-            <Modal.Dialog className="relative grid w-full max-w-sm gap-4 rounded-surface border border-border bg-overlay p-5 text-sm text-foreground outline-none">
-              <Modal.CloseTrigger className="absolute top-2 right-2 size-9 rounded-lg text-muted transition-colors hover:bg-surface-soft hover:text-foreground">
-                <XIcon className="size-4" />
-                <span className="sr-only">Close</span>
-              </Modal.CloseTrigger>
-              <Modal.Header className="flex flex-col gap-2">
-                <Modal.Heading className="text-base font-medium">Check if done</Modal.Heading>
-                <p slot="description" className="text-sm text-muted">
-                  Compares your done criteria against git activity and optional notes. Does not write
-                  to external systems.
-                </p>
-              </Modal.Header>
-              <label className="block">
-                <span className="text-xs font-medium text-foreground">What you shipped (optional)</span>
-                <TextArea
-                  value={deliveryNotes}
-                  onChange={(event) => setDeliveryNotes(event.target.value)}
-                  rows={4}
-                  placeholder="PR link, file changed, decision made…"
-                  className="mt-1.5 text-sm"
-                />
-              </label>
-              <Modal.Footer className="-mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-surface border-t border-border/70 bg-surface-soft/60 p-5 sm:flex-row sm:justify-end">
-                <Button type="button" variant="ghost" onClick={() => setVerifyOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => runVerify()}
-                  isDisabled={isLoading}
-                >
-                  {pendingAction === "verify" ? (
-                    <Loader2Icon className="size-4 animate-spin" aria-hidden />
-                  ) : null}
-                  Run check
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
 
       <AnimatePresence>
         {syncReviewReport ? (

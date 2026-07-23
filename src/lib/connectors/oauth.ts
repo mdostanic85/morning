@@ -10,6 +10,14 @@ export const CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
 ] as const;
 export const DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.readonly"] as const;
+/** Union of read-only Google scopes — authorizes Gmail + Calendar + Drive in one consent. */
+export const GOOGLE_COMBINED_SCOPES = [
+  ...GMAIL_SCOPES,
+  ...CALENDAR_SCOPES,
+  ...DRIVE_SCOPES,
+] as const;
+/** Providers a single combined Google grant connects together. */
+export const GOOGLE_LINKED_PROVIDERS = ["gmail", "calendar", "drive"] as const;
 export const JIRA_SCOPES = [
   "read:jira-work",
   "write:jira-work",
@@ -53,7 +61,14 @@ interface OAuthConfig {
 
 const statePath = path.join(process.cwd(), "data", "oauth-states.json");
 
-function readStateFile(): Record<string, { provider: OAuthProvider; createdAt: string }> {
+interface OAuthStateEntry {
+  provider: OAuthProvider;
+  createdAt: string;
+  /** When the grant should connect several providers (e.g. combined Google consent). */
+  linkedProviders?: OAuthProvider[];
+}
+
+function readStateFile(): Record<string, OAuthStateEntry> {
   if (!fs.existsSync(statePath)) return {};
   try {
     return JSON.parse(fs.readFileSync(statePath, "utf-8"));
@@ -62,7 +77,7 @@ function readStateFile(): Record<string, { provider: OAuthProvider; createdAt: s
   }
 }
 
-function writeStateFile(states: Record<string, { provider: OAuthProvider; createdAt: string }>) {
+function writeStateFile(states: Record<string, OAuthStateEntry>) {
   const dir = path.dirname(statePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(statePath, JSON.stringify(states, null, 2), { mode: 0o600 });
@@ -141,8 +156,8 @@ export function getOAuthConfig(provider: OAuthProvider): OAuthConfig | null {
 const STATE_TTL_MS = 10 * 60 * 1000;
 
 function pruneExpiredStates(
-  states: Record<string, { provider: OAuthProvider; createdAt: string }>
-): Record<string, { provider: OAuthProvider; createdAt: string }> {
+  states: Record<string, OAuthStateEntry>
+): Record<string, OAuthStateEntry> {
   const now = Date.now();
   return Object.fromEntries(
     Object.entries(states).filter(
@@ -151,10 +166,17 @@ function pruneExpiredStates(
   );
 }
 
-export function createOAuthState(provider: OAuthProvider): string {
+export function createOAuthState(
+  provider: OAuthProvider,
+  linkedProviders?: OAuthProvider[]
+): string {
   const state = crypto.randomBytes(24).toString("hex");
   const states = pruneExpiredStates(readStateFile());
-  states[state] = { provider, createdAt: new Date().toISOString() };
+  states[state] = {
+    provider,
+    createdAt: new Date().toISOString(),
+    ...(linkedProviders && linkedProviders.length > 0 ? { linkedProviders } : {}),
+  };
   writeStateFile(states);
   return state;
 }
@@ -166,6 +188,15 @@ export function getOAuthStateProvider(state: string): OAuthProvider | null {
   const ageMs = Date.now() - new Date(entry.createdAt).getTime();
   if (ageMs >= STATE_TTL_MS) return null;
   return entry.provider;
+}
+
+/** Providers a still-valid OAuth state should connect together (empty when none). */
+export function getOAuthStateLinkedProviders(state: string): OAuthProvider[] {
+  const entry = readStateFile()[state];
+  if (!entry) return [];
+  const ageMs = Date.now() - new Date(entry.createdAt).getTime();
+  if (ageMs >= STATE_TTL_MS) return [];
+  return entry.linkedProviders ?? [];
 }
 
 export function consumeOAuthState(state: string, provider: OAuthProvider): boolean {
@@ -210,18 +241,24 @@ export function resolveOAuthCallbackProvider(
 export function buildAuthorizationUrl(input: {
   provider: OAuthProvider;
   origin: string;
+  /** Google only: request Gmail + Calendar + Drive scopes in a single consent. */
+  linkGoogle?: boolean;
 }): string {
   const config = getOAuthConfig(input.provider);
   if (!config || !config.clientId) {
     throw new Error(`Missing OAuth client config for ${input.provider}.`);
   }
 
+  const linkGoogle = input.linkGoogle === true && isGoogleOAuthProvider(input.provider);
+  const scopes = linkGoogle ? GOOGLE_COMBINED_SCOPES : config.scopes;
+  const linkedProviders = linkGoogle ? [...GOOGLE_LINKED_PROVIDERS] : undefined;
+
   const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: buildRedirectUri(input.origin, input.provider),
     response_type: "code",
-    scope: config.scopes.join(" "),
-    state: createOAuthState(input.provider),
+    scope: scopes.join(" "),
+    state: createOAuthState(input.provider, linkedProviders),
     ...(config.extraAuthParams ?? {}),
   });
 

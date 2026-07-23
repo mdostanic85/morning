@@ -10,19 +10,31 @@ function bucket(value: number): { tone: AppBadgeTone } {
 }
 
 /**
- * Extraction/source confidence — never place next to priority/status badges.
- * Keep the label about trust (“Source confidence”), not importance.
+ * Extraction/source confidence. Keep the label about trust
+ * ("Source confidence"), not importance — never repurpose this badge to
+ * signal priority.
  */
-export function ConfidenceBadge({ level }: { level: number }) {
+export function ConfidenceBadge({
+  level,
+  withTooltip = true,
+}: {
+  level: number;
+  /** Set false in compact rows (e.g. Next up) that skip the trust explainer. */
+  withTooltip?: boolean;
+}) {
   const { tone } = bucket(level);
   const percent = Math.round(level * 100);
+  const badge = (
+    <AppBadge tone={tone} className="px-2.5">
+      Source confidence {percent}%
+    </AppBadge>
+  );
+
+  if (!withTooltip) return badge;
+
   return (
     <Tooltip delay={400}>
-      <Tooltip.Trigger>
-        <AppBadge tone={tone} className="px-2.5">
-          Source confidence {percent}%
-        </AppBadge>
-      </Tooltip.Trigger>
+      <Tooltip.Trigger>{badge}</Tooltip.Trigger>
       <Tooltip.Content
         placement="top"
         showArrow

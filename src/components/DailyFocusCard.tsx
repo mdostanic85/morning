@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClockIcon, ExternalLinkIcon, UserRoundIcon } from "lucide-react";
 import { Toast } from "@heroui/react/toast";
@@ -93,8 +93,8 @@ function PriorityConclusion({ item }: { item: DailyFocusData }) {
  item.priorityExplanation || item.reason
  );
  return (
- <div className="accent-soft-gradient relative z-1 mt-6 overflow-hidden rounded-2xl border border-border-strong p-5">
- <strong className="block text-[16px] font-semibold text-foreground">Why this first</strong>
+    <div className="accent-soft-gradient relative z-1 mt-6 overflow-hidden rounded-2xl border border-border p-5">
+      <strong className="block text-[16px] font-semibold text-foreground">Why this first</strong>
  <p className="mt-1.5 text-[15px] leading-relaxed text-muted">
  {explanation}
  </p>
@@ -122,7 +122,7 @@ function CurrentAction({
  const canPersist = item.linkedTaskId != null;
 
  return (
- <div className="current-action-gradient group relative z-1 mt-5 grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-border-strong p-5 transition-[transform,border-color,box-shadow] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-[3px] hover:border-accent hover:shadow-[var(--panel-hover-shadow)] sm:grid-cols-[3.5rem_minmax(0,1fr)_auto]">
+    <div className="current-action-gradient group relative z-1 mt-5 grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-border p-5 transition-[transform,border-color,box-shadow] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-[3px] hover:border-accent hover:shadow-[var(--panel-hover-shadow)] sm:grid-cols-[3.5rem_minmax(0,1fr)_auto]">
  <span className="chip-spring flex size-13 items-center justify-center rounded-[17px] bg-accent font-mono text-[17px] font-bold text-accent-contrast sm:size-14">
  {String(stepIndex + 1).padStart(2, "0")}
  </span>
@@ -400,7 +400,6 @@ function ContextQuickPanel({ item }: { item: DailyFocusData }) {
  latestVerificationReport={item.latestVerificationReport ?? null}
  latestSyncReviewReport={item.latestSyncReviewReport ?? null}
  layout="focus"
- showJiraStatus={false}
  showDelete={false}
  focusTaskSeed={{
  title: item.title,
@@ -481,7 +480,6 @@ export function DailyFocusCard({ item }: { item: DailyFocusData }) {
  const [drawerOpen, setDrawerOpen] = useState(false);
  const [drawerSection, setDrawerSection] = useState<AIExplanationSection>("overview");
  const returnFocusRef = useRef<HTMLElement | null>(null);
- const heroRef = useRef<HTMLDivElement | null>(null);
  const executionSteps =
  item.actionSteps && item.actionSteps.length > 0
  ? item.actionSteps
@@ -516,14 +514,6 @@ export function DailyFocusCard({ item }: { item: DailyFocusData }) {
  }
  }
 
- function handleHeroPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
- const hero = heroRef.current;
- if (!hero || event.pointerType === "touch") return;
- const rect = hero.getBoundingClientRect();
- hero.style.setProperty("--spot-x", `${((event.clientX - rect.left) / rect.width) * 100}%`);
- hero.style.setProperty("--spot-y", `${((event.clientY - rect.top) / rect.height) * 100}%`);
- }
-
  function completeCurrentStep(sourceElement: Element) {
  if (currentStepIndex < 0) return;
  burstSparklesFromElement(sourceElement, 10);
@@ -550,18 +540,12 @@ export function DailyFocusCard({ item }: { item: DailyFocusData }) {
  <article id="prioritet" className="space-y-[var(--today-section-gap)] scroll-mt-24">
  {/* 1. Priority layout: main hero + side quick panels */}
  <div className="grid items-start gap-[var(--today-grid-gap)] lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px]">
- <div
- ref={heroRef}
- onPointerMove={handleHeroPointerMove}
- className="focus-hero-gradient focus-card relative min-w-0 overflow-hidden rounded-[28px] border border-border-strong p-7 sm:p-9 lg:p-10"
- >
- {/* Left gradient rail */}
+ <div className="focus-hero-gradient focus-card relative min-w-0 overflow-hidden rounded-[28px] border border-border-strong p-7 sm:p-9 lg:p-10">
+ {/* Left accent rail */}
  <span
- className="absolute inset-y-0 left-0 w-1.5 bg-[linear-gradient(180deg,var(--accent),var(--sky),var(--mint))]"
+ className="absolute inset-y-0 left-0 w-1.5 bg-[linear-gradient(180deg,var(--gradient-magenta),var(--gradient-violet),var(--gradient-indigo),var(--gradient-blue),var(--gradient-cyan))]"
  aria-hidden
  />
- <span className="focus-blob" aria-hidden />
- <span className="focus-spotlight" aria-hidden />
 
  <div className="relative z-1 flex flex-wrap items-center gap-3">
  <span className="ai-mark inline-flex h-8 min-w-9.5 items-center justify-center rounded-full px-2.5 font-mono text-[14px] font-bold uppercase text-accent-contrast">

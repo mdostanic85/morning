@@ -1,8 +1,31 @@
 # Evidence Relevance Fix Plan
 
 > **Status: EV-00, EV-01, EV-02, EV-06 shipped** (persistence-side merge guard).
-> EV-03 (extractor grouping), EV-04 (display bundle), EV-05 (retroactive
-> prune) are **not yet implemented** — see "Still open" below.
+>
+> **Update — per-quote relevance shipped.** Relevance is now judged per *cited
+> quote*, not per whole source. `isSourceRelevantToTask` was replaced by
+> `isQuoteRelevantToTask` (`src/lib/tasks/evidenceRelevance.ts`): an on-topic
+> line stays while a sibling line about a different task is dropped, even when
+> both came from the same meeting (the "Milos & Lucas sync" case). This upgrade
+> reaches all three layers with one predicate:
+> - **Display** (`taskSupportingSources.ts`): filters individual quotes inside
+>   each source group; a group with no relevant quote drops out (Jira anchor
+>   always stays).
+> - **Prune / self-heal** (`evidenceRelevance.ts` `planEvidenceRelevancePrune`
+>   → `services/evidenceRelevancePrune.ts`): deletes individual off-topic
+>   evidence rows, not whole sources — the EV-05 retroactive prune, now
+>   per-quote.
+> - **Extraction write-time guard** (`extractor.ts` `filterEvidenceForTarget`):
+>   when a transcript's extracts merge onto a Jira-anchored task, only quotes
+>   about that task persist (falls back to the unfiltered set if filtering
+>   would leave the source with no evidence). This is the practical EV-03.
+>
+> Still deferred: EV-04 in `focusEvidenceBundle.ts`/`granolaRelevance.ts` (the
+> Today bundle over-pull path) is untouched by this change.
+>
+> Earlier plan (below) called EV-03 (extractor grouping), EV-04 (display
+> bundle), EV-05 (retroactive prune) **not yet implemented** — EV-03/EV-05 are
+> now covered per-quote as described above.
 > Companion to the UATL-380 contamination investigation.
 >
 > **Problem:** unrelated sources get attached to a prominent active task as

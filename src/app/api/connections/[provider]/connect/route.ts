@@ -11,9 +11,11 @@ export async function GET(
     return NextResponse.json({ error: "Unsupported OAuth provider." }, { status: 400 });
   }
 
-  const origin = new URL(request.url).origin;
+  const url = new URL(request.url);
+  const origin = url.origin;
+  const linkGoogle = url.searchParams.get("link") === "google";
   try {
-    return NextResponse.redirect(buildAuthorizationUrl({ provider, origin }));
+    return NextResponse.redirect(buildAuthorizationUrl({ provider, origin, linkGoogle }));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not start OAuth flow.";
     return NextResponse.redirect(

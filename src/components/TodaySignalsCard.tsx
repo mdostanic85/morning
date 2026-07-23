@@ -39,12 +39,12 @@ function SignalList({
                     href={item.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="block rounded-[var(--radius)] border border-border/70 bg-surface-soft/40 px-3 py-2.5 no-underline transition-colors hover:border-border hover:bg-surface-soft"
+                    className="block rounded-[0.75rem] bg-surface-soft p-4 no-underline transition-colors hover:bg-surface-soft/80"
                   >
                     {content}
                   </a>
                 ) : (
-                  <div className="rounded-[var(--radius)] border border-border/70 bg-surface-soft/40 px-3 py-2.5">
+                  <div className="rounded-[0.75rem] bg-surface-soft p-4">
                     {content}
                   </div>
                 )}

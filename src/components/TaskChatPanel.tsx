@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeftIcon,
+  ArrowUpIcon,
   ExternalLinkIcon,
   Loader2Icon,
   SearchIcon,
+  SlidersHorizontalIcon,
   SparklesIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { SourceBadge } from "@/components/SourceBadge";
 import { Button } from "@heroui/react/button";
 import { Input } from "@heroui/react/input";
@@ -39,6 +42,30 @@ const GENERAL_SUGGESTED_QUESTIONS = [
   "Are there any conflicting instructions?",
   "What is still unclear?",
 ];
+
+function AssistantAvatar({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "grid shrink-0 place-items-center rounded-full bg-accent-soft-surface text-accent-strong",
+        className
+      )}
+      aria-hidden
+    >
+      <SparklesIcon className="size-1/2" />
+    </span>
+  );
+}
+
+function TypingDots() {
+  return (
+    <span className="inline-flex items-center gap-1" aria-hidden>
+      <span className="chat-typing-dot" />
+      <span className="chat-typing-dot" style={{ animationDelay: "160ms" }} />
+      <span className="chat-typing-dot" style={{ animationDelay: "320ms" }} />
+    </span>
+  );
+}
 
 function formatSourceDate(value: string): string {
   const date = new Date(value);
@@ -125,9 +152,54 @@ function AnswerSources({ sources }: { sources: TaskQaAnswerSource[] }) {
   );
 }
 
+/** The API prefixes failures with a raw error kind (e.g. "missing_api_key:").
+ *  Turn that into calm, actionable copy — with a Settings link where relevant. */
+function humanizeAnswerError(raw: string): { message: string; settingsLink: boolean } {
+  const match = raw.match(/^([a-z0-9_]+):\s*(.*)$/is);
+  const kind = match?.[1] ?? "";
+  const rest = (match?.[2] ?? raw).trim();
+
+  if (kind === "missing_api_key" || /no active llm providers/i.test(raw)) {
+    return {
+      message: "No AI provider is turned on yet. Enable at least one provider so the assistant can answer.",
+      settingsLink: true,
+    };
+  }
+  if (kind === "rate_limit" || /rate limit/i.test(raw)) {
+    return {
+      message: "The AI provider hit its rate limit. Try again in a moment or switch provider in Settings.",
+      settingsLink: true,
+    };
+  }
+  if (kind === "quota" || /quota|billing/i.test(raw)) {
+    return {
+      message: "The AI provider's quota or billing is exceeded. Restore credits or switch provider in Settings.",
+      settingsLink: true,
+    };
+  }
+  return { message: rest || "The assistant couldn't answer that. Please try again.", settingsLink: false };
+}
+
+function AnswerError({ error }: { error: string }) {
+  const { message, settingsLink } = humanizeAnswerError(error);
+  return (
+    <div className="rounded-2xl border border-danger/25 bg-danger-soft-surface/60 p-3.5">
+      <p className="text-sm leading-relaxed text-foreground">{message}</p>
+      {settingsLink ? (
+        <Link
+          href="/settings"
+          className="mt-3 inline-flex h-9 items-center rounded-full bg-action-primary px-3.5 text-[14px] font-semibold text-action-primary-foreground"
+        >
+          Open Settings
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
 function StructuredAnswer({ answer }: { answer: TaskQaAnswer }) {
   if (!answer.ok) {
-    return <p className="text-sm leading-relaxed text-danger">{answer.error}</p>;
+    return <AnswerError error={answer.error ?? "The assistant couldn't answer that."} />;
   }
 
   const confidence = Math.round(answer.confidence * 100);
@@ -166,21 +238,18 @@ function StructuredAnswer({ answer }: { answer: TaskQaAnswer }) {
   );
 }
 
-function TaskPicker({
+function TaskFocusList({
   tasks,
   loading,
   error,
   onSelect,
-  onAskGeneral,
 }: {
   tasks: TaskChatOption[];
   loading: boolean;
   error: string | null;
   onSelect: (task: TaskChatOption) => void;
-  onAskGeneral: (question: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [generalQuestion, setGeneralQuestion] = useState("");
   const filteredTasks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return tasks;
@@ -190,95 +259,53 @@ function TaskPicker({
   }, [query, tasks]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 px-5 pb-3 pt-5 sm:px-6">
-        <div className="flex items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
-            <SparklesIcon className="size-4" aria-hidden />
-          </span>
-          <div>
-            <p className="font-display text-lg font-semibold tracking-tight">Ask about your work</p>
-            <p className="mt-1 text-sm leading-relaxed text-muted">
-              Ask across all synced sources, or choose a task for a more focused answer.
-            </p>
-          </div>
-        </div>
-
-        <form
-          className="mt-4 flex min-w-0 items-center gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (generalQuestion.trim()) onAskGeneral(generalQuestion);
-          }}
-        >
-          <Input
-            fullWidth
-            value={generalQuestion}
-            onChange={(event) => setGeneralQuestion(event.target.value)}
-            placeholder="Ask anything about your work…"
-            aria-label="Ask across all synced work"
-            className={cn("h-11 min-w-0 flex-1 border border-border bg-background/70 text-sm shadow-none")}
-          />
-          <Button type="submit" isDisabled={!generalQuestion.trim()} className="shrink-0">
-            Ask
-          </Button>
-        </form>
-
-        <p className="mt-5 text-[14px] font-semibold uppercase tracking-[0.14em] text-muted-soft">
-          Or choose a task
-        </p>
-        <div className="relative mt-4">
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-soft" aria-hidden />
-          <Input
-            fullWidth
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find a task…"
-            aria-label="Find a task"
-            className={cn("h-11 border border-border bg-background/70 pl-9 text-sm shadow-none")}
-          />
-        </div>
+    <div className="mt-4 rounded-2xl border border-border/70 bg-surface-soft/40 p-3">
+      <div className="relative">
+        <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-soft" aria-hidden />
+        <Input
+          fullWidth
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Find a task to focus on…"
+          aria-label="Find a task"
+          className={cn("h-11 border border-border bg-background/70 pl-9 text-sm shadow-none")}
+        />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 sm:px-6">
+      <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-0.5">
         {loading ? (
-          <div className="flex items-center gap-2 py-6 text-sm text-muted">
+          <div className="flex items-center gap-2 py-4 text-sm text-muted">
             <Loader2Icon className="size-4 animate-spin" aria-hidden />
             Loading your tasks…
           </div>
         ) : error ? (
-          <p className="py-6 text-sm text-danger">{error}</p>
+          <p className="py-4 text-sm text-danger">{error}</p>
         ) : filteredTasks.length === 0 ? (
-          <p className="py-6 text-sm text-muted">
+          <p className="py-4 text-sm text-muted">
             {tasks.length === 0 ? "No active tasks were found." : "No tasks match that search."}
           </p>
         ) : (
-          <div className="space-y-2">
-            {filteredTasks.map((task) => (
-              <Button
-                key={task.id}
-                type="button"
-                variant="ghost"
-                onPress={() => onSelect(task)}
-                className="h-auto w-full justify-start rounded-xl border border-border/70 bg-surface-soft/40 p-3.5 text-left transition-colors hover:border-accent/40 hover:bg-accent/[0.04]"
-              >
-                <div className="flex w-full items-center justify-between gap-3">
-                  <span className="min-w-0 truncate text-sm font-semibold text-foreground">
-                    {task.title}
-                  </span>
-                  <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[14px] font-medium uppercase tracking-wide text-muted">
-                    {task.status.replaceAll("_", " ")}
-                  </span>
-                </div>
-                <p className="mt-1 w-full text-left text-[14px] text-muted-soft">
-                  {task.projectName ?? "No project"}
-                </p>
-                <p className="mt-2 w-full line-clamp-2 text-left text-[14px] leading-relaxed text-muted">
-                  {task.nextAction}
-                </p>
-              </Button>
-            ))}
-          </div>
+          filteredTasks.map((task) => (
+            <Button
+              key={task.id}
+              type="button"
+              variant="ghost"
+              onPress={() => onSelect(task)}
+              className="h-auto w-full justify-start rounded-xl border border-border/70 bg-surface p-3 text-left transition-colors hover:border-accent/40 hover:bg-accent/[0.04]"
+            >
+              <div className="flex w-full items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-sm font-semibold text-foreground">
+                  {task.title}
+                </span>
+                <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[14px] font-medium uppercase tracking-wide text-muted">
+                  {task.status.replaceAll("_", " ")}
+                </span>
+              </div>
+              <p className="mt-1 w-full text-left text-[14px] text-muted-soft">
+                {task.projectName ?? "No project"}
+              </p>
+            </Button>
+          ))
         )}
       </div>
     </div>
@@ -305,6 +332,7 @@ export function TaskChatPanel({
   const [loadingTasks, setLoadingTasks] = useState(true);
   const [loadingAnswer, setLoadingAnswer] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTaskFocus, setShowTaskFocus] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -332,8 +360,9 @@ export function TaskChatPanel({
     scopeOverride?: Exclude<ChatScope, null>
   ) {
     const trimmed = question.trim();
-    const activeScope = scopeOverride ?? scope;
-    if (!activeScope || !trimmed || loadingAnswer) return;
+    const activeScope = scopeOverride ?? scope ?? "all";
+    if (!trimmed || loadingAnswer) return;
+    if (!scope) setScope(activeScope);
 
     setError(null);
     setLoadingAnswer(true);
@@ -374,9 +403,7 @@ export function TaskChatPanel({
     const trimmed = pendingQuestion?.trim();
     if (!trimmed) return;
     const timeoutId = window.setTimeout(() => {
-      const questionScope = scope ?? "all";
-      if (!scope) setScope("all");
-      void askQuestion(trimmed, questionScope);
+      void askQuestion(trimmed, scope ?? "all");
       onPendingQuestionConsumed?.();
     }, 0);
     return () => window.clearTimeout(timeoutId);
@@ -384,123 +411,135 @@ export function TaskChatPanel({
   }, [pendingQuestion]);
 
   useEffect(() => {
-    if (!scope || (messages.length === 0 && !loadingAnswer)) return;
+    if (messages.length === 0 && !loadingAnswer) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [scope, messages, loadingAnswer]);
+  }, [messages, loadingAnswer]);
 
   function selectTask(task: TaskChatOption) {
     setScope(task);
     setMessages([]);
     setError(null);
+    setShowTaskFocus(false);
   }
 
-  function askGeneralQuestion(question: string) {
-    setScope("all");
-    setMessages([]);
-    setError(null);
-    void askQuestion(question, "all");
-  }
-
-  function changeScope() {
+  function resetToStart() {
     setScope(null);
     setMessages([]);
     setInput("");
     setError(null);
+    setShowTaskFocus(false);
   }
 
-  if (!scope) {
-    return (
-      <section className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", className)}>
-        <TaskPicker
-          tasks={tasks}
-          loading={loadingTasks}
-          error={error}
-          onSelect={selectTask}
-          onAskGeneral={askGeneralQuestion}
-        />
-      </section>
-    );
-  }
-
-  const selectedTask = scope === "all" ? null : scope;
-  const suggestedQuestions = selectedTask
-    ? SUGGESTED_QUESTIONS
-    : GENERAL_SUGGESTED_QUESTIONS;
+  const selectedTask = scope && scope !== "all" ? scope : null;
+  const suggestedQuestions = selectedTask ? SUGGESTED_QUESTIONS : GENERAL_SUGGESTED_QUESTIONS;
+  const hasThread = messages.length > 0 || loadingAnswer;
 
   return (
     <section className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", className)}>
-      <div className="shrink-0 border-b border-border/70 px-4 py-3 sm:px-5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onPress={changeScope}
-          className="mb-2 px-0 text-[14px] font-medium text-muted hover:text-foreground"
-        >
-          <ArrowLeftIcon className="size-3.5" aria-hidden />
-          Change scope
-        </Button>
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-foreground">
-              {selectedTask?.title ?? "All synced work"}
-            </p>
-            <p className="mt-0.5 truncate text-[14px] text-muted-soft">
-              {selectedTask
-                ? selectedTask.projectName ?? "No project"
-                : "No project or task selected"}
-            </p>
-          </div>
-          {selectedTask ? (
+      {/* Scope bar — only once a conversation is scoped to a specific task. */}
+      {selectedTask ? (
+        <div className="shrink-0 border-b border-border/70 px-4 py-3 sm:px-5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onPress={resetToStart}
+            className="mb-2 px-0 text-[14px] font-medium text-muted hover:text-foreground"
+          >
+            <ArrowLeftIcon className="size-3.5" aria-hidden />
+            Ask across all work
+          </Button>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">{selectedTask.title}</p>
+              <p className="mt-0.5 truncate text-[14px] text-muted-soft">
+                {selectedTask.projectName ?? "No project"}
+              </p>
+            </div>
             <span className="shrink-0 rounded-full border border-border px-2 py-1 text-[14px] font-medium uppercase tracking-wide text-muted">
               {selectedTask.status.replaceAll("_", " ")}
             </span>
-          ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-4 sm:px-5">
-        {messages.length === 0 && !loadingAnswer ? (
+        {!hasThread ? (
           <div>
-            <p className="text-sm font-medium text-foreground">What do you want to know?</p>
-            <p className="mt-1 text-[14px] leading-relaxed text-muted">
-              {selectedTask
-                ? "I will answer only from this task's synced context and flag anything uncertain."
-                : "I will search across your synced work and flag anything uncertain."}
-            </p>
-            <div className="mt-4 grid gap-2">
+            <div>
+              <p className="font-display text-lg font-semibold tracking-tight">
+                {selectedTask ? "Ask about this task" : "How can I help with your work?"}
+              </p>
+              <p className="mt-1 text-[14px] leading-relaxed text-muted">
+                {selectedTask
+                  ? "I answer only from this task's synced context and flag anything uncertain."
+                  : "I search across your synced sources and flag anything uncertain."}
+              </p>
+            </div>
+
+            <div className="mt-5 grid gap-2">
               {suggestedQuestions.map((question) => (
                 <Button
                   key={question}
                   type="button"
                   variant="ghost"
                   onPress={() => void askQuestion(question)}
-                  className="h-auto w-full justify-start rounded-xl border border-border/70 bg-surface-soft/40 px-3.5 py-3 text-left text-[14px] text-foreground transition-colors hover:border-accent/40 hover:bg-accent/[0.04]"
+                  className="h-auto w-full justify-start rounded-2xl border border-border/70 bg-surface-soft/40 px-3.5 py-3 text-left text-[14px] text-foreground transition-colors hover:border-accent/40 hover:bg-accent/[0.04]"
                 >
                   {question}
                 </Button>
               ))}
             </div>
+
+            {!selectedTask ? (
+              <div className="mt-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onPress={() => setShowTaskFocus((current) => !current)}
+                  aria-expanded={showTaskFocus}
+                  className="px-0 text-[14px] font-medium text-muted hover:text-foreground"
+                >
+                  <SlidersHorizontalIcon className="size-3.5" aria-hidden />
+                  {showTaskFocus ? "Hide task focus" : "Focus on a specific task"}
+                </Button>
+                {showTaskFocus ? (
+                  <TaskFocusList
+                    tasks={tasks}
+                    loading={loadingTasks}
+                    error={error}
+                    onSelect={selectTask}
+                  />
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-5">
             {messages.map((message) =>
               message.role === "user" ? (
                 <div key={message.id} className="flex justify-end">
-                  <div className="max-w-[90%] break-words rounded-2xl bg-surface-soft px-4 py-3 text-sm leading-relaxed">
+                  <div className="max-w-[85%] break-words rounded-2xl rounded-br-md bg-surface-soft px-4 py-2.5 text-sm leading-relaxed">
                     {message.content}
                   </div>
                 </div>
               ) : (
-                <div key={message.id} className="min-w-0 max-w-full">
-                  {message.answer ? <StructuredAnswer answer={message.answer} /> : null}
+                <div key={message.id} className="flex min-w-0 gap-3">
+                  <AssistantAvatar className="mt-0.5 size-8" />
+                  <div className="min-w-0 flex-1">
+                    {message.answer ? <StructuredAnswer answer={message.answer} /> : null}
+                  </div>
                 </div>
               )
             )}
             {loadingAnswer ? (
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <Loader2Icon className="size-4 animate-spin" aria-hidden />
-                Checking Jira, Confluence and transcripts…
+              <div className="flex min-w-0 items-center gap-3">
+                <AssistantAvatar className="size-8" />
+                <div className="flex items-center gap-2 rounded-2xl rounded-bl-md bg-surface-soft px-4 py-3">
+                  <TypingDots />
+                  <span className="text-[14px] text-muted">Checking your sources…</span>
+                </div>
               </div>
             ) : null}
           </div>
@@ -509,27 +548,35 @@ export function TaskChatPanel({
       </div>
 
       <form
-        className="shrink-0 border-t border-border/70 p-4 sm:p-5"
+        className="shrink-0 border-t border-border/70 p-3 sm:p-4"
         onSubmit={(event) => {
           event.preventDefault();
           void askQuestion(input);
         }}
       >
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="chat-composer flex min-w-0 items-end gap-2 rounded-full border border-border bg-background/70 py-1 pl-4 pr-1.5 transition-[border-color,box-shadow] duration-150">
           <Input
             fullWidth
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder={selectedTask ? "Ask about this task…" : "Ask about your work…"}
+            placeholder={selectedTask ? "Ask about this task…" : "Ask anything about your work…"}
             disabled={loadingAnswer}
             aria-label={selectedTask ? "Ask about selected task" : "Ask about synced work"}
-            className={cn("h-11 min-w-0 flex-1 border border-border bg-background/70 text-sm shadow-none")}
+            className={cn(
+              "chat-composer-input h-10 min-w-0 flex-1 border-0 bg-transparent text-sm shadow-none ring-0 outline-none"
+            )}
           />
-          <Button type="submit" isDisabled={loadingAnswer || !input.trim()} className="shrink-0">
-            Ask
+          <Button
+            type="submit"
+            isIconOnly
+            isDisabled={loadingAnswer || !input.trim()}
+            aria-label="Send"
+            className="size-10 shrink-0 bg-action-primary text-action-primary-foreground"
+          >
+            <ArrowUpIcon className="size-4" aria-hidden />
           </Button>
         </div>
-        {error ? <p className="mt-2 text-sm text-danger">{error}</p> : null}
+        {error && hasThread ? <p className="mt-2 px-1 text-sm text-danger">{error}</p> : null}
       </form>
     </section>
   );

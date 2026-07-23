@@ -8,22 +8,28 @@
  * merges have over-attached unrelated sources (old Gmail threads, stale daily
  * standups covering many topics, unrelated 1:1 notes) onto anchored tasks.
  *
- * The rule that reliably separates signal from that noise:
+ * The rule that reliably separates signal from that noise, applied to each
+ * cited quote INDIVIDUALLY (not the whole source at once):
  *
  *   1. The Jira ticket itself (matching key) is always relevant — the anchor.
- *   2. Any source whose attached quotes name the ticket key is relevant.
- *   3. Otherwise a source is relevant only if it is BOTH
+ *   2. Any single quote that names the ticket key is relevant.
+ *   3. Otherwise a quote is relevant only if it is BOTH
  *        (a) within the per-task freshness window (see sourceAuthority), and
- *        (b) its *attached evidence quotes* — not the whole source body —
- *            share ≥2 domain tokens with the task.
+ *        (b) that one quote shares ≥2 domain tokens with the task.
  *
- * Using the attached quotes (what the extractor actually pulled onto the task)
- * instead of the full body is the crucial part: long multi-topic standup
- * transcripts overlap almost any task on their full text, but the specific
- * lines cited for an unrelated task do not overlap the banner work.
+ * Judging each quote on its own — rather than keeping every quote from a source
+ * the moment ANY of its quotes cites the key — is the crucial part. One meeting
+ * ("Milos & Lucas sync") routinely covers several tasks: the line that concerns
+ * this task's work stays, but a sibling line about a *different* task (e.g. the
+ * confidence-score placement) is dropped even though the same meeting also
+ * mentions this ticket somewhere. Evidence for a task is the Jira ticket plus
+ * only what was actually said about *this* task — of any kind (a requested
+ * change, a decision, or important context), never another task's line that
+ * merely rode along in the same source.
  *
  * Pure and dependency-light so it can be unit-tested and used both at display
- * time (to hide) and at rebuild time (to prune) with identical behavior.
+ * time (to hide), at extraction time (to not attach), and at rebuild time (to
+ * prune) with identical behavior.
  */
 import { TASK_SOURCE_FRESHNESS_WINDOW_MS } from "./sourceAuthority";
 import {
@@ -51,14 +57,12 @@ function sourceTime(dateValue: string | null | undefined): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
-export interface RelevanceSourceGroup {
-  sourceItemId: number;
+/** The source a quote came from — used for the anchor and freshness checks. */
+export interface RelevanceQuoteSource {
   sourceType: string;
   sourceExternalId: string | null;
   /** Best available date for the source (source item date, else evidence date). */
   sourceDate: string | null;
-  /** Concatenated quotes/summaries actually attached to this task for the source. */
-  quotesText: string;
 }
 
 export interface RelevanceDecision {
@@ -67,30 +71,36 @@ export interface RelevanceDecision {
 }
 
 /**
- * Decide whether a single source (as cited by a task) is relevant to that task.
- * `taskKey` is the task's Jira key (or null for non-anchored tasks).
+ * Decide whether a single cited quote is relevant to a task. `taskKey` is the
+ * task's Jira key (or null for non-anchored tasks). Each quote is judged on its
+ * own so an on-topic line and an off-topic line from the same source get
+ * different verdicts — the whole point of per-quote (not per-source) scoring.
  */
-export function isSourceRelevantToTask(input: {
+export function isQuoteRelevantToTask(input: {
   taskKey: string | null;
   domain: string;
   newestSourceTime: number;
-  group: RelevanceSourceGroup;
+  source: RelevanceQuoteSource;
+  quoteText: string;
 }): RelevanceDecision {
-  const { taskKey, domain, newestSourceTime, group } = input;
+  const { taskKey, domain, newestSourceTime, source, quoteText } = input;
 
   if (taskKey) {
+    // The Jira ticket itself is the task's proof of existence — always kept,
+    // regardless of what its snapshot text says.
     if (
-      group.sourceType === "jira" &&
-      group.sourceExternalId?.toUpperCase() === taskKey
+      source.sourceType === "jira" &&
+      source.sourceExternalId?.toUpperCase() === taskKey
     ) {
       return { relevant: true, reason: "jira anchor (proof of existence)" };
     }
-    if (extractJiraKeysFromText(group.quotesText).includes(taskKey)) {
-      return { relevant: true, reason: `cites ${taskKey}` };
+    // A quote that itself names the ticket key is about this task.
+    if (extractJiraKeysFromText(quoteText).includes(taskKey)) {
+      return { relevant: true, reason: `quote cites ${taskKey}` };
     }
   }
 
-  const time = sourceTime(group.sourceDate);
+  const time = sourceTime(source.sourceDate);
   const stale =
     newestSourceTime > 0 &&
     time > 0 &&
@@ -99,7 +109,7 @@ export function isSourceRelevantToTask(input: {
     return { relevant: false, reason: "older than freshness window" };
   }
 
-  const overlap = topicOverlapScore(group.quotesText, domain);
+  const overlap = topicOverlapScore(quoteText, domain);
   if (overlap >= MIN_QUOTE_OVERLAP) {
     return { relevant: true, reason: `fresh, quote overlap ${overlap}` };
   }
@@ -139,10 +149,12 @@ export interface PruneSourceInfo {
 }
 
 /**
- * Plans which evidence rows to remove from Jira-anchored tasks because their
- * source is not relevant to the task. Non-anchored (meeting-only) tasks are
- * left untouched — the anchor is what makes strict pruning safe (the task can
- * never lose its proof of existence). Pure; callers persist the deletions.
+ * Plans which individual evidence rows to remove from Jira-anchored tasks
+ * because the specific quote they carry is not relevant to the task. Each row
+ * is judged on its own quote, so an off-topic line is dropped even when a
+ * sibling line from the same source is kept. Non-anchored (meeting-only) tasks
+ * are left untouched — the anchor is what makes strict pruning safe (the task
+ * can never lose its proof of existence). Pure; callers persist the deletions.
  */
 export function planEvidenceRelevancePrune(input: {
   tasks: PruneTask[];
@@ -157,54 +169,36 @@ export function planEvidenceRelevancePrune(input: {
 
     const domain = taskDomainText(task);
 
-    // Collapse evidence rows into one group per source item.
-    const groups = new Map<
-      number,
-      { rows: PruneEvidenceRow[]; quotes: string[] }
-    >();
-    for (const row of task.evidence) {
-      let group = groups.get(row.sourceItemId);
-      if (!group) {
-        group = { rows: [], quotes: [] };
-        groups.set(row.sourceItemId, group);
-      }
-      group.rows.push(row);
-      const quote = (row.quote ?? "").trim() || row.summary.trim();
-      if (quote) group.quotes.push(quote);
-    }
-
-    // Newest signal across all sources cited by the task.
+    // Newest signal across all evidence rows cited by the task.
     let newestSourceTime = 0;
-    for (const [sourceItemId, group] of groups) {
-      const source = sourceById.get(sourceItemId);
-      const date = source?.sourceDate ?? group.rows[0]?.sourceDate ?? null;
+    for (const row of task.evidence) {
+      const source = sourceById.get(row.sourceItemId);
+      const date = source?.sourceDate ?? row.sourceDate ?? null;
       const time = sourceTime(date);
       if (time > newestSourceTime) newestSourceTime = time;
     }
 
-    for (const [sourceItemId, group] of groups) {
-      const source = sourceById.get(sourceItemId);
-      const decision = isSourceRelevantToTask({
+    for (const row of task.evidence) {
+      const source = sourceById.get(row.sourceItemId);
+      const quoteText = (row.quote ?? "").trim() || row.summary.trim();
+      const decision = isQuoteRelevantToTask({
         taskKey,
         domain,
         newestSourceTime,
-        group: {
-          sourceItemId,
+        source: {
           sourceType: source?.sourceType ?? "other",
           sourceExternalId: source?.sourceExternalId ?? null,
-          sourceDate: source?.sourceDate ?? group.rows[0]?.sourceDate ?? null,
-          quotesText: group.quotes.join("\n"),
+          sourceDate: source?.sourceDate ?? row.sourceDate ?? null,
         },
+        quoteText,
       });
       if (decision.relevant) continue;
-      for (const row of group.rows) {
-        pruned.push({
-          evidenceId: row.id,
-          taskId: task.id,
-          sourceItemId,
-          reason: decision.reason,
-        });
-      }
+      pruned.push({
+        evidenceId: row.id,
+        taskId: task.id,
+        sourceItemId: row.sourceItemId,
+        reason: decision.reason,
+      });
     }
   }
 

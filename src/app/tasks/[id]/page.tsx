@@ -4,9 +4,15 @@ import { AlertTriangle, ArrowRight, ExternalLink } from "lucide-react";
 import { getWorkTaskById } from "@/services/workTasks";
 import { getSourceItems } from "@/services/sourceItems";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
+import { SourceBadge } from "@/components/SourceBadge";
 import { BackToTodayButton } from "@/components/BackToTodayButton";
 import { TaskActionButtons } from "@/components/TaskActionButtons";
 import { buildTaskSupportingSources } from "@/lib/tasks/taskSupportingSources";
+import { SOURCE_TYPES, type SourceType } from "@/domain/sourceItem";
+
+function isKnownSourceType(value: string): value is SourceType {
+  return (SOURCE_TYPES as readonly string[]).includes(value);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -27,14 +33,27 @@ function confidenceLabel(value: number | null): string {
  return "Low source confidence";
 }
 
+/** Color for the confidence % — green above 65%, then amber, then red. */
+function confidenceToneClass(value: number | null): string {
+  if (value == null) return "text-muted";
+  if (value > 0.65) return "text-good";
+  if (value >= 0.5) return "text-warm";
+  return "text-danger";
+}
+
 function meetingDate(value: string): string {
- const date = new Date(value);
- if (Number.isNaN(date.getTime())) return value;
- return new Intl.DateTimeFormat("en", {
- day: "numeric",
- month: "short",
- year: "numeric",
- }).format(date);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+/** Normalizes whitespace/case so a quote can be compared against the action snippet drawn from it. */
+function normalizeQuoteText(value: string | null): string {
+  return (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 export default async function TaskDetailPage({
@@ -59,6 +78,12 @@ export default async function TaskDetailPage({
   const linkedJiraKey = task.title.match(/^([A-Z][A-Z0-9]+-\d+)\b/)?.[1] ?? null;
   const confidence = task.confidence == null ? null : Math.round(task.confidence * 100);
   const supporting = buildTaskSupportingSources({ task, sourceById });
+  // Jira's operational status, surfaced as a read-only badge in the header
+  // (the app never writes it back). Prefer the anchor ticket's status.
+  const jiraStatus =
+    supporting.groups.find((g) => g.isAnchor && g.jiraStatus)?.jiraStatus ??
+    supporting.groups.find((g) => g.jiraStatus)?.jiraStatus ??
+    null;
 
  return (
  <div className="mx-auto w-full max-w-[77.5rem] py-8 pb-20">
@@ -72,6 +97,9 @@ export default async function TaskDetailPage({
  {task.status === "waiting" ? "Waiting" : task.status === "unclear" ? "Needs your input" : "Do first"}
  </AppBadge>
  {isJiraTask ? <AppBadge tone="sky">Jira</AppBadge> : null}
+ {isJiraTask && jiraStatus ? (
+ <AppBadge tone={jiraStatusTone(jiraStatus)}>{jiraStatus}</AppBadge>
+ ) : null}
  </div>
  <h1 className="ft-screen-title mt-4 max-w-4xl font-display">{task.title}</h1>
  <div className="mt-4 max-w-3xl">
@@ -80,12 +108,9 @@ export default async function TaskDetailPage({
  </strong>
  <p className="ft-screen-lead mt-2 text-muted">{task.reason}</p>
  </div>
- <p className="ft-header-meta mt-3 text-muted-soft">
- {task.doneCriteria.length} required outcomes · {task.evidence.length} supporting sources
- </p>
  </header>
 
- <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1.55fr)_minmax(19rem,.65fr)] lg:items-start">
+ <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1.45fr)_minmax(22rem,.75fr)] lg:items-start">
  <main className="grid min-w-0 gap-6 [overflow-wrap:anywhere]">
  {task.latestSyncReviewReport ? (
  <section className="rounded-[20px] border border-border bg-surface p-6">
@@ -133,36 +158,34 @@ export default async function TaskDetailPage({
  <section className="rounded-[20px] border border-border bg-surface p-6">
  <h2 className="ft-panel-title font-display">What was said in meetings</h2>
  <p className="mt-2 text-sm leading-relaxed text-muted">
- The important decisions, feedback, and unresolved questions linked to this task.
+ Decisions, requested changes, and open questions linked to this task.
  </p>
  <div className="mt-5 grid gap-5">
  {task.meetingContext.map((context) => (
  <article
  key={context.sourceItemId}
- className="rounded-2xl border border-border bg-surface-soft/40 p-5"
+ className="overflow-hidden rounded-2xl border border-border bg-surface"
  >
- <div className="flex flex-wrap items-baseline justify-between gap-2">
- <strong className="text-[15px]">{context.sourceTitle}</strong>
+ <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border bg-surface-soft/55 px-5 py-4">
+ <strong className="text-[15px] font-bold">{context.sourceTitle}</strong>
  <span className="text-xs font-medium text-muted-soft">
  {meetingDate(context.sourceDate)}
  </span>
- </div>
- <p className="mt-3 text-sm leading-7 text-foreground">
+ </header>
+
+ <p className="px-5 py-4 text-sm leading-7 text-foreground">
  {context.overview}
  </p>
 
- <div className="mt-5 grid gap-5 sm:grid-cols-2">
- {context.keyPoints.length > 0 ? (
- <MeetingContextList title="Important context" items={context.keyPoints} />
- ) : null}
- {context.decisions.length > 0 ? (
- <MeetingContextList title="Decisions" items={context.decisions} />
- ) : null}
+ <div className="divide-y divide-border border-t border-border px-5">
  {context.requestedChanges.length > 0 ? (
  <MeetingContextList
  title="Requested changes"
  items={context.requestedChanges}
  />
+ ) : null}
+ {context.decisions.length > 0 ? (
+ <MeetingContextList title="Decisions" items={context.decisions} />
  ) : null}
  {context.openQuestions.length > 0 ? (
  <MeetingContextList
@@ -170,11 +193,17 @@ export default async function TaskDetailPage({
  items={context.openQuestions}
  />
  ) : null}
+ {context.keyPoints.length > 0 ? (
+ <MeetingContextList title="Context" items={context.keyPoints} />
+ ) : null}
  </div>
 
- <details className="mt-5 border-t border-border pt-4">
- <summary className="cursor-pointer text-sm font-semibold text-accent-strong">
- Show supporting quotes
+ <details className="group border-t border-border px-5 py-4">
+ <summary className="cursor-pointer list-none text-sm font-semibold text-accent-strong marker:content-none">
+ <span className="inline-flex items-center gap-2">
+ <span aria-hidden className="text-xs transition-transform group-open:rotate-90">▶</span>
+ {context.evidenceQuotes.length} supporting {context.evidenceQuotes.length === 1 ? "quote" : "quotes"}
+ </span>
  </summary>
  <div className="mt-3 grid gap-2">
  {context.evidenceQuotes.map((quote) => (
@@ -215,26 +244,25 @@ export default async function TaskDetailPage({
  </div>
  </section>
 
-            <section className="rounded-[20px] border border-border bg-surface p-6">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="ft-panel-subtitle font-display">Supporting sources</h2>
-                <div className="flex flex-wrap items-center gap-2">
-                  {supporting.conflicts.length > 0 ? (
-                    <AppBadge tone="danger" icon={<AlertTriangle className="size-3.5" aria-hidden />}>
-                      {supporting.conflicts.length === 1
-                        ? "Conflict"
-                        : `${supporting.conflicts.length} conflicts`}
-                    </AppBadge>
-                  ) : null}
-                  {confidence != null ? (
-                    <AppBadge tone="good">Source confidence {confidence}%</AppBadge>
-                  ) : null}
-                </div>
-              </div>
-              <p className="mt-2 text-sm leading-relaxed text-muted">
-                The Jira ticket is what proves this task exists; newer meeting notes add or
-                refine its details. When they disagree, the newest meeting guidance wins.
+ </main>
+
+ <aside className="grid min-w-0 gap-4 [overflow-wrap:anywhere] lg:sticky lg:top-24">
+            <section className="focus-soft-gradient rounded-[20px] border border-border-strong p-6">
+              <h2 className="ft-panel-subtitle font-display">Supporting sources</h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                Verify the task against the source, date, and quote.
               </p>
+              <div className="mt-4 flex items-center gap-3 rounded-[14px] border border-border bg-surface px-4 py-3">
+                <strong
+                  className={`font-display text-2xl leading-none tracking-[-0.04em] ${confidenceToneClass(task.confidence)}`}
+                >
+                  {confidence == null ? "—" : `${confidence}%`}
+                </strong>
+                <span className="h-8 w-px bg-border" aria-hidden />
+                <span className={`text-sm font-bold ${confidenceToneClass(task.confidence)}`}>
+                  {confidenceLabel(task.confidence)}
+                </span>
+              </div>
 
               {supporting.conflicts.map((conflict) => (
                 <div
@@ -250,60 +278,104 @@ export default async function TaskDetailPage({
                 </div>
               ))}
 
-              <div className="mt-4 grid gap-2.5">
+              <div className="mt-4 grid gap-2">
                 {supporting.groups.length > 0 ? (
                   supporting.groups.map((group) => (
                     <article
                       key={group.sourceItemId}
-                      className={`rounded-[14px] border p-4 ${
+                      className={`flex flex-col gap-3 rounded-[14px] border p-4 ${
                         group.inConflict
                           ? "border-danger/40 bg-danger-soft-surface/40"
                           : "border-border bg-surface"
                       }`}
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <AppBadge tone={group.sourceType === "jira" ? "sky" : "neutral"}>
-                            {group.label}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {isKnownSourceType(group.sourceType) ? (
+                          <SourceBadge sourceType={group.sourceType} />
+                        ) : (
+                          <AppBadge tone="neutral">{group.label}</AppBadge>
+                        )}
+                        {group.isAnchor ? <AppBadge tone="accent">Proof of task</AppBadge> : null}
+                        {group.jiraStatus ? (
+                          <AppBadge tone={jiraStatusTone(group.jiraStatus)}>
+                            {group.jiraStatus}
                           </AppBadge>
-                          {group.isAnchor ? <AppBadge tone="accent">Proof of task</AppBadge> : null}
-                          {group.jiraStatus ? (
-                            <AppBadge tone={jiraStatusTone(group.jiraStatus)}>
-                              {group.jiraStatus}
-                            </AppBadge>
-                          ) : null}
-                          {group.isLatest ? <AppBadge tone="mint">Latest update</AppBadge> : null}
-                          {group.inConflict ? <AppBadge tone="danger">Conflict</AppBadge> : null}
-                        </div>
-                        <span className="text-xs font-medium text-muted-soft">
+                        ) : null}
+                        {group.isLatest ? <AppBadge tone="mint">Latest update</AppBadge> : null}
+                        {group.inConflict ? <AppBadge tone="danger">Conflict</AppBadge> : null}
+                      </div>
+
+                      <div className="grid gap-1">
+                        <h3 className="text-xl font-semibold leading-7 text-foreground [overflow-wrap:anywhere]">
+                          {group.title}
+                        </h3>
+                        <span className="text-sm font-medium leading-5 text-muted-soft">
                           {meetingDate(group.sourceDate)}
                         </span>
                       </div>
-                      <div className="mt-2 flex items-baseline justify-between gap-3">
-                        <strong className="text-sm [overflow-wrap:anywhere]">{group.title}</strong>
-                        {group.url ? (
-                          <a
-                            href={group.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-accent-strong"
-                          >
-                            Open <ExternalLink className="size-3.5" />
-                          </a>
-                        ) : null}
-                      </div>
-                      {group.quotes.length > 0 ? (
-                        <ul className="mt-3 grid gap-2">
-                          {group.quotes.map((quote) => (
-                            <li
-                              key={quote.id}
-                              className="border-l-2 border-border-strong pl-3 text-sm leading-relaxed text-muted"
-                            >
-                              “{quote.text}”
-                            </li>
-                          ))}
-                        </ul>
+
+                      {group.actionSnippet ? (
+                        <div>
+                          <span className="block text-[11px] font-bold uppercase tracking-[0.08em] text-accent-strong">
+                            What this asks for
+                          </span>
+                          <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-foreground [overflow-wrap:anywhere]">
+                            “{group.actionSnippet}”
+                          </p>
+                        </div>
                       ) : null}
+
+                      {(() => {
+                        const remainingQuotes = group.quotes.filter(
+                          (quote) => normalizeQuoteText(quote.text) !== normalizeQuoteText(group.actionSnippet)
+                        );
+                        return remainingQuotes.length > 0 || group.url ? (
+                          <div className="relative border-t border-border pt-3">
+                            {group.url ? (
+                              <a
+                                href={group.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="absolute right-0 top-3 inline-flex h-8 items-center gap-1 rounded-2xl text-sm font-medium text-accent-strong"
+                              >
+                                Open Source <ExternalLink className="size-4" />
+                              </a>
+                            ) : null}
+                            {remainingQuotes.length > 0 ? (
+                              <details className="group/quotes">
+                                <summary
+                                  className={`flex h-8 cursor-pointer list-none items-center gap-2 text-sm font-semibold text-accent-strong marker:content-none ${
+                                    group.url ? "pr-28" : ""
+                                  }`}
+                                >
+                                  <span
+                                    aria-hidden
+                                    className="text-[10px] transition-transform group-open/quotes:rotate-90"
+                                  >
+                                    ▶
+                                  </span>
+                                  Show{" "}
+                                  {remainingQuotes.length === 1
+                                    ? "the quote"
+                                    : `${remainingQuotes.length} quotes`}
+                                </summary>
+                                <ul className="mt-3 grid w-full gap-2">
+                                  {remainingQuotes.map((quote) => (
+                                    <li
+                                      key={quote.id}
+                                      className="w-full border-l-2 border-border-strong pl-3.5 text-sm leading-[22.75px] text-muted [overflow-wrap:anywhere]"
+                                    >
+                                      “{quote.text}”
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            ) : (
+                              <div className="h-8" aria-hidden />
+                            )}
+                          </div>
+                        ) : null;
+                      })()}
                     </article>
                   ))
                 ) : (
@@ -313,39 +385,13 @@ export default async function TaskDetailPage({
                 )}
               </div>
             </section>
- </main>
-
- <aside className="grid min-w-0 gap-4 [overflow-wrap:anywhere] lg:sticky lg:top-24">
- <section className="focus-soft-gradient rounded-[20px] border border-border-strong p-6">
- <strong className="block font-display text-3xl tracking-[-0.05em]">
- {confidence == null ? "—" : `${confidence}%`}
- </strong>
- <span className="mt-1 block text-sm font-bold text-accent-strong">{confidenceLabel(task.confidence)}</span>
- <p className="mt-3 text-sm leading-relaxed text-muted">
- This score describes extraction confidence. Priority is determined by the current queue and supporting evidence.
- </p>
- </section>
- <section className="rounded-[20px] border border-border bg-surface p-6">
- <h2 className="ft-panel-subtitle font-display">Next action</h2>
- <p className="mt-2 text-sm leading-relaxed text-muted">{task.nextAction}</p>
- {task.evidence.find((item) => item.url)?.url ? (
- <a
- href={task.evidence.find((item) => item.url)?.url ?? "#"}
- target="_blank"
- rel="noreferrer"
- className="link-btn-primary link-btn-md motion-btn mt-5 w-full"
- >
- Open decisive source ↗
- </a>
-              ) : null}
-            </section>
 
             {/* WL-12: corrections reachable from Today → task detail, using the existing write-confirmation pattern (TaskActionButtons already gates Done/Delete behind a confirm dialog). */}
             <section className="rounded-[20px] border border-border bg-surface p-6">
               <h2 className="ft-panel-subtitle font-display">Change status</h2>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Start work, or update status if this isn&rsquo;t right. Nothing here writes to Jira
-                without a separate confirmation.
+                <span className="font-semibold text-foreground">Next: </span>
+                {task.nextAction}
               </p>
               <div className="mt-4">
                 <TaskActionButtons
@@ -353,7 +399,6 @@ export default async function TaskDetailPage({
                   linkedJiraKey={linkedJiraKey}
                   latestVerificationReport={task.latestVerificationReport}
                   latestSyncReviewReport={task.latestSyncReviewReport}
-                  showJiraStatus={isJiraTask}
                 />
               </div>
             </section>
@@ -365,18 +410,18 @@ export default async function TaskDetailPage({
 
 function MeetingContextList({ title, items }: { title: string; items: string[] }) {
  return (
- <div>
- <h3 className="text-xs font-bold uppercase tracking-[0.08em] text-muted">
+ <section className="grid gap-2.5 py-4 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-5">
+ <h3 className="text-xs font-bold leading-6 text-muted">
  {title}
  </h3>
- <ul className="mt-2 grid gap-2">
+ <ul className="grid gap-2">
  {items.map((item) => (
- <li key={item} className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 text-sm leading-relaxed">
- <span className="text-muted-soft">—</span>
+ <li key={item} className="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5 text-sm leading-6">
+ <span className="mt-[0.6rem] size-1 rounded-full bg-border-strong" aria-hidden />
  <span>{item}</span>
  </li>
  ))}
  </ul>
- </div>
+ </section>
  );
 }

@@ -35,6 +35,7 @@ import {
   type MergeCandidateTask,
 } from "@/lib/tasks/transcriptTaskMerge";
 import { myOwnerFilter, personMatchesFilter, classifyTaskOwnership } from "@/lib/filters/ownerFilter";
+import { isQuoteRelevantToTask, taskDomainText } from "@/lib/tasks/evidenceRelevance";
 import { computeTaskConfidence } from "@/lib/tasks/taskConfidence";
 import { getApplicableIngestionRules } from "@/services/ingestionRules";
 import { resolveOrCreatePerson } from "@/services/people";
@@ -111,6 +112,46 @@ function uniqueQuotes(items: { quote: string }[]): { quote: string }[] {
     out.push({ quote });
   }
   return out;
+}
+
+interface EvidenceInputRow {
+  quote: string;
+  summary: string;
+  sourceDate: string;
+  url?: string;
+}
+
+/**
+ * EV-03 write-time guard: when a transcript's extracts merge onto an existing
+ * Jira-anchored task, keep only the quotes that are actually about that task.
+ * A multi-topic meeting ("Milos & Lucas sync") resolves to the ticket it
+ * mentions, but its lines about *other* tasks must not ride along as evidence
+ * for this one. Uses the same per-quote predicate as display/prune so all three
+ * layers agree. Falls back to the unfiltered set if filtering would leave the
+ * source with no evidence at all (so a task update never lands unsupported —
+ * the display/prune layers still hide/remove any residual off-topic rows).
+ */
+function filterEvidenceForTarget(
+  evidenceInput: EvidenceInputRow[],
+  target: { title: string; reason: string; nextAction: string },
+  source: { sourceType: string; sourceExternalId: string | null; sourceDate: string }
+): EvidenceInputRow[] {
+  const taskKey = jiraKeyForTask({ title: target.title });
+  if (!taskKey) return evidenceInput; // only anchored tasks get strict filtering
+  const domain = taskDomainText(target);
+  const sourceMs = new Date(source.sourceDate).getTime();
+  const newestSourceTime = Number.isNaN(sourceMs) ? 0 : sourceMs;
+  const relevant = evidenceInput.filter(
+    (row) =>
+      isQuoteRelevantToTask({
+        taskKey,
+        domain,
+        newestSourceTime,
+        source,
+        quoteText: row.quote,
+      }).relevant
+  );
+  return relevant.length > 0 ? relevant : evidenceInput;
 }
 
 function uniqueCriteria(groups: string[][]): string[] {
@@ -308,6 +349,13 @@ export async function extractTasksFromSourceItem(
       const existing = existingTasks.find((task) => task.id === group.targetId) ?? null;
       if (!existing) continue;
 
+      // EV-03: strip lines that belong to a different task before they persist.
+      const targetEvidenceInput = filterEvidenceForTarget(evidenceInput, existing, {
+        sourceType: sourceItem.sourceType,
+        sourceExternalId: sourceItem.sourceExternalId,
+        sourceDate: sourceItem.sourceDate,
+      });
+
       if (group.mode === "evidence") {
         const contextUpdated = meetingContextEntry
           ? await updateWorkTask(existing.id, {
@@ -320,7 +368,7 @@ export async function extractTasksFromSourceItem(
         const replacedEvidence = await replaceEvidenceForTaskSource(
           existing.id,
           sourceItem.id,
-          evidenceInput
+          targetEvidenceInput
         );
         savedTasks.push(contextUpdated ?? existing);
         savedEvidence.push(...replacedEvidence);
@@ -389,7 +437,7 @@ export async function extractTasksFromSourceItem(
       const replacedEvidence = await replaceEvidenceForTaskSource(
         existing.id,
         sourceItem.id,
-        evidenceInput
+        targetEvidenceInput
       );
       savedTasks.push(updated ?? existing);
       savedEvidence.push(...replacedEvidence);
