@@ -1,9 +1,15 @@
 import "server-only";
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import { db } from "@/db/client";
 import { syncProviderRuns, syncRuns } from "@/db/tables";
-import { fetchAll, fetchOne, fetchReturning } from "@/db/query";
+import {
+  execute,
+  fetchAll,
+  fetchOne,
+  fetchReturning,
+  withTransaction,
+} from "@/db/query";
 import type {
   SyncProviderRun,
   SyncProviderRunMetrics,
@@ -12,6 +18,10 @@ import type {
   SyncRunStatus,
   SyncRunTrigger,
 } from "@/domain/syncRun";
+import {
+  planTerminalSyncFailure,
+  type SyncFailurePhase,
+} from "@/lib/imports/syncRunCompletion";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -92,6 +102,32 @@ export async function startSyncProviderRun(input: {
   return toSyncProviderRun(row);
 }
 
+async function preserveCancelledProviderMetrics(
+  id: number,
+  metrics: Partial<SyncProviderRunMetrics>
+): Promise<SyncProviderRun | null> {
+  const [row] = await fetchReturning(
+    db
+      .update(syncProviderRuns)
+      .set({
+        itemsFetched: metrics.itemsFetched,
+        itemsCreated: metrics.itemsCreated,
+        itemsUpdated: metrics.itemsUpdated,
+        itemsUnchanged: metrics.itemsUnchanged,
+        itemsFailed: metrics.itemsFailed,
+        itemsExtractionFailed: metrics.itemsExtractionFailed,
+      })
+      .where(
+        and(
+          eq(syncProviderRuns.id, id),
+          eq(syncProviderRuns.status, "cancelled")
+        )
+      )
+      .returning()
+  );
+  return row ? toSyncProviderRun(row) : null;
+}
+
 export async function completeSyncProviderRun(
   id: number,
   metrics: SyncProviderRunMetrics
@@ -111,10 +147,11 @@ export async function completeSyncProviderRun(
         errorCode: null,
         errorMessage: null,
       })
-      .where(eq(syncProviderRuns.id, id))
+      .where(and(eq(syncProviderRuns.id, id), eq(syncProviderRuns.status, "running")))
       .returning()
   );
-  return row ? toSyncProviderRun(row) : null;
+  if (row) return toSyncProviderRun(row);
+  return preserveCancelledProviderMetrics(id, metrics);
 }
 
 /**
@@ -142,10 +179,11 @@ export async function partialSyncProviderRun(
         errorCode: "partial_failure",
         errorMessage: input.errorMessage,
       })
-      .where(eq(syncProviderRuns.id, id))
+      .where(and(eq(syncProviderRuns.id, id), eq(syncProviderRuns.status, "running")))
       .returning()
   );
-  return row ? toSyncProviderRun(row) : null;
+  if (row) return toSyncProviderRun(row);
+  return preserveCancelledProviderMetrics(id, input.metrics);
 }
 
 export async function cancelSyncProviderRun(
@@ -176,13 +214,6 @@ export async function cancelSyncProviderRun(
       .returning()
   );
   return row ? toSyncProviderRun(row) : null;
-}
-
-export async function cancelRunningSyncProviderRuns(syncRunId: number): Promise<void> {
-  const runs = await listSyncProviderRuns(syncRunId);
-  await Promise.all(
-    runs.filter((run) => run.status === "running").map((run) => cancelSyncProviderRun(run.id))
-  );
 }
 
 const TERMINAL_SYNC_STATUSES = new Set<SyncRunStatus>([
@@ -216,7 +247,6 @@ export async function finalizeCancelledSyncRun(
   id: number,
   errorSummary: string
 ): Promise<SyncRun | null> {
-  await cancelRunningSyncProviderRuns(id);
   return finalizeSyncRun({
     id,
     status: "cancelled",
@@ -247,10 +277,44 @@ export async function failSyncProviderRun(
         errorCode: input.errorCode,
         errorMessage: input.errorMessage,
       })
-      .where(eq(syncProviderRuns.id, id))
+      .where(and(eq(syncProviderRuns.id, id), eq(syncProviderRuns.status, "running")))
       .returning()
   );
-  return row ? toSyncProviderRun(row) : null;
+  if (row) return toSyncProviderRun(row);
+  if (!input.metrics) return null;
+  return preserveCancelledProviderMetrics(id, input.metrics);
+}
+
+function providerTerminalStateForParent(status: SyncRunStatus): {
+  status: Extract<SyncProviderRun["status"], "failed" | "cancelled">;
+  errorCode: string;
+  errorMessage: string;
+} | null {
+  if (status === "cancelled") {
+    return {
+      status: "cancelled",
+      errorCode: "cancelled",
+      errorMessage:
+        "Sync cancelled. Any in-flight external requests may still complete.",
+    };
+  }
+  if (status === "failed") {
+    return {
+      status: "failed",
+      errorCode: "workflow_failure",
+      errorMessage:
+        "This source did not finish because the sync stopped. Try syncing again.",
+    };
+  }
+  if (status === "completed" || status === "partially_completed") {
+    return {
+      status: "failed",
+      errorCode: "incomplete_attempt",
+      errorMessage:
+        "This source attempt did not finish before the sync ended. Try syncing again.",
+    };
+  }
+  return null;
 }
 
 export async function finalizeSyncRun(input: {
@@ -259,20 +323,222 @@ export async function finalizeSyncRun(input: {
   errorSummary?: string | null;
   whatsNew?: string | null;
 }): Promise<SyncRun | null> {
-  const [row] = await fetchReturning(
-    db
-      .update(syncRuns)
-      .set({
-        status: input.status,
-        completedAt: nowIso(),
-        errorSummary: input.errorSummary ?? null,
-        whatsNew: input.whatsNew ?? null,
-        updatedAt: nowIso(),
-      })
-      .where(eq(syncRuns.id, input.id))
-      .returning()
+  const completedAt = nowIso();
+
+  return withTransaction(async (tx) => {
+    const [updated] = await fetchReturning(
+      tx
+        .update(syncRuns)
+        .set({
+          status: input.status,
+          completedAt,
+          errorSummary: input.errorSummary ?? null,
+          whatsNew: input.whatsNew ?? null,
+          updatedAt: completedAt,
+        })
+        .where(
+          and(
+            eq(syncRuns.id, input.id),
+            inArray(syncRuns.status, ["running", "cancelling"])
+          )
+        )
+        .returning()
+    );
+    const persisted =
+      updated ??
+      (await fetchOne(
+        tx.select().from(syncRuns).where(eq(syncRuns.id, input.id))
+      ));
+    if (!persisted) return null;
+
+    const providerTerminalState = providerTerminalStateForParent(
+      persisted.status
+    );
+    if (providerTerminalState) {
+      await execute(
+        tx
+          .update(syncProviderRuns)
+          .set({
+            ...providerTerminalState,
+            completedAt,
+          })
+          .where(
+            and(
+              eq(syncProviderRuns.syncRunId, input.id),
+              eq(syncProviderRuns.status, "running")
+            )
+          )
+      );
+    }
+
+    return toSyncRun(persisted);
+  });
+}
+
+/**
+ * Terminalizes an exhausted workflow failure and every started provider row
+ * in one database transaction. The update is monotonic and safe to replay:
+ * completed/partially-completed runs are never downgraded, while a duplicate
+ * failure can still repair running provider rows attached to an already
+ * failed/cancelled parent.
+ */
+export async function finalizeFailedSyncRun(input: {
+  id: number;
+  phase: SyncFailurePhase;
+  completedAt?: string;
+}): Promise<SyncRun | null> {
+  const completedAt = input.completedAt ?? nowIso();
+
+  return withTransaction(async (tx) => {
+    let runRow = await fetchOne(
+      tx.select().from(syncRuns).where(eq(syncRuns.id, input.id))
+    );
+    if (!runRow) return null;
+
+    const providerRows = await fetchAll(
+      tx
+        .select()
+        .from(syncProviderRuns)
+        .where(eq(syncProviderRuns.syncRunId, input.id))
+    );
+    const makePlan = (currentRunRow: typeof syncRuns.$inferSelect) =>
+      planTerminalSyncFailure({
+        run: {
+          status: currentRunRow.status,
+          cancelRequestedAt: currentRunRow.cancelRequestedAt ?? null,
+          completedAt: currentRunRow.completedAt ?? null,
+          errorSummary: currentRunRow.errorSummary ?? null,
+        },
+        providerRuns: providerRows.map((providerRun) => ({
+          id: providerRun.id,
+          status: providerRun.status,
+          completedAt: providerRun.completedAt ?? null,
+          errorCode: providerRun.errorCode ?? null,
+          errorMessage: providerRun.errorMessage ?? null,
+        })),
+        phase: input.phase,
+        completedAt,
+      });
+    let plan = makePlan(runRow);
+
+    if (runRow.status === "running" || runRow.status === "cancelling") {
+      const [updated] = await fetchReturning(
+        tx
+          .update(syncRuns)
+          .set({
+            status: plan.syncRun.status,
+            completedAt: plan.syncRun.completedAt,
+            errorSummary: plan.syncRun.errorSummary,
+            updatedAt: completedAt,
+          })
+          .where(
+            and(
+              eq(syncRuns.id, input.id),
+              inArray(syncRuns.status, ["running", "cancelling"])
+            )
+          )
+          .returning()
+      );
+
+      if (updated) {
+        runRow = updated;
+      } else {
+        const current = await fetchOne(
+          tx.select().from(syncRuns).where(eq(syncRuns.id, input.id))
+        );
+        if (!current) return null;
+        runRow = current;
+      }
+    }
+
+    plan = makePlan(runRow);
+    const providerTransition = plan.providerRuns.find(
+      (providerRun) =>
+        providerRows.some(
+          (persistedProvider) =>
+            persistedProvider.id === providerRun.id &&
+            persistedProvider.status === "running"
+        ) && providerRun.status !== "running"
+    );
+    if (providerTransition) {
+      await execute(
+        tx
+          .update(syncProviderRuns)
+          .set({
+            status: providerTransition.status,
+            completedAt: providerTransition.completedAt,
+            errorCode: providerTransition.errorCode,
+            errorMessage: providerTransition.errorMessage,
+          })
+          .where(
+            and(
+              eq(syncProviderRuns.syncRunId, input.id),
+              eq(syncProviderRuns.status, "running")
+            )
+          )
+      );
+    }
+
+    return toSyncRun(runRow);
+  });
+}
+
+export const STALE_SYNC_RUN_AGE_MS = 24 * 60 * 60 * 1_000;
+export const STALE_SYNC_RUN_BATCH_SIZE = 50;
+
+/**
+ * Repairs active sync rows whose workflow can no longer be expected to finish.
+ * This is lifecycle recovery only: it neither prevents nor deduplicates new
+ * sync events. The conservative age bound avoids treating a slow live workflow
+ * as stale in the absence of a heartbeat.
+ */
+export async function recoverStaleSyncRuns(
+  options: {
+    now?: Date;
+    staleAfterMs?: number;
+    limit?: number;
+  } = {}
+): Promise<{ candidateCount: number; recoveredIds: number[] }> {
+  const now = options.now ?? new Date();
+  const staleAfterMs = Math.max(1, options.staleAfterMs ?? STALE_SYNC_RUN_AGE_MS);
+  const limit = Math.min(
+    100,
+    Math.max(1, options.limit ?? STALE_SYNC_RUN_BATCH_SIZE)
   );
-  return row ? toSyncRun(row) : null;
+  const cutoff = new Date(now.getTime() - staleAfterMs).toISOString();
+  const candidates = await fetchAll(
+    db
+      .select({ id: syncRuns.id })
+      .from(syncRuns)
+      .where(
+        and(
+          inArray(syncRuns.status, ["running", "cancelling"]),
+          lte(syncRuns.startedAt, cutoff)
+        )
+      )
+      .orderBy(syncRuns.id)
+      .limit(limit)
+  );
+
+  const recoveredIds: number[] = [];
+  for (const candidate of candidates) {
+    const finalized = await finalizeFailedSyncRun({
+      id: candidate.id,
+      phase: "workflow",
+      completedAt: now.toISOString(),
+    });
+    if (
+      finalized?.status === "failed" ||
+      finalized?.status === "cancelled"
+    ) {
+      recoveredIds.push(candidate.id);
+    }
+  }
+
+  return {
+    candidateCount: candidates.length,
+    recoveredIds,
+  };
 }
 
 export async function getSyncRunById(id: number): Promise<SyncRun | null> {

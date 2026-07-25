@@ -1,6 +1,6 @@
 import "server-only";
 import { fetchRecentlyDoneJiraIssues } from "@/lib/connectors/jira";
-import { isJiraDoneStatus } from "@/lib/connectors/jiraStatusVisual";
+import { isJiraDoneStatus } from "@/lib/connectors/jiraStatus";
 import type { ConnectorSourceCandidate } from "@/lib/connectors/types";
 import {
   getSourceItemByExternalId,

@@ -1,5 +1,6 @@
 import { inngest } from "./client";
 import { setLastTestPingResult } from "./testState";
+import { staleSyncRunRecovery } from "./functions/recoverStaleSyncRuns";
 import { syncMyDay } from "./functions/syncMyDay";
 
 export const testPing = inngest.createFunction(
@@ -21,4 +22,4 @@ export const testPing = inngest.createFunction(
   }
 );
 
-export const inngestFunctions = [testPing, syncMyDay];
+export const inngestFunctions = [testPing, syncMyDay, staleSyncRunRecovery];
