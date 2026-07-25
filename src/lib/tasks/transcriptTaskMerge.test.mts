@@ -58,6 +58,16 @@ const otherLater: MergeCandidateTask = {
   projectId: 1,
 };
 
+const meetJackson: MergeCandidateTask = {
+  id: 465,
+  title: "Meet Jackson to align AI efforts",
+  reason: "Lucas asked Milos to meet Jackson and align the two AI assistant efforts.",
+  nextAction: "Schedule a meeting with Jackson to align the AI efforts.",
+  status: "now",
+  projectId: 1,
+  owner: "Milos Dostanic",
+};
+
 describe("transcriptTaskMerge", () => {
   it("extracts Jira keys from free text", () => {
     assert.deepEqual(
@@ -237,6 +247,30 @@ describe("transcriptTaskMerge", () => {
   // `existingTaskId` hint or a topic-only anchor.
 
   describe("EV-01: guards the existingTaskId hint", () => {
+    it("does not let copied task wording validate an unrelated existingTaskId guess", () => {
+      const resolution = resolveTranscriptMergeTarget({
+        source: {
+          sourceType: "granola",
+          title: "Milos & Lucas sync",
+          body: "It feels like mixing actions with status. Separate status from the call to action.",
+        },
+        extracted: {
+          // Simulates the model copying the target fields from the open-task
+          // list even though the raw meeting text never mentions Jackson.
+          title: meetJackson.title,
+          reason: meetJackson.reason,
+          nextAction: meetJackson.nextAction,
+          status: "actionable",
+          existingTaskId: meetJackson.id,
+          owner: "Milos Dostanic",
+        },
+        existingTasks: [meetJackson],
+        myName: MILOS,
+      });
+
+      assert.equal(resolution.taskId, null);
+    });
+
     it("does not merge an unrelated Gmail extract onto the banner just because the LLM hinted at it", () => {
       const resolution = resolveTranscriptMergeTarget({
         source: {

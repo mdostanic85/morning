@@ -58,14 +58,100 @@ export interface OpenAiCompatibleConfig {
   embeddingsUrl?: string;
   /** When false, skips response_format json_object (e.g. some local models). */
   jsonMode?: boolean;
+  /** Use the provider's native JSON Schema contract when one is supplied. */
+  structuredOutputs?: boolean;
+  /** Controls hidden reasoning on compatible thinking models. */
+  reasoningEffort?: "none" | "low" | "medium" | "high";
   label: string;
+  requestTimeoutMs?: number;
+}
+
+function everyObjectFieldIsRequired(node: unknown): boolean {
+  if (Array.isArray(node)) return node.every(everyObjectFieldIsRequired);
+  if (!node || typeof node !== "object") return true;
+
+  const record = node as Record<string, unknown>;
+  if (record.type === "object" || record.properties) {
+    const properties =
+      record.properties && typeof record.properties === "object"
+        ? (record.properties as Record<string, unknown>)
+        : {};
+    const required = new Set(Array.isArray(record.required) ? record.required : []);
+    if (
+      record.additionalProperties !== false ||
+      Object.keys(properties).some((key) => !required.has(key))
+    ) {
+      return false;
+    }
+  }
+
+  return Object.values(record).every(everyObjectFieldIsRequired);
+}
+
+function responseFormat(
+  config: OpenAiCompatibleConfig,
+  request: CompletionRequest
+): Record<string, unknown> | null {
+  if (config.jsonMode === false) return null;
+  if (config.structuredOutputs && request.responseJsonSchema) {
+    return {
+      type: "json_schema",
+      json_schema: {
+        name: "worklight_structured_result",
+        // Strict mode requires every object property to be required. Current
+        // sync schemas satisfy that; future schemas with optional properties
+        // still receive schema guidance without causing a provider 400.
+        strict: everyObjectFieldIsRequired(request.responseJsonSchema),
+        schema: request.responseJsonSchema,
+      },
+    };
+  }
+  return { type: "json_object" };
+}
+
+/** Exported to make the exact provider contract regression-testable. */
+export function buildOpenAiCompatibleRequestBody(
+  config: OpenAiCompatibleConfig,
+  request: CompletionRequest
+): Record<string, unknown> {
+  const usesModernOpenAiTokenParams =
+    config.provider === "openai" && /^gpt-5(?:\.|-|$)/i.test(request.model);
+  const format = responseFormat(config, request);
+
+  return {
+    model: request.model,
+    messages: [
+      { role: "system", content: request.systemPrompt },
+      {
+        role: "user",
+        content:
+          request.imageUrls && request.imageUrls.length > 0
+            ? [
+                { type: "text", text: request.userPrompt },
+                ...request.imageUrls.map((imageUrl) => ({
+                  type: "image_url",
+                  image_url: { url: imageUrl },
+                })),
+              ]
+            : request.userPrompt,
+      },
+    ],
+    ...(!usesModernOpenAiTokenParams
+      ? { temperature: request.temperature ?? 0.2 }
+      : {}),
+    ...(usesModernOpenAiTokenParams
+      ? { max_completion_tokens: request.maxTokens ?? 4096 }
+      : { max_tokens: request.maxTokens ?? 4096 }),
+    ...(format ? { response_format: format } : {}),
+    ...(config.reasoningEffort
+      ? { reasoning_effort: config.reasoningEffort }
+      : {}),
+  };
 }
 
 export function createOpenAiCompatibleClient(config: OpenAiCompatibleConfig): ProviderClient {
   async function complete(request: CompletionRequest): Promise<CompletionResponse> {
     const maxRateLimitAttempts = 3;
-    const usesModernOpenAiTokenParams =
-      config.provider === "openai" && /^gpt-5(?:\.|-|$)/i.test(request.model);
 
     for (let rateLimitAttempt = 0; rateLimitAttempt < maxRateLimitAttempts; rateLimitAttempt++) {
       let response: Response;
@@ -76,21 +162,8 @@ export function createOpenAiCompatibleClient(config: OpenAiCompatibleConfig): Pr
             "Content-Type": "application/json",
             Authorization: `Bearer ${request.apiKey}`,
           },
-          body: JSON.stringify({
-            model: request.model,
-            messages: [
-              { role: "system", content: request.systemPrompt },
-              { role: "user", content: request.userPrompt },
-            ],
-            ...(!usesModernOpenAiTokenParams
-              ? { temperature: request.temperature ?? 0.2 }
-              : {}),
-            ...(usesModernOpenAiTokenParams
-              ? { max_completion_tokens: request.maxTokens ?? 4096 }
-              : { max_tokens: request.maxTokens ?? 4096 }),
-            ...(config.jsonMode !== false ? { response_format: { type: "json_object" } } : {}),
-          }),
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          body: JSON.stringify(buildOpenAiCompatibleRequestBody(config, request)),
+          signal: AbortSignal.timeout(config.requestTimeoutMs ?? REQUEST_TIMEOUT_MS),
         });
       } catch (err) {
         throw new LlmError("network_error", `Failed to reach the ${config.label} API.`, err);

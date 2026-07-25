@@ -1,10 +1,15 @@
 import "server-only";
 import { z } from "zod";
-import { getActiveProviders, getAvailableApiKey } from "@/services/settings";
+import {
+  getActiveProviders,
+  getAvailableApiKey,
+  getLocalLlmConfig,
+} from "@/services/settings";
 import { hashLlmInput, recordLlmTelemetry } from "@/services/llmTelemetry";
 import { openaiClient, openaiEmbed } from "./openai";
 import { anthropicClient } from "./anthropic";
 import { groqClient } from "./groq";
+import { localClient } from "./local";
 import { TASK_EXTRACTOR_SYSTEM_PROMPT } from "./prompts/taskExtractor";
 import { TASK_REFLECT_SYSTEM_PROMPT } from "./prompts/factReflect";
 import { PROJECT_MATCHER_SYSTEM_PROMPT } from "./prompts/projectMatcher";
@@ -33,16 +38,24 @@ import {
 
 export * from "./types";
 
-const GROQ_70B = "llama-3.3-70b-versatile";
-const GROQ_8B = "llama-3.1-8b-instant";
+// Groq's GPT-OSS models support native JSON Schema output. The 120B model is
+// still inexpensive enough for the decisions where a wrong answer creates
+// bad tasks or priorities; the 20B model handles narrow cleanup/summarisation.
+const GROQ_ACCURATE = "openai/gpt-oss-120b";
+const GROQ_FAST = "openai/gpt-oss-20b";
 const OPENAI_MINI = "gpt-4.1-mini";
 const OPENAI_FULL = "gpt-4.1";
 const ANTHROPIC_SONNET = "claude-3-7-sonnet-latest";
 
-/** Groq 8b when 70b hits rate limits; then paid fallbacks only if configured. */
-const GROQ_8B_FALLBACK: ModelConfig = {
+const GROQ_FAST_FALLBACK: ModelConfig = {
   provider: "groq",
-  model: GROQ_8B,
+  model: GROQ_FAST,
+  maxTokens: 4096,
+};
+
+const GROQ_ACCURATE_FALLBACK: ModelConfig = {
+  provider: "groq",
+  model: GROQ_ACCURATE,
   maxTokens: 4096,
 };
 
@@ -65,26 +78,26 @@ const OPENAI_FULL_FALLBACK: ModelConfig = {
 };
 
 const STANDARD_TEXT_FALLBACKS: ModelConfig[] = [
-  GROQ_8B_FALLBACK,
+  GROQ_FAST_FALLBACK,
   ANTHROPIC_FALLBACK,
   OPENAI_MINI_FALLBACK,
 ];
 
 const HEAVY_TEXT_FALLBACKS: ModelConfig[] = [
-  { ...GROQ_8B_FALLBACK, maxTokens: 4096 },
+  { ...GROQ_FAST_FALLBACK, maxTokens: 4096 },
   { ...ANTHROPIC_FALLBACK, maxTokens: 4096 },
   OPENAI_FULL_FALLBACK,
 ];
 
 /**
- * Groq-first for every text job (70b → 8b), then Anthropic/OpenAI only when active.
+ * Groq-first for text jobs (GPT-OSS 120B → 20B), then other clouds only when active.
  * Inactive providers are never attempted — if only Groq is on, all text jobs stay on Groq.
  * OpenAI is also used for embeddings only when enabled. Jira projects sync from MCP.
  */
 export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
   task_extraction: {
     provider: "groq",
-    model: GROQ_70B,
+    model: GROQ_ACCURATE,
     maxTokens: 4096,
     fallbacks: STANDARD_TEXT_FALLBACKS,
   },
@@ -94,78 +107,84 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
   // only means the noise filter is skipped, never that extraction breaks.
   task_reflect: {
     provider: "groq",
-    model: GROQ_8B,
+    model: GROQ_FAST,
     maxTokens: 2048,
-    fallbacks: [OPENAI_MINI_FALLBACK],
+    fallbacks: [
+      { ...GROQ_ACCURATE_FALLBACK, maxTokens: 2048 },
+      OPENAI_MINI_FALLBACK,
+    ],
   },
   project_matching: {
     provider: "groq",
-    model: GROQ_70B,
+    model: GROQ_ACCURATE,
     maxTokens: 2048,
     fallbacks: STANDARD_TEXT_FALLBACKS,
   },
   project_discovery: {
     provider: "groq",
-    model: GROQ_70B,
+    model: GROQ_ACCURATE,
     maxTokens: 4096,
     fallbacks: HEAVY_TEXT_FALLBACKS,
   },
   knowledge_extraction: {
     provider: "groq",
-    model: GROQ_70B,
+    model: GROQ_ACCURATE,
     maxTokens: 4096,
     fallbacks: STANDARD_TEXT_FALLBACKS,
   },
   knowledge_qa: {
     provider: "groq",
-    model: GROQ_70B,
+    model: GROQ_FAST,
     maxTokens: 2048,
-    fallbacks: STANDARD_TEXT_FALLBACKS,
+    fallbacks: [
+      { ...GROQ_ACCURATE_FALLBACK, maxTokens: 2048 },
+      { ...ANTHROPIC_FALLBACK, maxTokens: 2048 },
+      { ...OPENAI_MINI_FALLBACK, maxTokens: 2048 },
+    ],
   },
   task_qa: {
-    provider: "openai",
-    model: "gpt-5.4",
+    provider: "groq",
+    model: GROQ_ACCURATE,
     maxTokens: 4096,
-    // If OpenAI is off/unavailable for chat, fall back to Groq.
     fallbacks: [
-      { provider: "groq", model: GROQ_70B, maxTokens: 4096 },
-      { ...GROQ_8B_FALLBACK },
+      { ...GROQ_FAST_FALLBACK },
+      OPENAI_MINI_FALLBACK,
     ],
   },
   priority_planning: {
     provider: "groq",
-    model: GROQ_70B,
+    model: GROQ_ACCURATE,
     maxTokens: 4096,
     fallbacks: HEAVY_TEXT_FALLBACKS,
   },
   today_briefing: {
     provider: "groq",
-    model: GROQ_70B,
+    model: GROQ_ACCURATE,
     maxTokens: 4096,
     fallbacks: HEAVY_TEXT_FALLBACKS,
   },
   daily_memory: {
     provider: "groq",
-    model: GROQ_70B,
+    model: GROQ_FAST,
     maxTokens: 2048,
     fallbacks: [
-      { ...GROQ_8B_FALLBACK, maxTokens: 2048 },
+      { ...GROQ_ACCURATE_FALLBACK, maxTokens: 2048 },
       { ...ANTHROPIC_FALLBACK, maxTokens: 2048 },
       { ...OPENAI_FULL_FALLBACK, maxTokens: 2048 },
     ],
   },
   delivery_verification: {
     provider: "groq",
-    model: GROQ_70B,
+    model: GROQ_ACCURATE,
     maxTokens: 2048,
     fallbacks: [
-      { ...GROQ_8B_FALLBACK, maxTokens: 2048 },
+      { ...GROQ_FAST_FALLBACK, maxTokens: 2048 },
       { ...ANTHROPIC_FALLBACK, maxTokens: 2048 },
     ],
   },
   focus_action_plan: {
     provider: "groq",
-    model: GROQ_70B,
+    model: GROQ_ACCURATE,
     maxTokens: 4096,
     fallbacks: HEAVY_TEXT_FALLBACKS,
   },
@@ -175,21 +194,22 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
     maxTokens: 2048,
   },
   delivery_sync_review: {
-    provider: "openai",
-    model: "gpt-5.4",
+    provider: "groq",
+    model: GROQ_ACCURATE,
     maxTokens: 4096,
     fallbacks: [
+      { ...GROQ_FAST_FALLBACK, maxTokens: 4096 },
       { provider: "anthropic", model: ANTHROPIC_SONNET, maxTokens: 4096 },
       { provider: "openai", model: OPENAI_FULL, maxTokens: 3072 },
     ],
   },
   hydra_report: {
-    provider: "openai",
-    model: OPENAI_FULL,
+    provider: "groq",
+    model: GROQ_ACCURATE,
     maxTokens: 6144,
     fallbacks: [
+      { ...GROQ_FAST_FALLBACK, maxTokens: 6144 },
       OPENAI_MINI_FALLBACK,
-      { provider: "groq", model: GROQ_70B, maxTokens: 6144 },
       { ...ANTHROPIC_FALLBACK, maxTokens: 6144 },
     ],
   },
@@ -227,6 +247,8 @@ function getProviderClient(provider: Provider): ProviderClient {
       return anthropicClient;
     case "groq":
       return groqClient;
+    case "local":
+      return localClient;
   }
 }
 
@@ -234,6 +256,7 @@ const ENV_VAR_HINT: Record<Provider, string> = {
   openai: "OPENAI_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
   groq: "GROQ_API_KEY",
+  local: "LOCAL_LLM_BASE_URL and LOCAL_LLM_MODEL",
 };
 
 function flattenModelChain(primary: ModelConfig): ModelConfig[] {
@@ -245,20 +268,51 @@ async function configsForJob(jobType: JobType): Promise<ModelConfig[]> {
   if (active.size === 0) return [];
 
   const chain = flattenModelChain(MODEL_CONFIG[jobType]);
-  return chain.filter((config) => active.has(config.provider));
+  const configuredCloudChain = chain.filter((config) => active.has(config.provider));
+  if (!active.has("local")) return configuredCloudChain;
+
+  const local = await getLocalLlmConfig();
+  if (!local) return configuredCloudChain;
+
+  // Local inference is intentionally the last safety net. A 35B local model
+  // is useful when clouds are unavailable, but it should not make every
+  // normal sync wait minutes or weaken structured extraction.
+  return [
+    ...configuredCloudChain,
+    {
+      provider: "local",
+      model: local.model,
+      maxTokens: MODEL_CONFIG[jobType].maxTokens,
+    },
+  ];
 }
 
 /**
- * OpenAI/Groq strict structured outputs reject JSON Schema "format" annotations
- * (e.g. "uri" from z.string().url()). Strip them — Zod still validates the
- * parsed response locally, so nothing is lost.
+ * Strict provider schemas support shape/type constraints, but not every JSON
+ * Schema validation keyword emitted by Zod. Keep only the provider-safe
+ * structural subset; Zod still performs the complete validation locally.
  */
 function sanitizeJsonSchemaForProviders(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(sanitizeJsonSchemaForProviders);
   if (node && typeof node === "object") {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(node)) {
-      if (key === "format" && typeof value === "string") continue;
+      if (
+        key === "$schema" ||
+        key === "default" ||
+        key === "format" ||
+        key === "minLength" ||
+        key === "maxLength" ||
+        key === "minimum" ||
+        key === "maximum" ||
+        key === "exclusiveMinimum" ||
+        key === "exclusiveMaximum" ||
+        key === "minItems" ||
+        key === "maxItems" ||
+        key === "pattern"
+      ) {
+        continue;
+      }
       result[key] = sanitizeJsonSchemaForProviders(value);
     }
     return result;

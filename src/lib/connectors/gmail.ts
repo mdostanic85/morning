@@ -23,6 +23,36 @@ interface GmailMessage {
   internalDate?: string;
 }
 
+export interface GoogleDocumentReference {
+  id: string;
+  url: string;
+}
+
+/**
+ * Gemini sometimes sends only a "Document shared with you" email. The useful
+ * transcript lives behind the Google Docs link, so the Gmail connector must
+ * recognize both the regular and `/u/<account>/` URL shapes.
+ */
+export function extractGoogleDocumentReference(
+  text: string
+): GoogleDocumentReference | null {
+  const match = text.match(
+    /https?:\/\/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([a-z0-9_-]+)/i
+  );
+  if (!match) return null;
+  return {
+    id: match[1],
+    url: `https://docs.google.com/document/d/${match[1]}/edit`,
+  };
+}
+
+export function sharedGoogleDocumentTitle(subject: string): string | null {
+  const match = subject.match(
+    /^Document shared with you:\s*["“](.+?)["”]\s*$/i
+  );
+  return match?.[1]?.trim() || null;
+}
+
 function decodeBase64Url(data: string): string {
   const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
   return Buffer.from(normalized, "base64").toString("utf-8");
@@ -62,6 +92,37 @@ function buildEmailBody(message: GmailMessage): string {
   return message.snippet ?? "";
 }
 
+type LinkedDocumentFetch = (url: string) => Promise<Response>;
+
+/**
+ * Uses the authenticated Docs export endpoint rather than Drive API v3. This
+ * works with the existing read-only Google grant even when Drive API is not
+ * enabled in the app's Google Cloud project.
+ */
+export async function fetchLinkedGoogleDocumentText(
+  reference: GoogleDocumentReference,
+  fetchDocument: LinkedDocumentFetch = (url) => bearerFetch("drive", url)
+): Promise<string> {
+  const exportUrl = new URL(
+    `https://docs.google.com/document/d/${encodeURIComponent(reference.id)}/export`
+  );
+  exportUrl.searchParams.set("format", "txt");
+  const response = await fetchDocument(exportUrl.toString());
+  if (!response.ok) {
+    const detail = (await response.text()).trim().replace(/\s+/g, " ");
+    throw new Error(
+      detail
+        ? `Could not read linked Gemini document: ${detail.slice(0, 240)}`
+        : `Could not read linked Gemini document (${response.status}).`
+    );
+  }
+  const text = (await response.text()).replace(/^\uFEFF/, "").trim();
+  if (!text) {
+    throw new Error("Linked Gemini document was empty.");
+  }
+  return text;
+}
+
 async function fetchMessageCandidate(
   item: { id: string; threadId: string },
   query: string
@@ -83,19 +144,48 @@ async function fetchMessageCandidate(
       ? new Date(dateHeader).toISOString()
       : new Date().toISOString();
   const body = buildEmailBody(message);
+  const rawBody = findBody(message.payload) ?? message.snippet ?? "";
+  const linkedDocument =
+    extractGoogleDocumentReference(rawBody) ??
+    extractGoogleDocumentReference(body);
+  const linkedDocumentText = linkedDocument
+    ? await fetchLinkedGoogleDocumentText(linkedDocument)
+    : null;
+  const linkedDocumentTitle = linkedDocument
+    ? sharedGoogleDocumentTitle(subject)
+    : null;
 
   return {
     sourceType: "gmail",
     sourceExternalId: message.id,
-    title: subject,
-    body: [`From: ${from ?? "unknown"}`, `Thread: ${message.threadId}`, "", body].join("\n"),
+    title: linkedDocumentTitle ?? subject,
+    body: linkedDocumentText
+      ? [
+          `From: ${from ?? "unknown"}`,
+          `Thread: ${message.threadId}`,
+          `Gemini document: ${linkedDocumentTitle ?? subject}`,
+          `URL: ${linkedDocument?.url}`,
+          "",
+          linkedDocumentText,
+        ].join("\n")
+      : [`From: ${from ?? "unknown"}`, `Thread: ${message.threadId}`, "", body].join("\n"),
     author: from,
     sourceDate,
-    url: `https://mail.google.com/mail/u/0/#inbox/${message.id}`,
+    url:
+      linkedDocument?.url ??
+      `https://mail.google.com/mail/u/0/#inbox/${message.id}`,
     metadata: {
       threadId: message.threadId,
       query,
       importedFrom: "gmail_gemini_meet_notes",
+      ...(linkedDocument
+        ? {
+            linkedDocumentId: linkedDocument.id,
+            linkedDocumentUrl: linkedDocument.url,
+            linkedDocumentTitle: linkedDocumentTitle,
+            contentOrigin: "google_docs",
+          }
+        : {}),
     },
   };
 }

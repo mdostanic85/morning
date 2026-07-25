@@ -76,6 +76,7 @@ export async function mergeImportResults(
     itemsExtractionFailed: 0,
     tasksExtracted: 0,
     errors: [],
+    warnings: [],
     importedItems: [],
     extractedTasks: [],
     knowledgeExtracted: [],
@@ -90,6 +91,7 @@ export async function mergeImportResults(
     merged.itemsExtractionFailed += result.itemsExtractionFailed;
     merged.tasksExtracted += result.tasksExtracted;
     merged.errors.push(...result.errors);
+    merged.warnings?.push(...(result.warnings ?? []));
     merged.importedItems.push(...result.importedItems);
     merged.extractedTasks.push(...result.extractedTasks);
     merged.knowledgeExtracted.push(...result.knowledgeExtracted);

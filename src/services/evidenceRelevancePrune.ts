@@ -1,24 +1,35 @@
 import "server-only";
 import { deleteEvidenceByIds } from "@/services/evidence";
 import { getSourceItems } from "@/services/sourceItems";
-import { getWorkTasksWithRawEvidenceForPrune } from "@/services/workTasks";
 import {
+  getWorkTasksWithRawEvidenceForPrune,
+  updateWorkTask,
+} from "@/services/workTasks";
+import {
+  filterMeetingContextForTask,
   planEvidenceRelevancePrune,
   type PruneSourceInfo,
 } from "@/lib/tasks/evidenceRelevance";
 
 /**
- * Retroactively removes evidence rows that were wrongly attached to
- * Jira-anchored tasks (stale or off-topic sources), keeping the anchor and
- * genuinely relevant fresh sources. Runs on every queue rebuild so the DB
- * self-heals — a one-off manual cleanup is not enough because later syncs,
- * adoption, and duplicate merges keep re-attaching contamination.
+ * Retroactively removes evidence rows that were wrongly attached to any task
+ * (stale or off-topic sources), keeping Jira anchors and genuinely relevant
+ * fresh sources. Runs on every queue rebuild so the DB self-heals.
  */
-export async function pruneIrrelevantTaskEvidence(): Promise<{ removed: number }> {
+export async function pruneIrrelevantTaskEvidence(
+  options: { taskIds?: number[] } = {}
+): Promise<{ removed: number; contextsCleaned: number }> {
   const [tasks, sources] = await Promise.all([
     getWorkTasksWithRawEvidenceForPrune(),
     getSourceItems(),
   ]);
+  const scopedTaskIds =
+    options.taskIds && options.taskIds.length > 0
+      ? new Set(options.taskIds)
+      : null;
+  const scopedTasks = scopedTaskIds
+    ? tasks.filter((task) => scopedTaskIds.has(task.id))
+    : tasks;
 
   const sourceById = new Map<number, PruneSourceInfo>(
     sources.map((source) => [
@@ -32,7 +43,7 @@ export async function pruneIrrelevantTaskEvidence(): Promise<{ removed: number }
   );
 
   const plan = planEvidenceRelevancePrune({
-    tasks: tasks.map((task) => ({
+    tasks: scopedTasks.map((task) => ({
       id: task.id,
       title: task.title,
       reason: task.reason,
@@ -48,15 +59,39 @@ export async function pruneIrrelevantTaskEvidence(): Promise<{ removed: number }
     sourceById,
   });
 
-  if (plan.length === 0) return { removed: 0 };
+  const contextUpdates = scopedTasks.flatMap((task) => {
+    const meetingContext = filterMeetingContextForTask({
+      task,
+      entries: task.meetingContext,
+      sourceById,
+    });
+    return JSON.stringify(meetingContext) === JSON.stringify(task.meetingContext)
+      ? []
+      : [{ taskId: task.id, meetingContext }];
+  });
 
-  await deleteEvidenceByIds(plan.map((row) => row.evidenceId));
-  const byTask = new Map<number, number>();
-  for (const row of plan) byTask.set(row.taskId, (byTask.get(row.taskId) ?? 0) + 1);
-  console.info(
-    `[evidence_prune] removed ${plan.length} irrelevant evidence row(s) across ${byTask.size} task(s): ` +
-      [...byTask.entries()].map(([taskId, count]) => `#${taskId}:${count}`).join(", ")
+  if (plan.length > 0) {
+    await deleteEvidenceByIds(plan.map((row) => row.evidenceId));
+  }
+  await Promise.all(
+    contextUpdates.map(({ taskId, meetingContext }) =>
+      updateWorkTask(taskId, { meetingContext })
+    )
   );
 
-  return { removed: plan.length };
+  const byTask = new Map<number, number>();
+  for (const row of plan) byTask.set(row.taskId, (byTask.get(row.taskId) ?? 0) + 1);
+  if (plan.length > 0 || contextUpdates.length > 0) {
+    console.info(
+      `[evidence_prune] removed ${plan.length} irrelevant evidence row(s) across ${byTask.size} task(s)` +
+        (byTask.size > 0
+          ? `: ${[...byTask.entries()]
+              .map(([taskId, count]) => `#${taskId}:${count}`)
+              .join(", ")}`
+          : "") +
+        `; cleaned ${contextUpdates.length} meeting context(s)`
+    );
+  }
+
+  return { removed: plan.length, contextsCleaned: contextUpdates.length };
 }

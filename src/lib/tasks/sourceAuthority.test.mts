@@ -6,6 +6,7 @@ import {
   hasHighAuthorityStakeholderInstruction,
   isIncomingSourceAuthoritative,
   isRecentAttendedTranscript,
+  isSyncMyDayProvider,
   isTranscriptSource,
   looksLikePrdTitle,
   sourceAuthorityScoreBoost,
@@ -17,7 +18,12 @@ describe("sourceAuthority", () => {
   it("orders sync waves confluence → jira → transcripts → rest", () => {
     assert.deepEqual([...SYNC_PROVIDER_WAVES[0]], ["confluence"]);
     assert.deepEqual([...SYNC_PROVIDER_WAVES[1]], ["jira"]);
-    assert.deepEqual([...SYNC_PROVIDER_WAVES[2]], ["granola", "gmail", "drive"]);
+    assert.deepEqual([...SYNC_PROVIDER_WAVES[2]], ["granola", "gmail"]);
+  });
+
+  it("uses Gmail as the single Gemini Notes sync provider", () => {
+    assert.equal(isSyncMyDayProvider("gmail"), true);
+    assert.equal(isSyncMyDayProvider("drive"), false);
   });
 
   it("detects granola, drive, and gemini meet notes as transcripts", () => {

@@ -90,9 +90,9 @@ function toSyncReviewReport(row: typeof syncReviewReportsTable.$inferSelect): Sy
  * Attaches evidence + reports to tasks. Every UI surface (Today, task detail,
  * TaskCard's evidence drawer, the AI explanation drawer) reads `task.evidence`
  * straight from here, so the per-quote relevance safety net lives in this one
- * place rather than in each component — a Jira-anchored task's evidence never
- * carries a different task's line just because it shared a source with a
- * genuinely relevant quote (see `evidenceRelevance.ts`).
+ * place rather than in each component — no task's evidence carries a different
+ * task's line just because it shared a source with a genuinely relevant quote
+ * (see `evidenceRelevance.ts`).
  *
  * `filterRelevance: false` is for the retroactive prune job only — it must
  * see the raw, unfiltered rows to find and delete the off-topic ones; the
@@ -126,7 +126,6 @@ async function attachContext(
     );
     for (const task of tasks) {
       const taskKey = jiraKeyForTask({ title: task.title });
-      if (!taskKey) continue; // only Jira-anchored tasks get strict per-quote filtering
       const list = byTask.get(task.id);
       if (!list || list.length === 0) continue;
 
@@ -151,10 +150,10 @@ async function attachContext(
           quoteText,
         }).relevant;
       });
-      // Never leave a task with zero evidence just from this safety net — an
-      // empty result means the predicate over-filtered, not that nothing is
-      // relevant (the Jira anchor row alone always passes when it exists).
-      byTask.set(task.id, relevant.length > 0 ? relevant : list);
+      // Empty is safer than presenting an unrelated quote as truth. Jira tasks
+      // keep their matching ticket anchor; meeting-created tasks must retain at
+      // least one genuinely topical quote to show supporting evidence.
+      byTask.set(task.id, relevant);
     }
   }
 

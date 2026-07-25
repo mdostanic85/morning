@@ -52,6 +52,7 @@ export async function importConnectorSources(
     itemsExtractionFailed: 0,
     tasksExtracted: 0,
     errors: [],
+    warnings: [],
     importedItems: [],
     extractedTasks: [],
     knowledgeExtracted: [],
@@ -167,7 +168,7 @@ export async function importConnectorSources(
       try {
         await indexSourceItem(sourceItem);
       } catch (err) {
-        result.errors.push(
+        result.warnings?.push(
           `Source ${sourceItem.id} indexed without embeddings: ${
             err instanceof Error ? err.message : "embedding failed"
           }`

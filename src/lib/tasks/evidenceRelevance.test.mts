@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  filterMeetingContextForTask,
   isQuoteRelevantToTask,
   planEvidenceRelevancePrune,
   taskDomainText,
@@ -168,21 +169,63 @@ describe("planEvidenceRelevancePrune", () => {
     );
   });
 
-  it("never touches non-anchored (meeting-only) tasks", () => {
+  it("prunes off-topic evidence from non-anchored meeting-created tasks", () => {
     const pruned = planEvidenceRelevancePrune({
       tasks: [
         {
-          id: 900,
-          title: "Prepare AI/SDLC company presentation",
-          reason: "Ivan asked for a company presentation.",
-          nextAction: "Draft the slides.",
+          id: 465,
+          title: "Meet Jackson to align AI efforts",
+          reason: "Lucas asked Milos to meet Jackson and align the two AI assistant efforts.",
+          nextAction: "Schedule a meeting with Jackson to align the AI efforts.",
           evidence: [
-            { id: 10, sourceItemId: 54, quote: "totally unrelated column mapping", summary: "", sourceDate: "2026-06-09T09:00:00.000Z" },
+            { id: 10, sourceItemId: 254, quote: "Lucas wants Milos to meet Jackson to align the two efforts.", summary: "", sourceDate: "2026-07-22T14:22:00.000Z" },
+            { id: 11, sourceItemId: 254, quote: "It feels like mixing actions with status.", summary: "", sourceDate: "2026-07-22T14:22:00.000Z" },
           ],
         },
       ],
       sourceById,
     });
-    assert.equal(pruned.length, 0);
+    assert.deepEqual(pruned.map((row) => row.evidenceId), [11]);
+  });
+});
+
+describe("filterMeetingContextForTask", () => {
+  it("drops an unrelated meeting card from a non-Jira task", () => {
+    const filtered = filterMeetingContextForTask({
+      task: {
+        title: "Meet Jackson to align AI efforts",
+        reason:
+          "Lucas explicitly instructed you to meet Jackson to align your AI assistant efforts. The Design Team meeting on July 24 confirmed the alignment is critical. You must schedule and attend this sync.",
+        nextAction:
+          "Send a calendar invite to Jackson proposing a sync to compare AI assistant architectures.",
+      },
+      entries: [
+        {
+          sourceItemId: 254,
+          sourceTitle: "Milos & Lucas sync",
+          sourceType: "granola",
+          sourceDate: "2026-07-22T14:22:00.000Z",
+          overview: "MVP demo walkthrough and UI copy feedback.",
+          keyPoints: ["The action and status controls are mixed together."],
+          decisions: [],
+          requestedChanges: ["Separate status from the call to action."],
+          openQuestions: [],
+          evidenceQuotes: ["It feels like mixing actions with status."],
+          confidence: 0.95,
+        },
+      ],
+      sourceById: new Map([
+        [
+          254,
+          {
+            sourceType: "granola",
+            sourceExternalId: null,
+            sourceDate: "2026-07-22T14:22:00.000Z",
+          },
+        ],
+      ]),
+    });
+
+    assert.deepEqual(filtered, []);
   });
 });

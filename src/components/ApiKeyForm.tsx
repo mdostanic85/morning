@@ -5,22 +5,22 @@ import { Toast } from "@heroui/react/toast";
 import { Button } from "@heroui/react/button";
 import { Input } from "@heroui/react/input";
 import { Switch } from "@heroui/react/switch";
-import type { LlmProvider, ProviderKeyStatus } from "@/services/settings";
+import type { CloudLlmProvider, ProviderKeyStatus } from "@/services/settings";
 
-const PROVIDER_LABEL: Record<LlmProvider, string> = {
+const PROVIDER_LABEL: Record<CloudLlmProvider, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
   groq: "Groq",
 };
 
-const PROVIDER_KEY_URL: Record<LlmProvider, string> = {
+const PROVIDER_KEY_URL: Record<CloudLlmProvider, string> = {
   openai: "https://platform.openai.com/api-keys",
   anthropic: "https://console.anthropic.com/settings/keys",
   groq: "https://console.groq.com/keys",
 };
 
-const PROVIDER_HINT: Partial<Record<LlmProvider, string>> = {
-  groq: "Primary — all text jobs (70b, then 8b if rate-limited). Free tier.",
+const PROVIDER_HINT: Partial<Record<CloudLlmProvider, string>> = {
+  groq: "Primary — GPT-OSS 120B for decisions, 20B for simpler jobs.",
   openai: "Embeddings only (knowledge search). Optional text fallback.",
   anthropic: "Optional text fallback after Groq.",
 };

@@ -24,7 +24,7 @@ function baseResult(overrides: Partial<ConnectorSyncResult> = {}): ConnectorSync
 
 // WL-01/WL-02: syncProvider.ts previously returned `{ ok: true }`
 // unconditionally whenever no exception was thrown, ignoring
-// importResult.ok/itemsFailed entirely — and extraction/embedding failures
+// importResult.ok/itemsFailed entirely — and extraction failures
 // never even touched itemsFailed, so they were invisible to any gate. Each
 // case below first states what the pre-fix code would have reported (always
 // "fully ok"), then asserts the fixed, honest outcome.
@@ -55,6 +55,13 @@ describe("isProviderSyncFullyOk (WL-01 honest provider status / WL-02 cursor gat
 
   it("a provider with zero imported items (nothing to fail) is fully ok", () => {
     const result = baseResult({ imported: 0, itemsCreated: 0, tasksExtracted: 0 });
+    assert.equal(isProviderSyncFullyOk(result), true);
+  });
+
+  it("missing embeddings remain a warning and do not fail source sync", () => {
+    const result = baseResult({
+      warnings: ["Source 39 indexed without embeddings: OpenAI is off."],
+    });
     assert.equal(isProviderSyncFullyOk(result), true);
   });
 });

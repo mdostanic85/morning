@@ -123,13 +123,12 @@ interface EvidenceInputRow {
 
 /**
  * EV-03 write-time guard: when a transcript's extracts merge onto an existing
- * Jira-anchored task, keep only the quotes that are actually about that task.
+ * task, keep only the quotes that are actually about that task.
  * A multi-topic meeting ("Milos & Lucas sync") resolves to the ticket it
  * mentions, but its lines about *other* tasks must not ride along as evidence
  * for this one. Uses the same per-quote predicate as display/prune so all three
- * layers agree. Falls back to the unfiltered set if filtering would leave the
- * source with no evidence at all (so a task update never lands unsupported —
- * the display/prune layers still hide/remove any residual off-topic rows).
+ * layers agree. If filtering leaves no evidence, the merge is skipped below:
+ * an update must never land without a quote that actually supports it.
  */
 function filterEvidenceForTarget(
   evidenceInput: EvidenceInputRow[],
@@ -137,7 +136,6 @@ function filterEvidenceForTarget(
   source: { sourceType: string; sourceExternalId: string | null; sourceDate: string }
 ): EvidenceInputRow[] {
   const taskKey = jiraKeyForTask({ title: target.title });
-  if (!taskKey) return evidenceInput; // only anchored tasks get strict filtering
   const domain = taskDomainText(target);
   const sourceMs = new Date(source.sourceDate).getTime();
   const newestSourceTime = Number.isNaN(sourceMs) ? 0 : sourceMs;
@@ -151,7 +149,7 @@ function filterEvidenceForTarget(
         quoteText: row.quote,
       }).relevant
   );
-  return relevant.length > 0 ? relevant : evidenceInput;
+  return relevant;
 }
 
 function uniqueCriteria(groups: string[][]): string[] {
@@ -355,6 +353,10 @@ export async function extractTasksFromSourceItem(
         sourceExternalId: sourceItem.sourceExternalId,
         sourceDate: sourceItem.sourceDate,
       });
+      // A multi-topic meeting may mention this task while the particular
+      // extracted quote belongs to another topic. Do not update the task or
+      // attach meeting context without at least one relevant individual quote.
+      if (targetEvidenceInput.length === 0) continue;
 
       if (group.mode === "evidence") {
         const contextUpdated = meetingContextEntry

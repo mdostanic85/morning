@@ -1,5 +1,6 @@
-import { getApiKeyStatuses } from "@/services/settings";
+import { getApiKeyStatuses, getLocalLlmStatus } from "@/services/settings";
 import { ApiKeyForm } from "@/components/ApiKeyForm";
+import { LocalLlmForm } from "@/components/LocalLlmForm";
 import { ProfileForm } from "@/components/ProfileForm";
 import { IngestForm } from "@/components/IngestForm";
 import { IngestionRulesPanel } from "@/components/IngestionRulesPanel";
@@ -20,8 +21,9 @@ export default async function SettingsPage({
 }: {
  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
- const [statuses, connections, profile, params, projects, ingestionRules] = await Promise.all([
+ const [statuses, localLlm, connections, profile, params, projects, ingestionRules] = await Promise.all([
  getApiKeyStatuses(),
+ getLocalLlmStatus(),
  getConnections(),
  getUserProfile(),
  searchParams,
@@ -46,21 +48,24 @@ export default async function SettingsPage({
     "console.cloud.google.com"
   );
   const googleProviders = [
-    { provider: "gmail", label: "Gmail" },
+    { provider: "gmail", label: "Gemini notes" },
     { provider: "calendar", label: "Google Calendar" },
-    { provider: "drive", label: "Google Drive" },
+    { provider: "drive", label: "Google Drive", hidden: true },
   ] as const;
-  const googleSources = googleProviders.map(({ provider, label }) => {
+  const googleSources = googleProviders.map(({ provider, label, ...presentation }) => {
     const connection = connectionByProvider.get(provider);
     return {
       provider,
       label,
+      ...presentation,
       status: connection?.status ?? "disconnected",
       lastSync:
         typeof connection?.metadata?.lastSync === "string" ? connection.metadata.lastSync : null,
     };
   });
-  const googleAllConnected = googleSources.every((s) => s.status === "connected");
+  const googleAllConnected = googleSources
+    .filter((source) => !source.hidden)
+    .every((source) => source.status === "connected");
 
   const connectionCards = [
     {
@@ -149,7 +154,10 @@ export default async function SettingsPage({
   ).length;
   const connectedCount = nonGoogleConnectedCount + (googleAllConnected ? 1 : 0);
   const totalSources = connectionCards.length + 1;
-  const activeKeyCount = statuses.filter((s) => s.configured && s.enabled).length;
+  const activeKeyCount =
+    statuses.filter((s) => s.configured && s.enabled).length +
+    (localLlm.configured && localLlm.enabled ? 1 : 0);
+  const modelProviderCount = statuses.length + 1;
 
  return (
  <div className="space-y-6">
@@ -168,7 +176,7 @@ export default async function SettingsPage({
                 {connectedCount}/{totalSources} sources
  </span>
  <span className="text-sm text-muted-soft">
- {activeKeyCount}/{statuses.length} model keys
+ {activeKeyCount}/{modelProviderCount} model providers
  </span>
  </div>
  </div>
@@ -210,7 +218,7 @@ export default async function SettingsPage({
  <Tabs.Tab id="model-keys" className="flex-1">
  Model keys
  <span className="tabular-nums text-muted-soft">
- {activeKeyCount}/{statuses.length}
+ {activeKeyCount}/{modelProviderCount}
  </span>
  <Tabs.Indicator />
  </Tabs.Tab>
@@ -333,11 +341,12 @@ export default async function SettingsPage({
         {/* ── Model keys ─────────────────────────────────────────────────── */}
  <Tabs.Panel id="model-keys" className="space-y-4">
  <p className="text-sm leading-relaxed text-muted">
- Groq runs almost everything for free. OpenAI is only needed for knowledge search
- embeddings. Inactive providers are never called.
+ A configured Local LLM is a last-resort fallback after enabled cloud models.
+ OpenAI is still used for knowledge-search embeddings.
  </p>
  <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-surface">
  <div className="divide-y divide-border">
+ <LocalLlmForm initialStatus={localLlm} />
  {statuses.map((status) => (
  <ApiKeyForm key={status.provider} initialStatus={status} />
  ))}

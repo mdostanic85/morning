@@ -39,6 +39,28 @@ const STOP_WORDS = new Set([
   "notes",
   "daily",
   "hydra",
+  "sync",
+  "discussed",
+  // Dates describe when two items happened, not whether they concern the same
+  // work. Without these, a generic "July sync" can look topically related to
+  // a task whose reason also happens to mention July and a sync.
+  "january",
+  "february",
+  "march",
+  "april",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+  // Common participants occur across many unrelated meetings and must not
+  // count as domain-topic proof on their own.
+  "milos",
+  "dostanic",
+  "lucas",
+  "matt",
 ]);
 
 export interface MergeCandidateTask {
@@ -231,8 +253,7 @@ export function isExtractRelevantToTask(input: {
 
   const targetKey = jiraKeyForTask({ title: target.title });
   if (targetKey) {
-    const extractText = `${sourceText}\n${extract.title}\n${extract.reason}\n${extract.nextAction}`;
-    if (extractJiraKeysFromText(extractText).includes(targetKey)) {
+    if (extractJiraKeysFromText(sourceText).includes(targetKey)) {
       return { relevant: true, reason: `shares Jira key ${targetKey}` };
     }
   }
@@ -359,19 +380,20 @@ export function resolveTranscriptMergeTarget(input: {
 }): TranscriptMergeResolution {
   const { source, extracted, existingTasks, myName = null } = input;
 
-  const haystack = [
+  // Only raw source text may prove that a transcript belongs to an existing
+  // task. Including the LLM-generated title/reason here creates a circular
+  // check: the model can copy an existing task's wording and then use that
+  // copied wording as "evidence" that its own existingTaskId guess was right.
+  const sourceText = [
     source.title ?? "",
     source.body ?? "",
-    extracted.title,
-    extracted.reason,
-    extracted.nextAction,
   ].join("\n");
 
   if (!isTranscriptSource(source)) {
     const hinted = resolveExistingTaskIdHint({
       extracted,
       existingTasks,
-      haystack,
+      haystack: sourceText,
       myName,
       mode: "full",
       reasonPrefix: "non-transcript existingTaskId",
@@ -395,7 +417,7 @@ export function resolveTranscriptMergeTarget(input: {
     const hinted = resolveExistingTaskIdHint({
       extracted,
       existingTasks,
-      haystack,
+      haystack: sourceText,
       myName,
       mode: "evidence",
       reasonPrefix: "llm existingTaskId (non-actionable)",
@@ -403,14 +425,26 @@ export function resolveTranscriptMergeTarget(input: {
     if (hinted) return hinted;
     const titleMatch = findTaskByExactTitleMatch(existingTasks, extracted.title, myName);
     if (titleMatch) {
-      return { taskId: titleMatch.id, mode: "evidence", reason: "exact title match (dedupe)" };
+      const check = isExtractRelevantToTask({
+        extract: extracted,
+        sourceText,
+        target: titleMatch,
+        myName,
+      });
+      if (check.relevant) {
+        return {
+          taskId: titleMatch.id,
+          mode: "evidence",
+          reason: `exact title match (dedupe; ${check.reason})`,
+        };
+      }
     }
     return { taskId: null, mode: "full", reason: "no merge for non-actionable" };
   }
 
   const keys = [
-    ...extractJiraKeysFromText(haystack),
-    ...inferJiraKeysFromBareTicketMentions(haystack, existingTasks),
+    ...extractJiraKeysFromText(sourceText),
+    ...inferJiraKeysFromBareTicketMentions(sourceText, existingTasks),
   ];
   for (const key of [...new Set(keys)]) {
     const match = findTaskByJiraKey(existingTasks, key);
@@ -425,7 +459,7 @@ export function resolveTranscriptMergeTarget(input: {
   const hinted = resolveExistingTaskIdHint({
     extracted,
     existingTasks,
-    haystack,
+    haystack: sourceText,
     myName,
     mode: "full",
     reasonPrefix: "llm existingTaskId",
@@ -434,11 +468,11 @@ export function resolveTranscriptMergeTarget(input: {
 
   // Topic-only anchor: still requires explicit ownership confirmation — a
   // sole prominent task must never become a magnet for unrelated items.
-  const anchor = findOnlyActiveTopicAnchor(existingTasks, haystack);
+  const anchor = findOnlyActiveTopicAnchor(existingTasks, sourceText);
   if (anchor) {
     const check = isExtractRelevantToTask({
       extract: extracted,
-      sourceText: haystack,
+      sourceText,
       target: anchor,
       myName,
     });
@@ -453,7 +487,19 @@ export function resolveTranscriptMergeTarget(input: {
 
   const titleMatch = findTaskByExactTitleMatch(existingTasks, extracted.title, myName);
   if (titleMatch) {
-    return { taskId: titleMatch.id, mode: "full", reason: "exact title match (dedupe)" };
+    const check = isExtractRelevantToTask({
+      extract: extracted,
+      sourceText,
+      target: titleMatch,
+      myName,
+    });
+    if (check.relevant) {
+      return {
+        taskId: titleMatch.id,
+        mode: "full",
+        reason: `exact title match (dedupe; ${check.reason})`,
+      };
+    }
   }
 
   return { taskId: null, mode: "full", reason: "genuinely new work" };

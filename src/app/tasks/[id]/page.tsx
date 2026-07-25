@@ -9,6 +9,7 @@ import { BackToTodayButton } from "@/components/BackToTodayButton";
 import { TaskActionButtons } from "@/components/TaskActionButtons";
 import { buildTaskSupportingSources } from "@/lib/tasks/taskSupportingSources";
 import { SOURCE_TYPES, type SourceType } from "@/domain/sourceItem";
+import { filterMeetingContextForTask } from "@/lib/tasks/evidenceRelevance";
 
 function isKnownSourceType(value: string): value is SourceType {
   return (SOURCE_TYPES as readonly string[]).includes(value);
@@ -78,6 +79,20 @@ export default async function TaskDetailPage({
   const linkedJiraKey = task.title.match(/^([A-Z][A-Z0-9]+-\d+)\b/)?.[1] ?? null;
   const confidence = task.confidence == null ? null : Math.round(task.confidence * 100);
   const supporting = buildTaskSupportingSources({ task, sourceById });
+  const relevantMeetingContext = filterMeetingContextForTask({
+    task,
+    entries: task.meetingContext,
+    sourceById: new Map(
+      sourceItems.map((source) => [
+        source.id,
+        {
+          sourceType: source.sourceType,
+          sourceExternalId: source.sourceExternalId,
+          sourceDate: source.sourceDate,
+        },
+      ])
+    ),
+  });
   // Jira's operational status, surfaced as a read-only badge in the header
   // (the app never writes it back). Prefer the anchor ticket's status.
   const jiraStatus =
@@ -154,14 +169,14 @@ export default async function TaskDetailPage({
  </section>
  ) : null}
 
- {task.meetingContext.length > 0 ? (
+ {relevantMeetingContext.length > 0 ? (
  <section className="rounded-[20px] border border-border bg-surface p-6">
  <h2 className="ft-panel-title font-display">What was said in meetings</h2>
  <p className="mt-2 text-sm leading-relaxed text-muted">
  Decisions, requested changes, and open questions linked to this task.
  </p>
  <div className="mt-5 grid gap-5">
- {task.meetingContext.map((context) => (
+ {relevantMeetingContext.map((context) => (
  <article
  key={context.sourceItemId}
  className="overflow-hidden rounded-2xl border border-border bg-surface"
@@ -230,7 +245,7 @@ export default async function TaskDetailPage({
  <Link
  key={`${index}-${criterion}`}
  href={`/tasks/${task.id}/corrections/${index + 1}`}
- className="group grid grid-cols-[2.5rem_minmax(0,1fr)_auto] gap-3 rounded-2xl border border-border bg-surface p-4 transition hover:border-border-strong hover:"
+ className="group grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-border bg-surface p-4 transition hover:border-border-strong hover:"
  >
  <span className="grid size-10 place-items-center rounded-xl bg-accent-soft-surface text-xs font-bold text-accent-strong">
  {String(index + 1).padStart(2, "0")}
@@ -238,7 +253,7 @@ export default async function TaskDetailPage({
  <span>
  <strong className="block text-[15px]">{criterion}</strong>
  </span>
- <ArrowRight className="mt-2 size-5 text-accent-strong transition-transform group-hover:translate-x-1" />
+ <ArrowRight className="size-5 text-accent-strong transition-transform group-hover:translate-x-1" />
  </Link>
  ))}
  </div>

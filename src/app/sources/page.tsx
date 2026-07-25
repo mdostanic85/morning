@@ -10,8 +10,7 @@ export const dynamic = "force-dynamic";
 const SOURCES = [
   { key: "granola", connection: "granola", label: "Granola", description: "Meetings, notes, transcripts, and capability limits." },
   { key: "calendar", connection: "calendar", label: "Google Calendar", description: "Hydra/ASC events, participants, time, and links." },
-  { key: "drive", connection: "drive", label: "Google Drive", description: "Gemini meeting notes and Google Docs transcripts saved to Drive." },
-  { key: "gmail", connection: "gmail", label: "Gmail", description: "Gemini / Google Meet notes delivered as email." },
+  { key: "gmail", connection: "gmail", label: "Gemini notes", description: "Gemini / Google Meet notes delivered through your Google account." },
   { key: "jira", connection: "jira", label: "Jira", description: "Assigned unfinished UATL issues, comments, status, and blockers." },
   { key: "confluence", connection: "confluence", label: "Confluence", description: "PRD, intake, and linked pages within configured scope." },
   { key: "figma", connection: "figma", label: "Figma", description: "Read-only node-specific evidence and preliminary audits." },

@@ -29,9 +29,20 @@ export type SourceAuthorityTier =
 export const SYNC_PROVIDER_WAVES: readonly (readonly ConnectionProvider[])[] = [
   ["confluence"],
   ["jira"],
-  ["granola", "gmail", "drive"],
+  ["granola", "gmail"],
   ["calendar", "github", "discord", "figma"],
 ] as const;
+
+/**
+ * Gmail is the single visible Gemini Notes sync provider. When a Gemini share
+ * email contains a Google Docs link, the Gmail connector follows that link and
+ * imports the real transcript through Docs' authenticated text export endpoint.
+ * The legacy standalone Drive provider remains hidden to avoid duplicate rows
+ * and does not require Drive API v3 to be enabled.
+ */
+export function isSyncMyDayProvider(provider: ConnectionProvider): boolean {
+  return provider !== "drive";
+}
 
 export const HIGH_AUTHORITY_STAKEHOLDERS = DEFAULT_HYDRA_CONFIG.stakeholders;
 

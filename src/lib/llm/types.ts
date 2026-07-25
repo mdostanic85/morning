@@ -22,7 +22,7 @@ export const JOB_TYPES = [
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
-export const PROVIDERS = ["openai", "anthropic", "groq"] as const;
+export const PROVIDERS = ["openai", "anthropic", "groq", "local"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
 export interface ModelConfig {

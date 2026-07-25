@@ -1,12 +1,12 @@
 /**
  * Deterministic "does this source actually belong on this task?" predicate.
  *
- * A Jira-anchored task (its title carries a ticket key like UATL-380) exists
- * because of that ticket — the ticket is its proof of existence. Everything
- * else attached to it is only justified if it genuinely concerns that ticket's
- * work. In practice, extraction merges, retroactive adoption, and duplicate
- * merges have over-attached unrelated sources (old Gmail threads, stale daily
- * standups covering many topics, unrelated 1:1 notes) onto anchored tasks.
+ * Every task — whether it came from Jira or directly from a meeting request —
+ * may only carry quotes that concern that task. A Jira ticket is an additional
+ * proof-of-existence anchor, but a meeting-created task still needs strict
+ * quote-level relevance. In practice, extraction merges, retroactive adoption,
+ * and duplicate merges have over-attached unrelated sources (old Gmail
+ * threads, stale daily standups covering many topics, unrelated 1:1 notes).
  *
  * The rule that reliably separates signal from that noise, applied to each
  * cited quote INDIVIDUALLY (not the whole source at once):
@@ -32,6 +32,7 @@
  * prune) with identical behavior.
  */
 import { TASK_SOURCE_FRESHNESS_WINDOW_MS } from "./sourceAuthority";
+import type { TaskMeetingContextEntry } from "@/domain/workTask";
 import {
   extractJiraKeysFromText,
   jiraKeyForTask,
@@ -149,12 +150,88 @@ export interface PruneSourceInfo {
 }
 
 /**
- * Plans which individual evidence rows to remove from Jira-anchored tasks
- * because the specific quote they carry is not relevant to the task. Each row
- * is judged on its own quote, so an off-topic line is dropped even when a
- * sibling line from the same source is kept. Non-anchored (meeting-only) tasks
- * are left untouched — the anchor is what makes strict pruning safe (the task
- * can never lose its proof of existence). Pure; callers persist the deletions.
+ * Applies the same quote-level relevance rule to the richer meeting-context
+ * cards. A multi-topic meeting may stay attached because one line is relevant,
+ * but its unrelated decisions, requested changes, and overview must not ride
+ * along on the task detail page.
+ */
+export function filterMeetingContextForTask(input: {
+  task: { title: string; reason: string; nextAction: string };
+  entries: TaskMeetingContextEntry[];
+  sourceById: Map<number, PruneSourceInfo>;
+}): TaskMeetingContextEntry[] {
+  const { task, entries, sourceById } = input;
+  const taskKey = jiraKeyForTask({ title: task.title });
+  const domain = taskDomainText(task);
+  const newestSourceTime = entries.reduce((max, entry) => {
+    const source = sourceById.get(entry.sourceItemId);
+    return Math.max(max, sourceTime(source?.sourceDate ?? entry.sourceDate));
+  }, 0);
+
+  return entries.flatMap((entry) => {
+    const knownSource = sourceById.get(entry.sourceItemId);
+    const source: RelevanceQuoteSource = {
+      sourceType: knownSource?.sourceType ?? entry.sourceType,
+      sourceExternalId: knownSource?.sourceExternalId ?? null,
+      sourceDate: knownSource?.sourceDate ?? entry.sourceDate,
+    };
+    const relevant = (text: string) =>
+      isQuoteRelevantToTask({
+        taskKey,
+        domain,
+        newestSourceTime,
+        source,
+        quoteText: text,
+      }).relevant;
+    const filter = (items: string[]) => items.filter(relevant);
+
+    const keyPoints = filter(entry.keyPoints);
+    const decisions = filter(entry.decisions);
+    const requestedChanges = filter(entry.requestedChanges);
+    const openQuestions = filter(entry.openQuestions);
+    const evidenceQuotes = filter(entry.evidenceQuotes);
+    const overview = relevant(entry.overview)
+      ? entry.overview
+      : (
+          requestedChanges[0] ??
+          decisions[0] ??
+          openQuestions[0] ??
+          keyPoints[0] ??
+          evidenceQuotes[0] ??
+          ""
+        );
+
+    if (
+      !overview &&
+      keyPoints.length === 0 &&
+      decisions.length === 0 &&
+      requestedChanges.length === 0 &&
+      openQuestions.length === 0 &&
+      evidenceQuotes.length === 0
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        ...entry,
+        overview,
+        keyPoints,
+        decisions,
+        requestedChanges,
+        openQuestions,
+        evidenceQuotes,
+      },
+    ];
+  });
+}
+
+/**
+ * Plans which individual evidence rows to remove because the specific quote
+ * does not concern its task. Each row is judged on its own quote, so an
+ * off-topic line is dropped even when a sibling line from the same source is
+ * kept. Jira anchors remain protected by `isQuoteRelevantToTask`; meeting-only
+ * tasks are held to the same topical standard. Pure; callers persist deletions.
  */
 export function planEvidenceRelevancePrune(input: {
   tasks: PruneTask[];
@@ -165,7 +242,6 @@ export function planEvidenceRelevancePrune(input: {
 
   for (const task of tasks) {
     const taskKey = jiraKeyForTask({ title: task.title });
-    if (!taskKey) continue; // only prune anchored tasks
 
     const domain = taskDomainText(task);
 

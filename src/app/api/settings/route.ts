@@ -4,8 +4,8 @@ import {
   saveApiKey,
   clearApiKey,
   setProviderEnabled,
-  LLM_PROVIDERS,
-  type LlmProvider,
+  CLOUD_LLM_PROVIDERS,
+  type CloudLlmProvider,
 } from "@/services/settings";
 
 export async function GET() {
@@ -13,8 +13,11 @@ export async function GET() {
   return NextResponse.json({ statuses });
 }
 
-function isProvider(value: unknown): value is LlmProvider {
-  return typeof value === "string" && (LLM_PROVIDERS as readonly string[]).includes(value);
+function isProvider(value: unknown): value is CloudLlmProvider {
+  return (
+    typeof value === "string" &&
+    (CLOUD_LLM_PROVIDERS as readonly string[]).includes(value)
+  );
 }
 
 export async function POST(request: Request) {

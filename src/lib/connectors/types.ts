@@ -64,6 +64,12 @@ export interface ConnectorSyncResult {
   /** Extracted tasks added to the Today queue. */
   tasksExtracted: number;
   errors: string[];
+  /**
+   * Non-blocking degradation such as unavailable semantic embeddings. Source
+   * import and task extraction still succeeded, so these must not fail the
+   * provider or prevent its incremental cursor from advancing.
+   */
+  warnings?: string[];
   importedItems: ImportedSourceItem[];
   extractedTasks: SyncExtractedTask[];
   knowledgeExtracted: SyncKnowledgeItem[];

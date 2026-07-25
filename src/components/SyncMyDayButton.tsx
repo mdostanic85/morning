@@ -19,9 +19,9 @@ const Lottie = dynamic(() => import("lottie-react").then((module) => module.defa
 });
 
 const PROVIDER_LABEL: Record<ConnectionProvider, string> = {
- gmail: "Gmail & Gemini notes",
+ gmail: "Gemini notes",
  calendar: "Google Calendar",
- drive: "Google Drive Gemini notes",
+ drive: "Gemini notes",
  jira: "Jira",
  confluence: "Confluence",
  granola: "Granola",
@@ -31,9 +31,9 @@ const PROVIDER_LABEL: Record<ConnectionProvider, string> = {
 };
 
 const PROVIDER_SYNC_DESCRIPTION: Record<ConnectionProvider, string> = {
- gmail: "Gemini meeting-note emails from the last 30 days",
+ gmail: "New Gemini meeting notes and transcripts",
  calendar: "Recent and upcoming calendar events",
- drive: "New or changed Gemini meeting notes in Drive",
+ drive: "Legacy Google Drive Gemini-note import",
  jira: "Issues assigned to you (any status) plus recent mentions",
  confluence: "Pages from configured spaces and page links",
  granola: "New meeting notes and transcripts",
@@ -178,7 +178,10 @@ function buildProviderItems(
  providerRuns: SyncProviderRunSnapshot[],
  syncRunStatus: string
 ): ProviderProgressItem[] {
- const runsByProvider = new Map(providerRuns.map((run) => [run.provider, run]));
+ // Drive used to duplicate the Gmail-backed Gemini Notes provider. Hide old
+ // in-flight/history rows so Gemini Notes always has one operational status.
+ const visibleRuns = providerRuns.filter((run) => run.provider !== "drive");
+ const runsByProvider = new Map(visibleRuns.map((run) => [run.provider, run]));
  const expected = expectedProviderKeys(sourceLabels);
  const seen = new Set<string>();
 
@@ -194,7 +197,7 @@ function buildProviderItems(
  };
  });
 
- for (const run of providerRuns) {
+ for (const run of visibleRuns) {
  if (seen.has(run.provider)) continue;
  const status = providerUiStatus(run.provider, run, syncRunStatus);
  items.push({
@@ -321,6 +324,19 @@ function humanizeSyncIssue(raw: string): SyncIssueInput {
  };
  }
 
+ if (
+ /calendar/i.test(text) &&
+ /invalid authentication credentials|oauth 2 access token|unauthenticated|unauthorized/i.test(text)
+ ) {
+ return {
+ label: "Calendar needs to reconnect",
+ detail:
+ "Google rejected the saved Calendar session. Reconnect Google, then run Sync my day again.",
+ href: "/api/connections/gmail/connect?link=google",
+ hrefLabel: "Reconnect Google",
+ };
+ }
+
  const confluenceMatch = text.match(/confluence\s*[—-]\s*(.+)/i);
  if (confluenceMatch || /select confluence spaces/i.test(text)) {
  return {
@@ -383,7 +399,11 @@ function humanizeSyncIssue(raw: string): SyncIssueInput {
 function buildCompletionIssues(status: SyncStatusResponse): SyncIssueInput[] {
  const syncIssues: SyncIssueInput[] = [];
 
- const failed = status.providerRuns.filter((entry) => entry.status === "failed");
+ // Drive is a retired duplicate Gemini path; it must not surface as a second
+ // Gemini failure while an older persisted run is still being displayed.
+ const failed = status.providerRuns.filter(
+ (entry) => entry.status === "failed" && entry.provider !== "drive"
+ );
  for (const entry of failed) {
  syncIssues.push(
  humanizeSyncIssue(`${entry.provider} — ${entry.errorMessage ?? "Connection failed."}`)
@@ -845,7 +865,6 @@ export function SyncMyDayButton({
 }) {
  const router = useRouter();
  const [status, setStatus] = useState<"idle" | "syncing">("idle");
- const [issues, setIssues] = useState<SyncIssue[]>([]);
  const [whatsNew, setWhatsNew] = useState<SyncWhatsNew | null>(null);
  const [liveStatus, setLiveStatus] = useState<SyncStatusResponse | null>(null);
  const [networkError, setNetworkError] = useState<string | null>(null);
@@ -908,7 +927,6 @@ export function SyncMyDayButton({
  async (existingSyncRunId?: number) => {
  setStatus("syncing");
  setResult(null);
- setIssues([]);
  setWhatsNew(null);
  setNetworkError(null);
  setLiveStatus(null);
@@ -950,8 +968,6 @@ export function SyncMyDayButton({
  const syncIssues = buildCompletionIssues(finalStatus);
  const dedupedIssues = dedupeSyncIssues(syncIssues);
 
- setIssues(finalStatus.syncRun.status === "cancelled" ? [] : dedupedIssues);
-
  if (finalStatus.whatsNew?.hasNew) {
  setWhatsNew(finalStatus.whatsNew);
  }
@@ -975,7 +991,9 @@ export function SyncMyDayButton({
  setStatus("idle");
  const message = err instanceof Error ? err.message : "Sync failed.";
  const failureIssues = dedupeSyncIssues([humanizeSyncIssue(message)]);
- setIssues(failureIssues);
+ // A temporary polling/network failure belongs in a toast, not as permanent
+ // error chrome under the primary Sync button. Concrete provider failures are
+ // still shown in the sync result modal with their relevant actions.
  showSyncIssueToasts(failureIssues, router);
  } finally {
  cancelRequestInFlightRef.current = false;
@@ -1040,30 +1058,9 @@ export function SyncMyDayButton({
  "↻ Sync my day"
  )}
  </Button>
- {issues.length > 0 ? (
- <details className="max-w-lg rounded-xl border border-danger/20 bg-danger/5">
- <summary className="cursor-pointer list-none px-3 py-2 text-[14px] font-semibold text-danger">
- {issues.length === 1 ? "1 sync issue" : `${issues.length} sync issues`}
- </summary>
- <ul className="space-y-4 border-t border-danger/15 px-3 py-3">
- {issues.map((issue) => (
- <li key={issue.id}>
- <p className="text-[14px] font-medium leading-snug">{issue.label}</p>
- <p className="mt-1 text-[14px] leading-relaxed text-muted">{issue.detail}</p>
- {issue.href ? (
- <Link
- href={issue.href}
- className="mt-2 inline-block text-[14px] text-accent underline-offset-2 hover:underline"
- >
- {issue.hrefLabel ?? "Open"}
- </Link>
+ {whatsNew ? (
+ <SyncWhatsNewPanel whatsNew={whatsNew} onDismiss={() => setWhatsNew(null)} />
  ) : null}
- </li>
- ))}
- </ul>
- </details>
- ) : null}
- {whatsNew ? <SyncWhatsNewPanel whatsNew={whatsNew} /> : null}
  </div>
  );
 }

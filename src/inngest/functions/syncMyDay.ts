@@ -27,7 +27,10 @@ import {
   startSyncProviderRun,
 } from "@/services/syncRuns";
 import type { SyncProviderRunMetrics } from "@/domain/syncRun";
-import { SYNC_PROVIDER_WAVES } from "@/lib/tasks/sourceAuthority";
+import {
+  isSyncMyDayProvider,
+  SYNC_PROVIDER_WAVES,
+} from "@/lib/tasks/sourceAuthority";
 import { runTodayFigmaTaskAudits } from "@/lib/tasks/figmaTaskAudit";
 
 async function finalizeIfCancelled(
@@ -66,10 +69,12 @@ export const syncMyDay = inngest.createFunction(
 
     const connectedProviders = await step.run("resolve-connected-providers", async () => {
       const connections = await getConnections();
-      return CONNECTION_PROVIDERS.filter((provider) =>
-        connections.some(
-          (connection) => connection.provider === provider && connection.status === "connected"
-        )
+      return CONNECTION_PROVIDERS.filter(
+        (provider) =>
+          isSyncMyDayProvider(provider) &&
+          connections.some(
+            (connection) => connection.provider === provider && connection.status === "connected"
+          )
       ) as ConnectionProvider[];
     });
 

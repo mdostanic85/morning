@@ -11,6 +11,7 @@ export interface GoogleSourceStatus {
   label: string;
   status: "connected" | "disconnected" | "error";
   lastSync: string | null;
+  hidden?: boolean;
 }
 
 interface GoogleConnectionPanelProps {
@@ -27,8 +28,10 @@ export function GoogleConnectionPanel({
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
-  const allConnected = sources.length > 0 && sources.every((s) => s.status === "connected");
-  const anyConnected = sources.some((s) => s.status === "connected");
+  const visibleSources = sources.filter((source) => !source.hidden);
+  const allConnected =
+    visibleSources.length > 0 && visibleSources.every((source) => source.status === "connected");
+  const anyConnected = visibleSources.some((source) => source.status === "connected");
 
   async function disconnectAll() {
     setPending(true);
@@ -62,8 +65,7 @@ export function GoogleConnectionPanel({
             </AppBadge>
           </div>
           <p className="mt-1 text-sm leading-snug text-muted">
-            One sign-in authorizes read-only Gmail, Google Calendar, and Google Drive (Gemini
-            notes) together.
+            One sign-in authorizes read-only Gemini meeting notes and Google Calendar.
           </p>
         </div>
 
@@ -101,7 +103,7 @@ export function GoogleConnectionPanel({
       </div>
 
       <div className="mt-3 space-y-1.5 border-t border-border pt-3">
-        {sources.map((source) => (
+        {visibleSources.map((source) => (
           <div key={source.provider} className="flex items-center justify-between gap-3">
             <span className="text-sm text-foreground">{source.label}</span>
             <div className="flex items-center gap-2">

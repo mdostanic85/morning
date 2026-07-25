@@ -78,6 +78,7 @@
   --success-foreground: #ffffff;
   --warning: var(--waiting);
   --warning-foreground: #ffffff;
+  --warning-soft-surface: var(--waiting-soft-surface);
   --action-primary: #0b2f67;
   --action-primary-hover: #123c7d;
   --action-primary-active: #082353;
@@ -203,6 +204,7 @@
   --success-foreground: #0d1424;
   --warning: var(--waiting);
   --warning-foreground: #0d1424;
+  --warning-soft-surface: var(--waiting-soft-surface);
   --action-primary: #0bcfff;
   --action-primary-hover: #38d9ff;
   --action-primary-active: #16c2f2;
@@ -1833,6 +1835,20 @@ summary {
   background: color-mix(in srgb, var(--accent-soft-surface) 62%, var(--surface));
 }
 
+.brief-change-alert--warning {
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+  background: color-mix(in srgb, var(--warning-soft-surface) 62%, var(--surface));
+}
+
+.brief-change-alert--warning .brief-change-mark {
+  background: var(--warning);
+  color: var(--warning-foreground);
+}
+
+.brief-change-alert--warning .brief-kicker {
+  color: var(--warning);
+}
+
 .brief-change-alert p:last-child {
   margin: 0.2rem 0 0;
   font-size: 0.9375rem;
@@ -1886,6 +1902,11 @@ summary {
   color: var(--accent-contrast);
   font-size: 0.9rem;
   font-weight: 850;
+}
+
+.brief-change-mark svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .brief-bento {

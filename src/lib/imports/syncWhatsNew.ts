@@ -117,7 +117,7 @@ function buildGeminiKnowledgeNotifications(
           : "New Gemini notes",
       detail: `${typeLabel}: ${top.title} — ${truncate(top.content, 120)}`,
       href: `/knowledge#knowledge-${top.id}`,
-      hrefLabel: "Read in Knowledge",
+      hrefLabel: "Review knowledge",
     },
   ];
 }

@@ -26,9 +26,9 @@ import { HumanReadableTodayView } from "@/components/HumanReadableTodayView";
 export const dynamic = "force-dynamic";
 
 const CONNECTED_PROVIDER_LABEL: Record<ConnectionProvider, string> = {
-  gmail: "Gmail & Gemini notes",
+  gmail: "Gemini notes",
   calendar: "Google Calendar",
-  drive: "Google Drive Gemini notes",
+  drive: "Gemini notes",
   jira: "Jira",
   confluence: "Confluence",
   granola: "Granola",
@@ -119,14 +119,20 @@ export default async function TodayPage() {
     : null;
 
   const connectedProviderLabels = connections
-    .filter((connection) => connection.status === "connected")
+    .filter(
+      (connection) => connection.status === "connected" && connection.provider !== "drive"
+    )
     .map((connection) => CONNECTED_PROVIDER_LABEL[connection.provider as ConnectionProvider])
     .filter(Boolean);
 
   // WL-12: sync health belongs on Today chrome, not only the sync overlay —
   // driven by the now-honest per-provider status (WL-01).
   const failedProviderLabels = (latestSync?.providerRuns ?? [])
-    .filter((providerRun) => providerRun.status === "failed" || providerRun.status === "cancelled")
+    .filter(
+      (providerRun) =>
+        providerRun.provider !== "drive" &&
+        (providerRun.status === "failed" || providerRun.status === "cancelled")
+    )
     .map(
       (providerRun) =>
         CONNECTED_PROVIDER_LABEL[providerRun.provider as ConnectionProvider] ?? providerRun.provider

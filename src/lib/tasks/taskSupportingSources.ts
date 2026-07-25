@@ -224,44 +224,36 @@ export function buildTaskSupportingSources(input: {
 
   let groups = [...groupsBySource.values()];
 
-  // Safety net: for a Jira-anchored task, hide individual quotes that don't
-  // genuinely belong to it (stale or off-topic lines wrongly attached by
-  // earlier syncs/merges). Each quote is judged on its own — an on-topic line
-  // stays while a sibling line about a different task is dropped, even when
-  // both came from the same meeting. Uses the same per-quote predicate as the
-  // rebuild-time prune, so what renders always matches what the DB self-heals
-  // to. Sources left with no relevant quote drop out (the Jira anchor always
-  // stays — it is the task's proof of existence). Non-anchored tasks keep
-  // everything — the anchor is what makes strict filtering safe.
-  if (targetKey != null) {
-    const domain = taskDomainText({
-      title: task.title,
-      reason: task.reason,
-      nextAction: task.nextAction,
-    });
-    const newestSourceTime = groups.reduce(
-      (max, group) => Math.max(max, sourceTime(group.sourceDate)),
-      0
+  // Safety net for every task, including meeting-created tasks without Jira:
+  // judge each quote independently and drop a source when none of its quotes
+  // concern this task. Jira anchors remain as proof of existence.
+  const domain = taskDomainText({
+    title: task.title,
+    reason: task.reason,
+    nextAction: task.nextAction,
+  });
+  const newestSourceTime = groups.reduce(
+    (max, group) => Math.max(max, sourceTime(group.sourceDate)),
+    0
+  );
+  for (const group of groups) {
+    const source = sourceById.get(group.sourceItemId);
+    group.quotes = group.quotes.filter(
+      (quote) =>
+        isQuoteRelevantToTask({
+          taskKey: targetKey,
+          domain,
+          newestSourceTime,
+          source: {
+            sourceType: group.sourceType,
+            sourceExternalId: source?.sourceExternalId ?? null,
+            sourceDate: group.sourceDate,
+          },
+          quoteText: quote.text,
+        }).relevant
     );
-    for (const group of groups) {
-      const source = sourceById.get(group.sourceItemId);
-      group.quotes = group.quotes.filter(
-        (quote) =>
-          isQuoteRelevantToTask({
-            taskKey: targetKey,
-            domain,
-            newestSourceTime,
-            source: {
-              sourceType: group.sourceType,
-              sourceExternalId: source?.sourceExternalId ?? null,
-              sourceDate: group.sourceDate,
-            },
-            quoteText: quote.text,
-          }).relevant
-      );
-    }
-    groups = groups.filter((group) => group.isAnchor || group.quotes.length > 0);
   }
+  groups = groups.filter((group) => group.isAnchor || group.quotes.length > 0);
 
   // Mark the single newest-dated source (typically the latest meeting note).
   let latestId: number | null = null;

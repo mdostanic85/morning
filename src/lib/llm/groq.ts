@@ -6,5 +6,6 @@ const GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completio
 export const groqClient = createOpenAiCompatibleClient({
   provider: "groq",
   chatCompletionsUrl: GROQ_CHAT_COMPLETIONS_URL,
+  structuredOutputs: true,
   label: "Groq",
 });

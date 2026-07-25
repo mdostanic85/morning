@@ -514,14 +514,13 @@ export function HumanReadableTodayView({
 
       {/* WL-12: sync health belongs on Today chrome itself, not only the sync overlay — a failed provider must stay visible until the next successful sync. */}
       {failedProviderLabels.length > 0 ? (
-        <div className="brief-alert brief-alert-sync" role="status">
-          <AlertTriangle className="size-4 shrink-0" aria-hidden />
-          <p>
-            <strong>Last sync was incomplete: </strong>
-            {failedProviderLabels.join(", ")} did not sync cleanly. Some evidence here may be
-            out of date.
-          </p>
-        </div>
+        <DismissibleDayChange
+          title="Last sync was incomplete"
+          text={`${failedProviderLabels.join(", ")} did not sync cleanly. Some evidence here may be out of date.`}
+          tone="warning"
+          icon={<AlertTriangle />}
+          dismissLabel="Dismiss sync warning"
+        />
       ) : null}
 
       {dailyBrief?.dayChange ? <DismissibleDayChange text={dailyBrief.dayChange.text} /> : null}
