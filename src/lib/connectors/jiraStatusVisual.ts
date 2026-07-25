@@ -8,17 +8,13 @@ import {
   Loader2Icon,
   PlayCircleIcon,
 } from "lucide-react";
+import { isJiraDoneStatus } from "@/lib/connectors/jiraStatus";
 
 export interface JiraStatusVisual {
   label: string;
   icon: LucideIcon;
   triggerClassName: string;
   dotClassName: string;
-}
-
-export function isJiraDoneStatus(status: string | null | undefined): boolean {
-  if (!status?.trim()) return false;
-  return /done|closed|resolved|complete/i.test(status.toLowerCase());
 }
 
 export function jiraStatusVisual(status: string | null | undefined): JiraStatusVisual {

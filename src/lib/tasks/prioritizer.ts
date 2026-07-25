@@ -47,6 +47,7 @@ import {
   reconcileJiraWorkItems,
   reconcileSelfReportedCompletion,
 } from "@/services/jiraWorkItemReconciliation";
+import { runPlannerSummaryWrite } from "@/lib/imports/syncRunCompletion";
 
 const RECENT_SOURCE_LIMIT = 8;
 const SOURCE_EXCERPT_LENGTH = 360;
@@ -63,10 +64,10 @@ export interface PriorityPlanSummary {
 }
 
 export interface RebuildTodayQueueResult {
-  ok: boolean;
+  ok: true;
   summary?: PriorityPlanSummary;
   updatedTaskCount: number;
-  error?: string;
+  diagnostics?: string[];
 }
 
 function excerpt(text: string): string {
@@ -239,6 +240,7 @@ function buildTasksForPlanning(
 export async function rebuildTodayQueue(options?: {
   today?: string;
   jiraPending?: JiraPendingSnapshot[];
+  summaryWriter?: (summary: PriorityPlanSummary) => void | Promise<void>;
 }): Promise<RebuildTodayQueueResult> {
   // Close Done Jira work items and merge duplicates before ranking.
   await reconcileJiraWorkItems();
@@ -280,8 +282,12 @@ export async function rebuildTodayQueue(options?: {
       today,
       updatedTaskCount: 0,
     };
-    writeSummary(summary);
-    return { ok: true, summary, updatedTaskCount: 0 };
+    const summaryWrite = await runPlannerSummaryWrite(() =>
+      (options?.summaryWriter ?? writeSummary)(summary)
+    );
+    const diagnostics = summaryWrite.ok ? [] : [summaryWrite.warning];
+    if (!summaryWrite.ok) console.warn(`[sync] ${summaryWrite.warning}`);
+    return { ok: true, summary, updatedTaskCount: 0, diagnostics };
   }
 
   const projectNameById = new Map(projects.map((project) => [project.id, project.name]));
@@ -357,6 +363,7 @@ export async function rebuildTodayQueue(options?: {
       ok: true,
       summary: previousSummary,
       updatedTaskCount: 0,
+      diagnostics: [],
     };
   }
 
@@ -436,11 +443,16 @@ export async function rebuildTodayQueue(options?: {
     updatedTaskCount: updated,
     inputHash,
   };
-  writeSummary(summary);
+  const summaryWrite = await runPlannerSummaryWrite(() =>
+    (options?.summaryWriter ?? writeSummary)(summary)
+  );
+  const diagnostics = summaryWrite.ok ? [] : [summaryWrite.warning];
+  if (!summaryWrite.ok) console.warn(`[sync] ${summaryWrite.warning}`);
 
   return {
     ok: true,
     summary,
     updatedTaskCount: updated,
+    diagnostics,
   };
 }

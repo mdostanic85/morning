@@ -16,12 +16,20 @@ import type { ImportedSourceItem, SyncKnowledgeItem } from "@/lib/connectors/typ
 import { getConnections } from "@/services/connections";
 import { getUserProfile } from "@/services/userProfile";
 import { isSyncRunCancellationRequested } from "@/lib/imports/syncCancellation";
-import { deriveSyncRunCompletionStatus } from "@/lib/imports/syncRunCompletion";
+import {
+  deriveSyncRunCompletionStatus,
+  failurePhaseFromError,
+  failurePhaseFromStepId,
+  rebuildDiagnosticsFromResult,
+  retryTerminalSyncFailureFinalization,
+  runSyncPhase,
+} from "@/lib/imports/syncRunCompletion";
 import {
   cancelSyncProviderRun,
   completeSyncProviderRun,
   failSyncProviderRun,
   finalizeCancelledSyncRun,
+  finalizeFailedSyncRun,
   finalizeSyncRun,
   partialSyncProviderRun,
   startSyncProviderRun,
@@ -44,15 +52,32 @@ export const syncMyDay = inngest.createFunction(
     id: "sync-my-day",
     name: "Sync My Day",
     triggers: [{ event: "worklight/sync.requested" }],
+    onFailure: async ({ event, error }) => {
+      const originalData = event.data.event.data as { syncRunId?: unknown };
+      const syncRunId = Number(originalData?.syncRunId);
+      if (!Number.isFinite(syncRunId)) return;
+
+      const phase = failurePhaseFromError(error);
+      await retryTerminalSyncFailureFinalization(() =>
+        finalizeFailedSyncRun({
+          id: syncRunId,
+          phase,
+        })
+      );
+    },
   },
   async ({ event, step }) => {
     const syncRunId = Number(event.data.syncRunId);
     if (!Number.isFinite(syncRunId)) {
       throw new Error("worklight/sync.requested requires syncRunId.");
     }
+    const runStep = <T>(id: string, operation: () => T | Promise<T>) =>
+      step.run(id, () =>
+        runSyncPhase(failurePhaseFromStepId(id), operation)
+      );
 
     if (
-      await step.run("check-cancelled", async () =>
+      await runStep("check-cancelled", () =>
         finalizeIfCancelled(
           syncRunId,
           "Sync cancelled before processing started. Source data already synced is preserved."
@@ -62,9 +87,9 @@ export const syncMyDay = inngest.createFunction(
       return { syncRunId, status: "cancelled" as const };
     }
 
-    await step.run("approve-pending", () => approveAllPendingExtractions());
+    await runStep("approve-pending", () => approveAllPendingExtractions());
 
-    const connectedProviders = await step.run("resolve-connected-providers", async () => {
+    const connectedProviders = await runStep("resolve-connected-providers", async () => {
       const connections = await getConnections();
       return CONNECTION_PROVIDERS.filter((provider) =>
         connections.some(
@@ -73,12 +98,16 @@ export const syncMyDay = inngest.createFunction(
       ) as ConnectionProvider[];
     });
 
-    let projectDiscovery = await step.run("discover-projects", () =>
+    let projectDiscovery = await runStep("discover-projects", () =>
       discoverProjectsFromSignals(connectedProviders)
     );
 
-    if (await isSyncRunCancellationRequested(syncRunId)) {
-      await step.run("finalize-cancelled-before-providers", async () => {
+    if (
+      await runSyncPhase("check-cancelled", () =>
+        isSyncRunCancellationRequested(syncRunId)
+      )
+    ) {
+      await runStep("finalize-cancelled-before-providers", async () => {
         await finalizeCancelledSyncRun(
           syncRunId,
           "Sync cancelled before provider execution. Source data already synced is preserved."
@@ -117,13 +146,17 @@ export const syncMyDay = inngest.createFunction(
       const waveProviders = wave.filter((provider) => connectedSet.has(provider));
       if (waveProviders.length === 0) continue;
 
-      if (await isSyncRunCancellationRequested(syncRunId)) {
+      if (
+        await runSyncPhase("check-cancelled", () =>
+          isSyncRunCancellationRequested(syncRunId)
+        )
+      ) {
         break;
       }
 
       const waveResults = await Promise.all(
         waveProviders.map((provider) =>
-          step.run(`sync-provider-${provider}`, async () => {
+          runStep(`sync-provider-${provider}`, async () => {
             if (await isSyncRunCancellationRequested(syncRunId)) {
               return {
                 provider,
@@ -253,9 +286,11 @@ export const syncMyDay = inngest.createFunction(
 
     if (
       providerResults.some((entry) => entry.cancelled) ||
-      (await isSyncRunCancellationRequested(syncRunId))
+      (await runSyncPhase("check-cancelled", () =>
+        isSyncRunCancellationRequested(syncRunId)
+      ))
     ) {
-      await step.run("finalize-cancelled-after-providers", async () => {
+      await runStep("finalize-cancelled-after-providers", async () => {
         await finalizeCancelledSyncRun(
           syncRunId,
           "Sync cancelled during provider sync. Source data already synced is preserved."
@@ -266,11 +301,11 @@ export const syncMyDay = inngest.createFunction(
 
     const totalImported = providerResults.reduce((sum, entry) => sum + entry.imported, 0);
 
-    const backfill = await step.run("backfill-sources", () =>
+    const backfill = await runStep("backfill-sources", () =>
       backfillUnextractedSources({ syncRunId })
     );
     if ("cancelled" in backfill && backfill.cancelled) {
-      await step.run("finalize-cancelled-after-backfill", async () => {
+      await runStep("finalize-cancelled-after-backfill", async () => {
         await finalizeCancelledSyncRun(
           syncRunId,
           "Sync cancelled before AI extraction finished. Source data already synced is preserved."
@@ -280,7 +315,7 @@ export const syncMyDay = inngest.createFunction(
     }
 
     if (
-      await step.run("check-cancelled-after-backfill", async () =>
+      await runStep("check-cancelled-after-backfill", () =>
         finalizeIfCancelled(
           syncRunId,
           "Sync cancelled before AI extraction finished. Source data already synced is preserved."
@@ -290,10 +325,10 @@ export const syncMyDay = inngest.createFunction(
       return { syncRunId, status: "cancelled" as const };
     }
 
-    const jiraPending = await step.run("fetch-jira-pending", () => fetchJiraPendingSnapshot());
+    const jiraPending = await runStep("fetch-jira-pending", () => fetchJiraPendingSnapshot());
 
     if (
-      await step.run("check-cancelled-before-rediscover", async () =>
+      await runStep("check-cancelled-before-rediscover", () =>
         finalizeIfCancelled(
           syncRunId,
           "Sync cancelled before project rediscovery. Source data already synced is preserved."
@@ -304,7 +339,7 @@ export const syncMyDay = inngest.createFunction(
     }
 
     if (totalImported > 0 && !connectedProviders.includes("jira")) {
-      const afterImport = await step.run("rediscover-projects", () =>
+      const afterImport = await runStep("rediscover-projects", () =>
         discoverProjectsFromSignals(connectedProviders)
       );
       projectDiscovery = {
@@ -318,7 +353,7 @@ export const syncMyDay = inngest.createFunction(
     }
 
     if (
-      await step.run("check-cancelled-before-rebuild", async () =>
+      await runStep("check-cancelled-before-rebuild", () =>
         finalizeIfCancelled(
           syncRunId,
           "Sync cancelled before task reconciliation. Source data already synced is preserved."
@@ -328,12 +363,14 @@ export const syncMyDay = inngest.createFunction(
       return { syncRunId, status: "cancelled" as const };
     }
 
-    await step.run("import-linked-jira", () => importLinkedJiraEvidence());
+    await runStep("import-linked-jira", () => importLinkedJiraEvidence());
 
-    const rebuild = await step.run("rebuild-queue", () => rebuildTodayQueue({ jiraPending }));
+    const rebuild = await runStep("rebuild-queue", () =>
+      rebuildTodayQueue({ jiraPending })
+    );
 
     if (
-      await step.run("check-cancelled-before-audits", async () =>
+      await runStep("check-cancelled-before-audits", () =>
         finalizeIfCancelled(
           syncRunId,
           "Sync cancelled before artifact audits. Source data already synced is preserved."
@@ -343,18 +380,20 @@ export const syncMyDay = inngest.createFunction(
       return { syncRunId, status: "cancelled" as const };
     }
 
-    const figmaAudits = await step.run("audit-today-figma-work", () =>
+    const figmaAudits = await runStep("audit-today-figma-work", () =>
       runTodayFigmaTaskAudits()
     );
 
-    const briefingResult = await step.run("build-briefing", () => buildTodayBriefing({ jiraPending }));
+    const briefingResult = await runStep("build-briefing", () =>
+      buildTodayBriefing({ jiraPending })
+    );
 
-    const dailyBriefResult = await step.run("build-daily-brief-v2", () =>
+    const dailyBriefResult = await runStep("build-daily-brief-v2", () =>
       buildDailyBriefV2({ jiraPending })
     );
 
     if (
-      await step.run("check-cancelled-before-publication", async () =>
+      await runStep("check-cancelled-before-publication", () =>
         finalizeIfCancelled(
           syncRunId,
           "Sync cancelled before final publication. Source data already synced is preserved."
@@ -364,7 +403,7 @@ export const syncMyDay = inngest.createFunction(
       return { syncRunId, status: "cancelled" as const };
     }
 
-    const postSyncHooks = await step.run("post-sync-hooks", async () => {
+    const postSyncHooks = await runStep("post-sync-hooks", async () => {
       const [jiraDone, profile] = await Promise.all([
         detectJiraDoneNotifications(),
         getUserProfile(),
@@ -377,13 +416,13 @@ export const syncMyDay = inngest.createFunction(
     });
 
     const providerFailures = providerResults.filter((entry) => !entry.ok);
+    const rebuildDiagnostics = rebuildDiagnosticsFromResult(rebuild);
     const errorParts: string[] = [];
     if (providerFailures.length > 0) {
       errorParts.push(
         `${providerFailures.length} provider(s) failed: ${providerFailures.map((entry) => entry.provider).join(", ")}`
       );
     }
-    if (!rebuild.ok) errorParts.push(rebuild.error ?? "Queue rebuild failed.");
     if (figmaAudits.errors.length > 0) {
       errorParts.push(`${figmaAudits.errors.length} Figma audit(s) failed.`);
     }
@@ -391,9 +430,7 @@ export const syncMyDay = inngest.createFunction(
     if (!dailyBriefResult.ok) errorParts.push(dailyBriefResult.error ?? "Daily brief failed.");
 
     const status = deriveSyncRunCompletionStatus({
-      providerCount: providerResults.length,
       failedProviderCount: providerFailures.length,
-      rebuildOk: rebuild.ok,
       briefingOk: briefingResult.ok && dailyBriefResult.ok,
     });
 
@@ -410,7 +447,7 @@ export const syncMyDay = inngest.createFunction(
       myEmail: postSyncHooks.myEmail,
     });
 
-    await step.run("finalize-sync-run", async () => {
+    await runStep("finalize-sync-run", async () => {
       await finalizeSyncRun({
         id: syncRunId,
         status,
@@ -427,7 +464,8 @@ export const syncMyDay = inngest.createFunction(
       failedProviders: providerFailures.length,
       projectDiscoveryOk: projectDiscovery.ok,
       backfillProcessed: "sourcesProcessed" in backfill ? backfill.sourcesProcessed : 0,
-      rebuildOk: rebuild.ok,
+      rebuildOk: true,
+      plannerSummaryCached: rebuildDiagnostics.length === 0,
       figmaAuditsCompleted: figmaAudits.completed,
       briefingOk: briefingResult.ok,
     };

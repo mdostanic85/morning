@@ -17,6 +17,8 @@
     "db:migrate:sqlite-to-postgres": "npm run docker:pg:up && DATABASE_URL=postgresql://worklight:worklight@127.0.0.1:5433/worklight tsx scripts/migrate-sqlite-to-postgres.mts",
     "test:connection-cursors": "tsx --test src/lib/imports/connectionCursorUtils.test.mts src/lib/imports/jiraConnectionCursor.test.mts src/lib/imports/gmailConnectionCursor.test.mts src/lib/imports/resourceConnectionCursor.test.mts",
     "test:sync-run-completion": "tsx --test src/lib/imports/syncRunCompletion.test.mts",
+    "test:p1-3-postgres": "node --env-file-if-exists=.env.local --conditions=react-server --test --import tsx src/services/syncRuns.p1-3.test.ts",
+    "test:p1-3": "npm run test:sync-run-completion && npm run test:p1-3-postgres && npm run test:sync-provider-status",
     "test:sync-provider-status": "tsx --test src/lib/imports/syncProvider.test.mts",
     "test:redact": "tsx --test src/lib/llm/redact.test.mts",
     "test:source-content-hash": "tsx --test src/lib/imports/sourceContentHash.test.mts",
