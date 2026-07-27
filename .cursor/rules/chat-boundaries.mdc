@@ -1,0 +1,79 @@
+---
+description: Detect when the current task should move to a fresh chat
+alwaysApply: true
+---
+
+# Chat boundary policy
+
+Continuously evaluate whether the current work still belongs in this chat.
+
+Keep working in the current chat when:
+
+- the goal is unchanged;
+- changes belong to the same implementation phase;
+- you are fixing review findings for the same phase;
+- the same files, acceptance criteria, and root cause remain relevant.
+
+Recommend a NEW CHAT when any of these becomes true:
+
+1. The current implementation phase is complete.
+2. The user moves from implementation to independent review.
+3. The user moves from review to a different implementation phase.
+4. The new request addresses a different root cause.
+5. The required production file scope materially changes.
+6. The new task has independent acceptance criteria and could be reverted separately.
+7. Earlier instructions conflict with the current task.
+8. The conversation contains substantial completed work no longer needed for the next task.
+9. The next task can be completed using a small self-contained handoff instead of the full conversation.
+10. Chat summarization or compaction has occurred and exact implementation details may have been lost.
+
+Do not recommend a new chat merely because:
+
+- one test failed;
+- a small correction is needed;
+- the user provides review feedback for the current phase;
+- additional directly relevant files must be inspected;
+- the current phase is still unfinished.
+
+When a new chat is recommended:
+
+1. Stop before beginning the new phase.
+2. Do not modify files for the new phase.
+3. Output exactly:
+
+NEW CHAT RECOMMENDED
+
+Reason:
+<one concise explanation>
+
+Next task:
+<one-sentence goal>
+
+Required attachments:
+<only the files or reports needed>
+
+Required repository state:
+<branch, commit, or uncommitted diff requirements>
+
+Starter prompt:
+<a self-contained prompt for the new chat>
+
+4. Create or update:
+
+docs/agent-handoffs/next-chat.md
+
+The handoff must contain only:
+
+- completed work;
+- current repository state;
+- unresolved verified issues;
+- relevant changed files;
+- test results;
+- exact next task;
+- scope exclusions;
+- acceptance criteria;
+- required input documents.
+
+Do not copy the entire conversation.
+Do not include obsolete prompts or rejected findings.
+Do not begin the next task in the current chat.
