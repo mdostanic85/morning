@@ -25,6 +25,7 @@ describe("detectJiraDoneVsOpenTaskConflicts (WL-06)", () => {
     const conflicts = detectJiraDoneVsOpenTaskConflicts({
       tasks: [
         {
+          id: 1,
           status: "next",
           title: "Finish UATL-367 review",
           evidence: [{ sourceItemId: 10 }, { sourceItemId: 11 }],
@@ -41,6 +42,7 @@ describe("detectJiraDoneVsOpenTaskConflicts (WL-06)", () => {
     const conflicts = detectJiraDoneVsOpenTaskConflicts({
       tasks: [
         {
+          id: 2,
           status: "waiting",
           title: "UATL-367 · Convert file manager to Canvas",
           evidence: [{ sourceItemId: 99 }],
@@ -54,7 +56,7 @@ describe("detectJiraDoneVsOpenTaskConflicts (WL-06)", () => {
   it("does not flag a conflict when the citing task is itself already done", () => {
     const conflicts = detectJiraDoneVsOpenTaskConflicts({
       tasks: [
-        { status: "done", title: "UATL-367 wrap-up", evidence: [{ sourceItemId: 10 }] },
+        { id: 3, status: "done", title: "UATL-367 wrap-up", evidence: [{ sourceItemId: 10 }] },
       ],
       sources: [jiraDoneSource(10, "UATL-367")],
     });
@@ -64,7 +66,7 @@ describe("detectJiraDoneVsOpenTaskConflicts (WL-06)", () => {
   it("does not flag a conflict for a Jira source that is not Done", () => {
     const conflicts = detectJiraDoneVsOpenTaskConflicts({
       tasks: [
-        { status: "next", title: "UATL-500 follow-up", evidence: [{ sourceItemId: 20 }] },
+        { id: 4, status: "next", title: "UATL-500 follow-up", evidence: [{ sourceItemId: 20 }] },
       ],
       sources: [jiraOpenSource(20, "UATL-500")],
     });
@@ -80,6 +82,7 @@ describe("detectJiraDoneVsOpenTaskConflicts (WL-06)", () => {
     const unrelatedDoneTicket = jiraDoneSource(30, "UATL-999");
 
     const conflictedTask: ConflictCandidateTask = {
+      id: 5,
       status: "next",
       title: "Finish UATL-367 review",
       evidence: [{ sourceItemId: 10 }, { sourceItemId: 11 }],
@@ -87,6 +90,7 @@ describe("detectJiraDoneVsOpenTaskConflicts (WL-06)", () => {
     // A task from a completely different meeting/topic — must never be
     // treated as evidence for UATL-999's (non-existent) conflict.
     const unrelatedMeetingTask: ConflictCandidateTask = {
+      id: 6,
       status: "next",
       title: "Prep Q3 roadmap deck",
       evidence: [{ sourceItemId: 42 }],
@@ -106,7 +110,7 @@ describe("detectJiraDoneVsOpenTaskConflicts (WL-06)", () => {
 
   it("is deterministic and order-independent for the source list", () => {
     const tasks: ConflictCandidateTask[] = [
-      { status: "next", title: "Finish A review", evidence: [{ sourceItemId: 1 }] },
+      { id: 7, status: "next", title: "Finish A review", evidence: [{ sourceItemId: 1 }] },
     ];
     const sources = [jiraDoneSource(1, "A-1"), jiraOpenSource(2, "B-2")];
     const a = detectJiraDoneVsOpenTaskConflicts({ tasks, sources });

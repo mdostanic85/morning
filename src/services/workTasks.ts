@@ -17,6 +17,7 @@ import type { SyncReviewReport } from "@/domain/syncReviewReport";
 import { findTaskIdByJiraKey } from "@/lib/tasks/resolveFocusTask";
 import { jiraKeyForTask } from "@/lib/tasks/transcriptTaskMerge";
 import { isQuoteRelevantToTask, taskDomainText } from "@/lib/tasks/evidenceRelevance";
+import { isRejectedOwnership } from "@/lib/tasks/ownershipDecision";
 import { toEvidence } from "./evidence";
 import { getSourceItemByExternalId, getSourceItemsByIds, searchSourceItems } from "./sourceItems";
 
@@ -43,6 +44,7 @@ function toWorkTask(row: typeof workTasksTable.$inferSelect): WorkTask {
     githubRepo: row.githubRepo,
     workContext: row.workContext,
     canonicalKey: row.canonicalKey ?? null,
+    ownershipDecision: (row.ownershipDecision as WorkTask["ownershipDecision"] | null) ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -199,6 +201,7 @@ function insertWorkTaskRow(tx: DbOrTransaction, input: NewWorkTask): WorkTask {
     reviewStatus: input.reviewStatus ?? "approved",
     statusManuallySet: input.statusManuallySet ?? false,
     canonicalKey: input.canonicalKey ?? null,
+    ownershipDecision: input.ownershipDecision ?? null,
   }).returning();
   const rows = syncAll(returning);
   const [row] = rows;
@@ -231,6 +234,7 @@ export async function createWorkTask(input: NewWorkTask): Promise<WorkTask> {
         reviewStatus: input.reviewStatus ?? "approved",
         statusManuallySet: input.statusManuallySet ?? false,
         canonicalKey: input.canonicalKey ?? null,
+        ownershipDecision: input.ownershipDecision ?? null,
       })
       .returning()
   );
@@ -282,6 +286,7 @@ export async function createWorkTaskWithEvidence(
         reviewStatus: effectiveInput.reviewStatus ?? "approved",
         statusManuallySet: effectiveInput.statusManuallySet ?? false,
         canonicalKey: effectiveInput.canonicalKey ?? null,
+        ownershipDecision: effectiveInput.ownershipDecision ?? null,
       }).returning();
       const task = toWorkTask(taskRow);
       const evidenceRows = await Promise.all(
@@ -341,6 +346,7 @@ export async function getTodayQueue(): Promise<Record<WorkTaskStatus, WorkTaskWi
   grouped.done = [];
 
   for (const task of withEvidence) {
+    if (isRejectedOwnership(task)) continue;
     grouped[task.status].push(task);
   }
 

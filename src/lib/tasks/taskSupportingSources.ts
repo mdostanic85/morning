@@ -168,6 +168,7 @@ export function pickActionSnippet(quotes: string[], actionText: string): string 
 }
 
 interface TaskLike {
+  id: number;
   title: string;
   status: string;
   reason: string;
@@ -288,6 +289,7 @@ export function buildTaskSupportingSources(input: {
   const detected = detectJiraDoneVsOpenTaskConflicts({
     tasks: [
       {
+        id: task.id,
         status: task.status,
         title: task.title,
         evidence: groups.map((g) => ({ sourceItemId: g.sourceItemId })),

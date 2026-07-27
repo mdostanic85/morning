@@ -28,6 +28,7 @@ import {
   type WorkTaskWithEvidence,
 } from "@/services/workTasks";
 import { getLatestDailyMemory } from "@/services/dailyMemories";
+import { isRejectedOwnership } from "@/lib/tasks/ownershipDecision";
 import { planJiraAnchorEvidenceAdoption } from "@/lib/tasks/jiraAnchorEvidence";
 import { createEvidence } from "@/services/evidence";
 import {
@@ -272,7 +273,7 @@ export async function rebuildTodayQueue(options?: {
   // Tasks the user manually triaged (Start/Snooze/Waiting/Not mine) and tasks
   // sitting in "unclear" are not re-planned — only the user resolves those.
   // They keep their status; the planner only ranks the rest.
-  const allOpen = flattenQueue(queue);
+  const allOpen = flattenQueue(queue).filter((task) => !isRejectedOwnership(task));
   const tasks = allOpen.filter(
     (task) =>
       !task.statusManuallySet &&

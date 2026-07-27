@@ -1,5 +1,6 @@
-import type { WorkTaskStatus } from "@/domain/workTask";
+import type { OwnershipDecision, WorkTaskStatus } from "@/domain/workTask";
 import { OPEN_QUEUE_STATUSES } from "@/domain/workTask";
+import { isConfirmedOwnership, isRejectedOwnership } from "@/lib/tasks/ownershipDecision";
 import type { WorkTaskWithEvidence } from "@/services/workTasks";
 import type { StoredTodayBriefing } from "@/lib/llm/prompts/todayBriefing";
 import { parseJiraBodyFields } from "@/lib/connectors/jiraText";
@@ -138,6 +139,7 @@ export type TaskOwnershipSignals = {
   nextAction?: string | null;
   /** Jira assignee when the task is backed by a Jira issue. */
   jiraAssignee?: string | null;
+  ownershipDecision?: OwnershipDecision | null;
 };
 
 /**
@@ -209,7 +211,10 @@ export function classifyTaskOwnership(
   task: TaskOwnershipSignals,
   myName: string | null
 ): TaskOwnershipClass {
-  // An explicit "Not mine" decision by the user overrides every other signal.
+  // Durable user decisions beat every heuristic, including legacy reason notes.
+  if (isRejectedOwnership(task)) return "other";
+  if (isConfirmedOwnership(task)) return "mine";
+  // Legacy "Not mine" note still wins when ownershipDecision is unset.
   if (isMarkedNotMine(task.reason)) return "other";
   if (!myName?.trim()) return "unclear";
 
@@ -243,6 +248,8 @@ export function taskEligibleForBriefPriority(
   task: TaskOwnershipSignals,
   myName: string | null
 ): boolean {
+  if (isRejectedOwnership(task)) return false;
+  if (isConfirmedOwnership(task)) return true;
   return classifyTaskOwnership(task, myName) === "mine";
 }
 

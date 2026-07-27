@@ -53,6 +53,7 @@ describe("buildTaskSupportingSources", () => {
 
     const result = buildTaskSupportingSources({
       task: {
+        id: 487,
         title: "UATL-380 · Design Part Search Banner",
         status: "now",
         reason: "Design a unified search banner shown across every module.",
@@ -94,6 +95,7 @@ describe("buildTaskSupportingSources", () => {
 
     const result = buildTaskSupportingSources({
       task: {
+        id: 487,
         title: "UATL-367 · Convert file manager to Canvas",
         status: "next",
         reason: "Convert the file manager screen to the Canvas layout.",
@@ -120,6 +122,7 @@ describe("buildTaskSupportingSources", () => {
 
     const result = buildTaskSupportingSources({
       task: {
+        id: 487,
         title: "UATL-380 · Design Part Search Banner",
         status: "now",
         reason: "Design the part search banner.",
@@ -172,6 +175,7 @@ describe("buildTaskSupportingSources", () => {
 
     const result = buildTaskSupportingSources({
       task: {
+        id: 487,
         title: "UATL-380 · Design Part Search Banner",
         status: "now",
         reason: "Design a unified search banner shown across every module.",
@@ -229,6 +233,7 @@ describe("buildTaskSupportingSources", () => {
 
     const result = buildTaskSupportingSources({
       task: {
+        id: 487,
         title: "UATL-380 · Design Part Search Banner",
         status: "now",
         reason: "Design a unified search banner shown across every module.",
@@ -273,6 +278,7 @@ describe("buildTaskSupportingSources", () => {
 
     const result = buildTaskSupportingSources({
       task: {
+        id: 487,
         title: "Design Part Search Banner",
         status: "now",
         reason: "The banner is needed across modules.",

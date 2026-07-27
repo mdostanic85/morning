@@ -1,35 +1,19 @@
 import { NextResponse } from "next/server";
 import { getWorkTaskById, updateWorkTask } from "@/services/workTasks";
 import { getUserProfile } from "@/services/userProfile";
-import { NOT_MINE_NOTE } from "@/lib/filters/ownerFilter";
-import type { WorkTaskPatch, WorkTaskStatus } from "@/domain/workTask";
+import type { ConflictResolutionDecision, WorkTaskPatch, WorkTaskStatus } from "@/domain/workTask";
+import { CONFLICT_RESOLUTION_DECISIONS } from "@/domain/workTask";
+import { upsertTaskConflictDecision } from "@/services/taskConflictDecisions";
 
 const ACTION_TO_STATUS: Record<string, WorkTaskStatus> = {
   start: "now",
-  // "This is mine" — confirmed ownership queues the task as up-next.
+  // Legacy "This is mine" control — kept for current UI; also sets durable ownership.
   mine: "next",
   done: "done",
   snooze: "tomorrow",
   skip: "later",
   waiting: "waiting",
-  not_mine: "unclear",
 };
-
-function noteNotMine(reason: string): string {
-  return reason.includes(NOT_MINE_NOTE) ? reason : `${reason} (${NOT_MINE_NOTE})`;
-}
-
-/** Undo a prior "Not mine" note when the user reclaims the task. */
-function stripNotMine(reason: string): string {
-  return reason
-    .split(`(${NOT_MINE_NOTE})`)
-    .join("")
-    .split(NOT_MINE_NOTE)
-    .join("")
-    .replace(/\(\s*\)/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
 
 export async function PATCH(
   request: Request,
@@ -44,36 +28,81 @@ export async function PATCH(
 
   const body = await request.json();
   const action = typeof body?.action === "string" ? body.action : "";
-  const nextStatus = ACTION_TO_STATUS[action];
-
-  if (!nextStatus) {
-    return NextResponse.json({ error: "Unsupported task action." }, { status: 400 });
-  }
 
   const existing = await getWorkTaskById(taskId);
   if (!existing) {
     return NextResponse.json({ error: "Task not found." }, { status: 404 });
   }
 
+  if (action === "confirm_mine" || action === "mine") {
+    const profile = await getUserProfile();
+    const myName = profile?.name?.trim() || null;
+    const task = await updateWorkTask(taskId, {
+      ownershipDecision: "confirmed_mine",
+      statusManuallySet: true,
+      status: action === "mine" || existing.status === "unclear" ? "next" : existing.status,
+      waitingOn: null,
+      ...(myName ? { owner: myName } : {}),
+    });
+    return NextResponse.json({ task });
+  }
+
+  if (action === "not_mine") {
+    const task = await updateWorkTask(taskId, {
+      ownershipDecision: "rejected_not_mine",
+      statusManuallySet: true,
+      waitingOn: null,
+    });
+    return NextResponse.json({ task });
+  }
+
+  if (action === "undo_ownership") {
+    const task = await updateWorkTask(taskId, {
+      ownershipDecision: null,
+      status: "unclear",
+      statusManuallySet: false,
+    });
+    return NextResponse.json({ task });
+  }
+
+  if (action === "resolve_conflict") {
+    const decision = body?.decision;
+    const summary = typeof body?.summary === "string" ? body.summary.trim() : "";
+    const evidenceSourceItemIds = Array.isArray(body?.evidenceSourceItemIds)
+      ? body.evidenceSourceItemIds.filter((value: unknown) => Number.isInteger(value))
+      : [];
+
+    if (
+      !summary ||
+      !CONFLICT_RESOLUTION_DECISIONS.includes(decision as ConflictResolutionDecision)
+    ) {
+      return NextResponse.json({ error: "Unsupported conflict decision." }, { status: 400 });
+    }
+
+    const stored = await upsertTaskConflictDecision({
+      taskId,
+      summary,
+      decision: decision as ConflictResolutionDecision,
+      evidenceSourceItemIds,
+    });
+
+    let taskPatch: WorkTaskPatch | null = null;
+    if (decision === "mark_done_locally") {
+      taskPatch = { status: "done", statusManuallySet: true };
+    }
+
+    const task = taskPatch ? await updateWorkTask(taskId, taskPatch) : existing;
+    return NextResponse.json({ task, conflictDecision: stored });
+  }
+
+  const nextStatus = ACTION_TO_STATUS[action];
+  if (!nextStatus) {
+    return NextResponse.json({ error: "Unsupported task action." }, { status: 400 });
+  }
+
   // A user click is an explicit triage decision — the priority planner must
   // never overwrite it on the next rebuild.
   const patch: WorkTaskPatch = { status: nextStatus, statusManuallySet: true };
-
-  if (action === "not_mine") {
-    patch.reason = noteNotMine(existing.reason);
-    patch.waitingOn = null;
-  }
-
-  if (action === "mine") {
-    // Confirming ownership sets the user as owner so the classifier reads it
-    // as "mine" everywhere, clears any waiting/blocked state, and undoes a
-    // prior "Not mine" decision.
-    const profile = await getUserProfile();
-    const myName = profile?.name?.trim() || null;
-    if (myName) patch.owner = myName;
-    patch.waitingOn = null;
-    patch.reason = stripNotMine(existing.reason);
-  }
 
   if (action === "waiting" && !existing.waitingOn) {
     patch.waitingOn = "Manual follow-up needed";

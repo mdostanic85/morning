@@ -21,6 +21,7 @@ export interface ConflictCandidateSource {
 }
 
 export interface ConflictCandidateTask {
+  id: number;
   status: string;
   title: string;
   evidence: { sourceItemId: number }[];
@@ -29,6 +30,7 @@ export interface ConflictCandidateTask {
 export interface DetectedSourceConflict {
   summary: string;
   evidenceIds: number[];
+  taskId: number | null;
 }
 
 /**
@@ -69,6 +71,7 @@ export function detectJiraDoneVsOpenTaskConflicts(input: {
     conflicts.push({
       summary: `Transcript still treats ${key} work as open while Jira is Done`,
       evidenceIds: [...new Set([source.id, ...citedEvidenceIds])],
+      taskId: tasksCitingThisTicket[0]?.id ?? null,
     });
   }
 
