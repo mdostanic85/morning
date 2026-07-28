@@ -99,7 +99,7 @@ export const DEFAULT_HYDRA_CONFIG = {
   jiraProject: "UATL",
   assignee: "Milos Dostanic",
   timezone: "Europe/Belgrade",
-  stakeholders: ["Matt", "Lucas"],
+  stakeholders: ["Matt Pettit", "Lucas Saeed"],
   sourcePriority: [...HYDRA_SOURCE_PRIORITY],
   reportSections: [
     "today_first",

@@ -88,12 +88,32 @@ function everyObjectFieldIsRequired(node: unknown): boolean {
   return Object.values(record).every(everyObjectFieldIsRequired);
 }
 
+/**
+ * Groq only accepts `response_format: json_schema` on a subset of models
+ * (the GPT-OSS family). Others — notably the Qwen 3.x vision model used for
+ * Figma delivery audits — return a hard 400 for `json_schema` and must use
+ * `json_object`. Sending the wrong format silently kills the whole job, so we
+ * gate schema mode per model rather than per provider.
+ */
+export function groqModelSupportsJsonSchema(model: string): boolean {
+  return /gpt-oss/i.test(model);
+}
+
+/** Groq "thinking" models (Qwen 3.x) emit <think> traces; suppress them so the body is pure JSON. */
+export function isGroqReasoningModel(provider: Provider, model: string): boolean {
+  return provider === "groq" && /qwen3/i.test(model);
+}
+
 function responseFormat(
   config: OpenAiCompatibleConfig,
   request: CompletionRequest
 ): Record<string, unknown> | null {
   if (config.jsonMode === false) return null;
-  if (config.structuredOutputs && request.responseJsonSchema) {
+  const schemaMode =
+    config.provider === "groq"
+      ? groqModelSupportsJsonSchema(request.model)
+      : true;
+  if (config.structuredOutputs && schemaMode && request.responseJsonSchema) {
     return {
       type: "json_schema",
       json_schema: {
@@ -145,6 +165,11 @@ export function buildOpenAiCompatibleRequestBody(
     ...(format ? { response_format: format } : {}),
     ...(config.reasoningEffort
       ? { reasoning_effort: config.reasoningEffort }
+      : {}),
+    // Keep reasoning out of the returned content for Groq thinking models so
+    // JSON parsing/validation sees only the answer, not the <think> trace.
+    ...(isGroqReasoningModel(config.provider, request.model)
+      ? { reasoning_format: "hidden" }
       : {}),
   };
 }

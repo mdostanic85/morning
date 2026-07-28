@@ -2,6 +2,11 @@ import type { HydraReport, HydraActionItem, SourceStatus } from "@/domain/hydraR
 import type { HydraEvidence } from "@/services/hydra";
 import type { WorkTaskWithEvidence } from "@/services/workTasks";
 import { isTranscriptSource } from "@/lib/tasks/sourceAuthority";
+import {
+  effectiveStakeholderPeople,
+  matchesStakeholder,
+  stakeholderLabel,
+} from "@/lib/tasks/highAuthorityPeople";
 
 const DAY_MS = 86_400_000;
 const BLOCKER_PATTERN = /\b(blocked|blocker|waiting on|cannot proceed|can't proceed|needs? decision|čeka|blokiran)\b/i;
@@ -35,7 +40,8 @@ export function scoreHydraEvidence(input: {
 }): { score: number; reasons: string[] } {
   const { item } = input;
   const now = input.now ?? new Date();
-  const stakeholders = input.stakeholders ?? ["Matt", "Lucas"];
+  const configuredStakeholders = input.stakeholders ?? ["Matt Pettit", "Lucas Saeed"];
+  const stakeholderPeople = effectiveStakeholderPeople(configuredStakeholders);
   const haystack = `${item.title}\n${item.content}`;
   const author = item.author ?? "";
   const reasons: string[] = [];
@@ -49,9 +55,9 @@ export function scoreHydraEvidence(input: {
     score += 30;
     reasons.push("Names the current user");
   }
-  if (stakeholders.some((name) => author.toLowerCase().includes(name.toLowerCase()))) {
+  if (matchesStakeholder(author, stakeholderPeople, { authorField: true })) {
     score += 80;
-    reasons.push("Instruction from Matt or Lucas");
+    reasons.push(`Instruction from ${stakeholderLabel(stakeholderPeople)}`);
   }
   // Meeting transcripts carry equal authority regardless of provider: Granola
   // and Gemini (Gmail/Drive) notes are the same tier of "action instruction"

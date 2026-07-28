@@ -257,10 +257,16 @@ const discordConnector: Connector = {
 
 const figmaConnector: Connector = {
   provider: "figma",
-  configError: ({ projects }) =>
-    unique(projects.flatMap((project) => project.figmaFileKeys)).length === 0
-      ? "Add Figma file keys in Project settings before syncing."
-      : null,
+  // configError is intentionally lenient: even with no project figmaFileKeys
+  // configured, Sync My Day may discover keys from Jira/transcript sources.
+  // We only block when there is genuinely no Figma connection at all.
+  configError: async () => {
+    const connection = await getConnectionByProvider("figma");
+    if (!connection || connection.status !== "connected") {
+      return "Connect Figma in Settings before syncing.";
+    }
+    return null;
+  },
   listItems: async ({ projects }) => {
     const connection = await getConnectionByProvider("figma");
     if (!connection || connection.status !== "connected") return [];

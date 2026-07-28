@@ -2,12 +2,12 @@
  * task-detail-ux-audit F3: "how do I know it's done" must be answerable on
  * the task detail page without opening the corrections page.
  *
- * A `VerificationReport` does not store a structural link from `matches` /
- * `missing` back to a specific done-criterion index — those arrays are
- * free-text lines written by the verify job, not per-criterion ids. Rather
- * than inventing a new stored link (a schema change out of scope here) or
- * claiming a verdict we can't ground, this is a conservative, purely
- * client-side word-overlap heuristic in the same spirit as
+ * A `VerificationReport` / `SyncReviewReport` does not store a structural
+ * link from matches/missing (or ok/notOk) back to a specific done-criterion
+ * index — those arrays are free-text lines written by the verify/sync jobs,
+ * not per-criterion ids. Rather than inventing a new stored link (a schema
+ * change out of scope here) or claiming a verdict we can't ground, this is a
+ * conservative word-overlap heuristic in the same spirit as
  * `evidenceVerification.ts`'s lenient substring check: it only ever reports
  * "met" or "missing" when a report line shares most of the criterion's
  * significant words, and defaults to "not_checked" otherwise. Treat the
@@ -17,9 +17,19 @@
 
 import { normalizeForMatch } from "./evidenceVerification";
 import type { VerificationReport } from "@/domain/verificationReport";
+import type { SyncReviewReport } from "@/domain/syncReviewReport";
 
 export const CRITERION_VERDICTS = ["met", "missing", "not_checked"] as const;
 export type CriterionVerdict = (typeof CRITERION_VERDICTS)[number];
+
+export type CriterionCheckSource = "verification" | "sync_review" | null;
+
+export interface CriterionCheckResult {
+  verdict: CriterionVerdict;
+  /** Free-text report line that drove the verdict, when any. */
+  detail: string | null;
+  source: CriterionCheckSource;
+}
 
 /** Below this many shared significant words, don't bother scoring — avoids matching on one common word. */
 const MIN_SHARED_WORDS = 2;
@@ -51,13 +61,57 @@ function overlapRatio(criterionWords: Set<string>, candidateWords: Set<string>):
   return shared / criterionWords.size;
 }
 
-function bestOverlap(criterionWords: Set<string>, candidateLines: string[]): number {
-  let best = 0;
+function bestOverlapLine(
+  criterionWords: Set<string>,
+  candidateLines: string[]
+): { score: number; line: string | null } {
+  let bestScore = 0;
+  let bestLine: string | null = null;
   for (const line of candidateLines) {
     const score = overlapRatio(criterionWords, significantWords(line));
-    if (score > best) best = score;
+    if (score > bestScore) {
+      bestScore = score;
+      bestLine = line;
+    }
   }
-  return best;
+  return { score: bestScore, line: bestLine };
+}
+
+/** Explicit "Outcome N:" / "Outcome N -" prefix from sync/verify report lines. */
+function lineForOutcomeIndex(lines: string[], index: number): string | null {
+  const n = index + 1;
+  const prefix = new RegExp(`^\\s*outcome\\s*${n}\\s*[:.\\-)–—]\\s*`, "i");
+  return lines.find((line) => prefix.test(line)) ?? null;
+}
+
+function matchAgainstLines(
+  doneCriteria: string[],
+  metLines: string[],
+  missingLines: string[],
+  source: Exclude<CriterionCheckSource, null>
+): CriterionCheckResult[] {
+  return doneCriteria.map((criterion, index) => {
+    const numberedMet = lineForOutcomeIndex(metLines, index);
+    const numberedMissing = lineForOutcomeIndex(missingLines, index);
+    if (numberedMet) {
+      return { verdict: "met", detail: numberedMet, source };
+    }
+    if (numberedMissing) {
+      return { verdict: "missing", detail: numberedMissing, source };
+    }
+
+    const criterionWords = significantWords(criterion);
+    const met = bestOverlapLine(criterionWords, metLines);
+    const missing = bestOverlapLine(criterionWords, missingLines);
+
+    if (met.score >= MATCH_THRESHOLD && met.score >= missing.score) {
+      return { verdict: "met", detail: met.line, source };
+    }
+    if (missing.score >= MATCH_THRESHOLD) {
+      return { verdict: "missing", detail: missing.line, source };
+    }
+    return { verdict: "not_checked", detail: null, source: null };
+  });
 }
 
 /**
@@ -69,21 +123,57 @@ export function matchCriteriaToVerificationReport(
   doneCriteria: string[],
   report: Pick<VerificationReport, "matches" | "missing"> | null | undefined
 ): CriterionVerdict[] {
-  if (!report) return doneCriteria.map(() => "not_checked");
+  return matchCriteriaToDeliveryChecks(doneCriteria, { verification: report }).map(
+    (result) => result.verdict
+  );
+}
 
-  return doneCriteria.map((criterion) => {
-    const criterionWords = significantWords(criterion);
-    const metScore = bestOverlap(criterionWords, report.matches);
-    const missingScore = bestOverlap(criterionWords, report.missing);
+/**
+ * Prefer the delivery verification report; fall back to sync-review ok/notOk
+ * when verification has not classified a criterion. Returns one rich result
+ * per done criterion (verdict + the report line that grounded it).
+ */
+export function matchCriteriaToDeliveryChecks(
+  doneCriteria: string[],
+  reports: {
+    verification?: Pick<VerificationReport, "matches" | "missing"> | null;
+    syncReview?: Pick<SyncReviewReport, "ok" | "notOk"> | null;
+  }
+): CriterionCheckResult[] {
+  if (doneCriteria.length === 0) return [];
 
-    if (metScore >= MATCH_THRESHOLD && metScore >= missingScore) return "met";
-    if (missingScore >= MATCH_THRESHOLD) return "missing";
-    return "not_checked";
+  const fromVerification = reports.verification
+    ? matchAgainstLines(
+        doneCriteria,
+        reports.verification.matches,
+        reports.verification.missing,
+        "verification"
+      )
+    : doneCriteria.map(
+        (): CriterionCheckResult => ({
+          verdict: "not_checked",
+          detail: null,
+          source: null,
+        })
+      );
+
+  if (!reports.syncReview) return fromVerification;
+
+  const fromSync = matchAgainstLines(
+    doneCriteria,
+    reports.syncReview.ok,
+    reports.syncReview.notOk,
+    "sync_review"
+  );
+
+  return fromVerification.map((result, index) => {
+    if (result.verdict !== "not_checked") return result;
+    return fromSync[index] ?? result;
   });
 }
 
 export const CRITERION_VERDICT_LABEL: Record<CriterionVerdict, string> = {
-  met: "Met",
-  missing: "Missing",
-  not_checked: "Not checked",
+  met: "Checked by sync",
+  missing: "Still missing",
+  not_checked: "Not checked yet",
 };

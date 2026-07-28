@@ -110,3 +110,68 @@ test("local endpoints can disable JSON response_format entirely", () => {
 
   assert.equal("response_format" in body, false);
 });
+
+test("Groq Qwen vision model uses json_object, not json_schema", () => {
+  const body = buildOpenAiCompatibleRequestBody(
+    {
+      provider: "groq",
+      chatCompletionsUrl: "https://example.test/chat/completions",
+      label: "Groq",
+      structuredOutputs: true,
+    },
+    {
+      ...baseRequest,
+      model: "qwen/qwen3.6-27b",
+      responseJsonSchema: {
+        type: "object",
+        properties: { summary: { type: "string" } },
+        required: ["summary"],
+        additionalProperties: false,
+      },
+    }
+  );
+
+  assert.deepEqual(body.response_format, { type: "json_object" });
+  // Qwen is a thinking model — reasoning must be hidden so JSON parses cleanly.
+  assert.equal(body.reasoning_format, "hidden");
+});
+
+test("Groq gpt-oss keeps json_schema and no reasoning_format", () => {
+  const body = buildOpenAiCompatibleRequestBody(
+    {
+      provider: "groq",
+      chatCompletionsUrl: "https://example.test/chat/completions",
+      label: "Groq",
+      structuredOutputs: true,
+    },
+    {
+      ...baseRequest,
+      model: "openai/gpt-oss-120b",
+      responseJsonSchema: {
+        type: "object",
+        properties: { summary: { type: "string" } },
+        required: ["summary"],
+        additionalProperties: false,
+      },
+    }
+  );
+
+  const format = body.response_format as { type: string };
+  assert.equal(format.type, "json_schema");
+  assert.equal("reasoning_format" in body, false);
+});
+
+test("Anthropic user content includes image blocks when urls are present", async () => {
+  const { buildAnthropicUserContent } = await import("./anthropic");
+  assert.equal(buildAnthropicUserContent({ userPrompt: "hello" }), "hello");
+  assert.deepEqual(
+    buildAnthropicUserContent({
+      userPrompt: "audit this",
+      imageUrls: ["https://example.com/a.png"],
+    }),
+    [
+      { type: "text", text: "audit this" },
+      { type: "image", source: { type: "url", url: "https://example.com/a.png" } },
+    ]
+  );
+});

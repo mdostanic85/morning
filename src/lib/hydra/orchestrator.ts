@@ -38,6 +38,7 @@ import {
 } from "@/services/hydra";
 import {
   hydraReportSchema,
+  DEFAULT_HYDRA_CONFIG,
   type HydraReport,
   type SourceStatus,
 } from "@/domain/hydraReport";
@@ -446,7 +447,7 @@ export async function executeHydraRun(runId: number) {
     const profile = await getUserProfile();
     const stakeholders = Array.isArray(setup.task.config?.stakeholders)
       ? setup.task.config.stakeholders.filter((value): value is string => typeof value === "string")
-      : ["Matt", "Lucas"];
+      : [...DEFAULT_HYDRA_CONFIG.stakeholders];
     await phase("ranking", async () => {
       for (const item of evidence) {
         const scored = scoreHydraEvidence({

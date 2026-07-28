@@ -32,7 +32,7 @@ export const FIGMA_FRAME_DISCOVERY_SYSTEM_PROMPT = buildStrictSystemPrompt({
   role: `You locate the exact Figma frame that corresponds to one work task. You receive the task's latest requirements and read-only outlines of candidate Figma files.`,
   jobInstructions: `
 - Match the task to one specific frame, section, component, or page node only when names, visible copy, and structure provide concrete evidence that it is the artifact for this work.
-- Treat requirements using this authority order: Confluence/PRD baseline, Jira operational state, then meeting transcripts for the current action. The newest dated explicit instruction wins; a direct Matt or Lucas transcript instruction outranks conflicting non-stakeholder wording.
+- Treat requirements using this authority order: Confluence/PRD baseline, Jira operational state, then meeting transcripts for the current action. The newest dated explicit instruction wins; a direct Matt Pettit (Product Manager) or Lucas Saeed (Design Team Lead) transcript instruction outranks conflicting non-stakeholder wording.
 - Ignore task evidence more than 5 days older than the newest evidence for that task.
 - Return "matched": false when the outlines do not contain a defensible task-specific match. Never select a generic dashboard, cover page, or similarly named node just to produce an answer.
 - When matched, copy fileKey and nodeId exactly from the supplied candidate outline. Never invent or normalize an id yourself.

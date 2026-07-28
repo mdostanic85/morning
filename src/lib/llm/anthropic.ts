@@ -11,6 +11,10 @@ interface AnthropicMessage {
   error?: { message?: string };
 }
 
+type AnthropicContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; source: { type: "url"; url: string } };
+
 /**
  * Thin adapter over Anthropic's Messages API. Uses plain `fetch` rather than
  * `@anthropic-ai/sdk` to keep this module small and easy to swap — all
@@ -22,6 +26,24 @@ interface AnthropicMessage {
  */
 const JSON_MODE_SUFFIX =
   "\n\nRespond with ONLY valid JSON — no markdown fences, no commentary, no text before or after the JSON object.";
+
+/** Exported for contract tests — mirrors the Messages API user content shape. */
+export function buildAnthropicUserContent(
+  request: Pick<CompletionRequest, "userPrompt" | "imageUrls">
+): string | AnthropicContentBlock[] {
+  if (!request.imageUrls || request.imageUrls.length === 0) {
+    return request.userPrompt;
+  }
+  return [
+    { type: "text", text: request.userPrompt },
+    ...request.imageUrls.map(
+      (url): AnthropicContentBlock => ({
+        type: "image",
+        source: { type: "url", url },
+      })
+    ),
+  ];
+}
 
 async function complete(request: CompletionRequest): Promise<CompletionResponse> {
   let response: Response;
@@ -38,7 +60,7 @@ async function complete(request: CompletionRequest): Promise<CompletionResponse>
         system: request.systemPrompt + JSON_MODE_SUFFIX,
         max_tokens: request.maxTokens ?? 1024,
         temperature: request.temperature ?? 0.2,
-        messages: [{ role: "user", content: request.userPrompt }],
+        messages: [{ role: "user", content: buildAnthropicUserContent(request) }],
       }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });

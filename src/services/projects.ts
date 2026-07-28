@@ -1,10 +1,11 @@
 import "server-only";
-import { eq, ne } from "drizzle-orm";
+import { eq, ne, asc } from "drizzle-orm";
 import { db } from "@/db/client";
 import { projects as projectsTable, workTasks as workTasksTable } from "@/db/tables";
 import { fetchAll, fetchOne, fetchReturning, execute } from "@/db/query";
 import type { NewProject, Project, ProjectPatch, ProjectWithCounts } from "@/domain/project";
 import type { SourceItem } from "@/domain/sourceItem";
+import { projectStatusForJiraKey } from "@/lib/projects/projectForJiraKey";
 
 function toProject(row: typeof projectsTable.$inferSelect): Project {
   return {
@@ -49,7 +50,7 @@ export async function createProject(input: NewProject): Promise<Project> {
 }
 
 export async function getProjects(): Promise<ProjectWithCounts[]> {
-  const rows = await fetchAll(db.select().from(projectsTable));
+  const rows = await fetchAll(db.select().from(projectsTable).orderBy(asc(projectsTable.id)));
   const openTasks = await fetchAll(db.select().from(workTasksTable).where(ne(workTasksTable.status, "done")));
 
   const countByProject = new Map<number, number>();
@@ -93,17 +94,8 @@ export function isSourceFromInactiveProject(
   const issueProjectKey = jiraProjectKeyFromIssueKey(source.sourceExternalId);
   if (!issueProjectKey) return false;
 
-  const activeKeys = new Set(
-    filterActiveProjects(allProjects).flatMap((project) => project.jiraKeys)
-  );
-  if (activeKeys.has(issueProjectKey)) return false;
-
-  const inactiveKeys = new Set(
-    allProjects
-      .filter((project) => project.status === "inactive")
-      .flatMap((project) => project.jiraKeys)
-  );
-  return inactiveKeys.has(issueProjectKey);
+  const status = projectStatusForJiraKey(allProjects, issueProjectKey);
+  return status === "inactive";
 }
 
 export async function getProjectById(id: number): Promise<Project | null> {

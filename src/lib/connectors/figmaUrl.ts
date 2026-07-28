@@ -43,3 +43,19 @@ export function figmaDesignUrl(fileKey: string, nodeId?: string | null): string 
   if (!nodeId) return base;
   return `${base}?node-id=${nodeId.replace(":", "-")}`;
 }
+
+/**
+ * Scans arbitrary text strings for figma.com URLs and returns every unique
+ * file key found. Matches both `/design/:key` and legacy `/file/:key` paths,
+ * including branch URLs.
+ */
+export function extractAllFigmaFileKeys(texts: string[]): string[] {
+  const keys = new Set<string>();
+  const regex = /figma\.com\/(?:design|file)\/([a-zA-Z0-9]{10,})/g;
+  for (const text of texts) {
+    for (const match of text.matchAll(regex)) {
+      keys.add(match[1]);
+    }
+  }
+  return Array.from(keys);
+}

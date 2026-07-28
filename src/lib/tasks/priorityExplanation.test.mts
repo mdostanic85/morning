@@ -7,7 +7,7 @@ import {
 
 test("condenses raw ranking signals into two readable sentences", () => {
   const raw =
-    "Marked as in focus now · Jira UATL-367 · Medium · Actively in progress in Jira (In Progress) · Fresh signal in last 48h · Meeting transcript instruction · Committed in a meeting you attended in the last 4 days · Explicit instruction from Matt or Lucas · Confirmed by jira and granola";
+    "Marked as in focus now · Jira UATL-367 · Medium · Actively in progress in Jira (In Progress) · Fresh signal in last 48h · Meeting transcript instruction · Committed in a meeting you attended in the last 4 days · Explicit instruction from Matt Pettit or Lucas Saeed · Confirmed by jira and granola";
   const result = priorityExplanationForDisplay(raw);
 
   assert.equal(isRawPriorityExplanation(raw), true);

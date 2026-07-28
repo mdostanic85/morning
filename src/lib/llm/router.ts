@@ -26,6 +26,11 @@ import { FIGMA_FRAME_DISCOVERY_SYSTEM_PROMPT } from "./prompts/figmaFrameDiscove
 import { DELIVERY_SYNC_REVIEW_SYSTEM_PROMPT } from "./prompts/deliverySyncReview";
 import { HYDRA_REPORT_SYSTEM_PROMPT } from "./prompts/hydraReport";
 import {
+  imageUrlsForModel,
+  orderConfigsForImages,
+  stripReasoningWrappers,
+} from "./modelCapabilities";
+import {
   LlmError,
   type JobType,
   type LlmErrorKind,
@@ -43,6 +48,8 @@ export * from "./types";
 // bad tasks or priorities; the 20B model handles narrow cleanup/summarisation.
 const GROQ_ACCURATE = "openai/gpt-oss-120b";
 const GROQ_FAST = "openai/gpt-oss-20b";
+/** Groq's current vision-capable model (Llama 4 Scout shut down 2026-07-17). */
+const GROQ_VISION = "qwen/qwen3.6-27b";
 const OPENAI_MINI = "gpt-4.1-mini";
 const OPENAI_FULL = "gpt-4.1";
 const ANTHROPIC_SONNET = "claude-3-7-sonnet-latest";
@@ -192,15 +199,26 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
     provider: "openai",
     model: OPENAI_FULL,
     maxTokens: 2048,
+    // Outline matching is text-only — Groq covers OpenAI outages.
+    fallbacks: [
+      { provider: "groq", model: GROQ_ACCURATE, maxTokens: 2048 },
+      { ...GROQ_FAST_FALLBACK, maxTokens: 2048 },
+    ],
   },
+  // Figma audits attach a screenshot. Prefer a vision model first; text-only
+  // fallbacks still run because the router strips images for them (metadata +
+  // design context remain in the prompt).
   delivery_sync_review: {
     provider: "groq",
-    model: GROQ_ACCURATE,
-    maxTokens: 4096,
+    model: GROQ_VISION,
+    // Qwen is a thinking model: hidden reasoning tokens still count against the
+    // budget, so leave headroom for the reasoning pass plus the full report.
+    maxTokens: 8192,
     fallbacks: [
+      { provider: "groq", model: GROQ_ACCURATE, maxTokens: 4096 },
       { ...GROQ_FAST_FALLBACK, maxTokens: 4096 },
-      { provider: "anthropic", model: ANTHROPIC_SONNET, maxTokens: 4096 },
       { provider: "openai", model: OPENAI_FULL, maxTokens: 3072 },
+      { provider: "anthropic", model: ANTHROPIC_SONNET, maxTokens: 4096 },
     ],
   },
   hydra_report: {
@@ -263,28 +281,34 @@ function flattenModelChain(primary: ModelConfig): ModelConfig[] {
   return [primary, ...(primary.fallbacks ?? [])];
 }
 
-async function configsForJob(jobType: JobType): Promise<ModelConfig[]> {
+async function configsForJob(
+  jobType: JobType,
+  options?: { hasImages?: boolean }
+): Promise<ModelConfig[]> {
   const active = new Set(await getActiveProviders());
   if (active.size === 0) return [];
 
   const chain = flattenModelChain(MODEL_CONFIG[jobType]);
   const configuredCloudChain = chain.filter((config) => active.has(config.provider));
-  if (!active.has("local")) return configuredCloudChain;
+  let configs = configuredCloudChain;
+  if (active.has("local")) {
+    const local = await getLocalLlmConfig();
+    if (local) {
+      // Local inference is intentionally the last safety net. A 35B local model
+      // is useful when clouds are unavailable, but it should not make every
+      // normal sync wait minutes or weaken structured extraction.
+      configs = [
+        ...configuredCloudChain,
+        {
+          provider: "local",
+          model: local.model,
+          maxTokens: MODEL_CONFIG[jobType].maxTokens,
+        },
+      ];
+    }
+  }
 
-  const local = await getLocalLlmConfig();
-  if (!local) return configuredCloudChain;
-
-  // Local inference is intentionally the last safety net. A 35B local model
-  // is useful when clouds are unavailable, but it should not make every
-  // normal sync wait minutes or weaken structured extraction.
-  return [
-    ...configuredCloudChain,
-    {
-      provider: "local",
-      model: local.model,
-      maxTokens: MODEL_CONFIG[jobType].maxTokens,
-    },
-  ];
+  return orderConfigsForImages(configs, Boolean(options?.hasImages));
 }
 
 /**
@@ -321,8 +345,9 @@ function sanitizeJsonSchemaForProviders(node: unknown): unknown {
 }
 
 function tryParseJson(text: string): { ok: true; data: unknown } | { ok: false; error: string } {
+  const cleaned = stripReasoningWrappers(text);
   try {
-    return { ok: true, data: JSON.parse(text) };
+    return { ok: true, data: JSON.parse(cleaned) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Invalid JSON." };
   }
@@ -452,7 +477,9 @@ async function runWithConfig<T>(
           responseJsonSchema: sanitizeJsonSchemaForProviders(
             z.toJSONSchema(schema, { io: "output" })
           ) as Record<string, unknown>,
-          imageUrls: params.imageUrls,
+          // gpt-oss and other text-only models reject image_url payloads with
+          // a hard provider_error — strip rather than fail the whole audit.
+          imageUrls: imageUrlsForModel(provider, model, params.imageUrls),
         })
       );
     } catch (err) {
@@ -499,7 +526,9 @@ async function runWithConfig<T>(
 export async function runLlmJob<T>(params: RunJobParams<T>): Promise<LlmJobResult<T>> {
   const { jobType } = params;
   const startedAt = Date.now();
-  const configs = await configsForJob(jobType);
+  const configs = await configsForJob(jobType, {
+    hasImages: Boolean(params.imageUrls && params.imageUrls.length > 0),
+  });
 
   if (configs.length === 0) {
     return {

@@ -4,11 +4,14 @@ import { isConfirmedOwnership, isRejectedOwnership } from "@/lib/tasks/ownership
 import type { WorkTaskWithEvidence } from "@/services/workTasks";
 import type { StoredTodayBriefing } from "@/lib/llm/prompts/todayBriefing";
 import { parseJiraBodyFields } from "@/lib/connectors/jiraText";
+import { normalizePersonName, extractDisplayName } from "@/lib/tasks/personIdentity";
+
+export { extractDisplayName };
 
 export type TodayQueue = Record<Exclude<WorkTaskStatus, "done">, WorkTaskWithEvidence[]>;
 
 function normalizePerson(value: string): string {
-  return value.trim().toLowerCase();
+  return normalizePersonName(value);
 }
 
 /** Split compound owners like "Milos Dostanic and Loza" or "A, B". */
@@ -70,7 +73,7 @@ export function taskMatchesOwner(
 }
 
 /** Words that look like names in title case but are not people. */
-const NON_PERSON_ACTORS = new Set([
+export const NON_PERSON_ACTORS = new Set([
   "please",
   "today",
   "tomorrow",

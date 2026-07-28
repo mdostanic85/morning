@@ -7,6 +7,7 @@ import {
   updateSourceItem,
 } from "@/services/sourceItems";
 import { getActiveProjects } from "@/services/projects";
+import { projectForJiraKey } from "@/lib/projects/projectForJiraKey";
 
 export interface JiraDoneNotification {
   key: string;
@@ -26,7 +27,7 @@ function projectNameForKey(
 ): string | null {
   const projectKey = issueKey.match(/^([A-Z][A-Z0-9]+)-\d+$/)?.[1];
   if (!projectKey) return null;
-  return projects.find((project) => project.jiraKeys.includes(projectKey))?.name ?? null;
+  return projectForJiraKey(projects, projectKey)?.name ?? null;
 }
 
 async function markSourceItemDone(candidate: ConnectorSourceCandidate): Promise<void> {

@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
+import { projectForJiraKey } from "@/lib/projects/projectForJiraKey";
 import {
   auditLogs,
   evidenceRelations,
@@ -71,7 +72,7 @@ export async function ensureHydraSetup(): Promise<{
   const projectRows = await fetchAll(db.select().from(projects));
   const hydraProject =
     projectRows.find((project) => /hydra|asc/i.test(project.name)) ??
-    projectRows.find((project) => project.jiraKeys.some((key) => key.toUpperCase() === "UATL")) ??
+    projectForJiraKey(projectRows, "UATL") ??
     null;
 
   let task = await fetchOne(db.select().from(reportTasks).where(eq(reportTasks.template, "hydra_asc")));

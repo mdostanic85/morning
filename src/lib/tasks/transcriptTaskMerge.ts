@@ -1,6 +1,7 @@
 import { extractJiraKeyFromTitle } from "@/lib/tasks/resolveFocusTask";
 import { isTranscriptSource } from "@/lib/tasks/sourceAuthority";
 import { classifyTaskOwnership } from "@/lib/filters/ownerFilter";
+import { parseFigmaUrl } from "@/lib/connectors/figmaUrl";
 
 /** Open queue statuses that can receive transcript merges as the "active" anchor. */
 const ACTIVE_MERGE_STATUSES = new Set(["now", "next", "later"]);
@@ -72,6 +73,8 @@ export interface MergeCandidateTask {
   projectId: number | null;
   /** Used only to block cross-owner exact-title dedupe (EV-06) — never required elsewhere. */
   owner?: string | null;
+  /** Figma frame URL stored on the task — used to match pinned comments to tasks. */
+  figmaFrameUrl?: string | null;
 }
 
 export interface ExtractedTaskForMerge {
@@ -129,6 +132,35 @@ export function jiraKeyForTask(task: Pick<MergeCandidateTask, "title">): string 
   const fromStart = extractJiraKeyFromTitle(task.title)?.toUpperCase();
   if (fromStart) return fromStart;
   return extractJiraKeysFromText(task.title)[0] ?? null;
+}
+
+/**
+ * Find the first open task whose stored `figmaFrameUrl` references the same
+ * Figma file key and node id as the pinned comment's `url`. Both sides are
+ * normalised with `parseFigmaUrl` so the comparison is robust to query-string
+ * differences. Returns `null` when there is no pinned node or no matching
+ * task.
+ */
+export function findTaskByFigmaNodeId(
+  tasks: MergeCandidateTask[],
+  commentUrl: string | null | undefined
+): MergeCandidateTask | null {
+  if (!commentUrl) return null;
+  const parsed = parseFigmaUrl(commentUrl);
+  if (!parsed || !parsed.nodeId) return null;
+
+  for (const task of tasks) {
+    if (!task.figmaFrameUrl) continue;
+    const taskParsed = parseFigmaUrl(task.figmaFrameUrl);
+    if (!taskParsed) continue;
+    if (
+      taskParsed.fileKey === parsed.fileKey &&
+      taskParsed.nodeId === parsed.nodeId
+    ) {
+      return task;
+    }
+  }
+  return null;
 }
 
 function findTaskByJiraKey(
@@ -388,6 +420,94 @@ export function resolveTranscriptMergeTarget(input: {
     source.title ?? "",
     source.body ?? "",
   ].join("\n");
+
+  // --- Figma comment source: deterministic priority order ---
+  // 1. Jira key in comment body (strongest)
+  // 2. Parent-thread task (reply whose root comment is already on a task)
+  // 3. Exact pinned-node URL match against task.figmaFrameUrl
+  // 4. Confirmed existingTaskId hint
+  // 5. Topic anchor + explicit ownership (same guard as transcripts)
+  // 6. Exact title match
+  // 7. New task
+  //
+  // Replies often omit node pins and Jira keys; without (2)/(5) they spawn
+  // orphan tasks instead of updating the design work under discussion.
+  if (source.sourceType === "figma" && source.metadata?.importedFrom === "figma_comment") {
+    const jiraKeys = [
+      ...extractJiraKeysFromText(sourceText),
+      ...inferJiraKeysFromBareTicketMentions(sourceText, existingTasks),
+    ];
+    for (const key of [...new Set(jiraKeys)]) {
+      const match = findTaskByJiraKey(existingTasks, key);
+      if (match) {
+        return { taskId: match.id, mode: "full", reason: `figma comment jira key ${key}` };
+      }
+    }
+
+    const threadTaskId =
+      typeof source.metadata?.parentLinkedTaskId === "number"
+        ? source.metadata.parentLinkedTaskId
+        : null;
+    if (threadTaskId != null) {
+      const threadTask = existingTasks.find((task) => task.id === threadTaskId);
+      if (threadTask) {
+        return {
+          taskId: threadTask.id,
+          mode: "full",
+          reason: "figma comment reply on same thread as existing task",
+        };
+      }
+    }
+
+    const nodeMatch = findTaskByFigmaNodeId(
+      existingTasks,
+      typeof source.metadata?.nodeId === "string" &&
+        typeof source.metadata?.fileKey === "string"
+        ? `https://www.figma.com/design/${source.metadata.fileKey}?node-id=${source.metadata.nodeId}`
+        : null
+    );
+    if (nodeMatch) {
+      return {
+        taskId: nodeMatch.id,
+        mode: "full",
+        reason: `figma comment pinned to same node as task`,
+      };
+    }
+
+    const hinted = resolveExistingTaskIdHint({
+      extracted,
+      existingTasks,
+      haystack: sourceText,
+      myName,
+      mode: "full",
+      reasonPrefix: "figma comment existingTaskId",
+    });
+    if (hinted) return hinted;
+
+    const anchor = findOnlyActiveTopicAnchor(existingTasks, sourceText);
+    if (anchor) {
+      const check = isExtractRelevantToTask({
+        extract: extracted,
+        sourceText,
+        target: anchor,
+        myName,
+      });
+      if (check.relevant) {
+        return {
+          taskId: anchor.id,
+          mode: "full",
+          reason: `figma comment topic anchor (${check.reason})`,
+        };
+      }
+    }
+
+    const titleMatch = findTaskByExactTitleMatch(existingTasks, extracted.title, myName);
+    if (titleMatch) {
+      return { taskId: titleMatch.id, mode: "full", reason: "exact title match (figma comment dedupe)" };
+    }
+
+    return { taskId: null, mode: "full", reason: "figma comment new work" };
+  }
 
   if (!isTranscriptSource(source)) {
     const hinted = resolveExistingTaskIdHint({

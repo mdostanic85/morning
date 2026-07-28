@@ -52,6 +52,12 @@ export interface TaskConfidenceInput {
   hasProject: boolean;
   /** WL-10: a durable person-entity id for `ownerName`, once resolved. Null when unresolved or self-scoped. */
   resolvedPersonId?: number | null;
+  /**
+   * True when the person id came from an existing alias record (pre-existing identity match).
+   * False / omitted when the id was just created by `resolveOrCreatePerson` — it is a persisted
+   * guess, not a verified identity, so it should not earn the maximum identity confidence score.
+   */
+  resolvedPersonVerified?: boolean;
   /** All sources providing fresh-window-eligible evidence for this task (including the primary source), for freshness/corroboration. */
   evidenceSources: ConfidenceSourceFields[];
   hasUnresolvedConflict?: boolean;
@@ -118,6 +124,7 @@ export function computeTaskConfidence(input: TaskConfidenceInput): ConfidenceRes
   const identityConfidence = computeIdentityConfidence({
     ownerName: input.ownerName,
     resolvedPersonId: input.resolvedPersonId ?? null,
+    resolvedPersonVerified: input.resolvedPersonVerified ?? false,
   });
 
   const projectMatchConfidence = computeProjectMatchConfidence({

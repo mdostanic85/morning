@@ -50,10 +50,21 @@ describe("confidenceModel component functions (WL-05)", () => {
     );
   });
 
-  it("identity: self-scoped tasks and resolved identities are both fully trusted; a named-but-unresolved owner is not", () => {
+  it("identity: self-scoped tasks and verified identities are fully trusted; a named-but-unresolved owner is not; a newly-minted person (created=true) is not verified", () => {
     assert.equal(computeIdentityConfidence({ ownerName: null }), 1);
-    assert.equal(computeIdentityConfidence({ ownerName: "Matt", resolvedPersonId: 42 }), 1);
-    assert.equal(computeIdentityConfidence({ ownerName: "Matt", resolvedPersonId: null }), 0.6);
+    // Verified pre-existing identity → 1.0
+    assert.equal(
+      computeIdentityConfidence({ ownerName: "Matt Pettit", resolvedPersonId: 42, resolvedPersonVerified: true }),
+      1
+    );
+    // Newly created person (created=true, so verified=false) → 0.6, not 1.0
+    assert.equal(
+      computeIdentityConfidence({ ownerName: "Matt Pettit", resolvedPersonId: 42, resolvedPersonVerified: false }),
+      0.6,
+      "a newly minted person id must not score 1.0"
+    );
+    // No id at all → 0.6
+    assert.equal(computeIdentityConfidence({ ownerName: "Matt Pettit", resolvedPersonId: null }), 0.6);
   });
 
   it("project match: exact Jira-key hit and no-project-claimed are both 1.0; an LLM match score is used as-is; an unscored assignment is neutral", () => {

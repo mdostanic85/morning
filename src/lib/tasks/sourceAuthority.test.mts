@@ -65,7 +65,7 @@ describe("sourceAuthority", () => {
     assert.equal(looksLikePrdTitle("Weekly standup notes"), false);
   });
 
-  it("detects Matt/Lucas instructions in transcript text", () => {
+  it("detects Matt Pettit / Lucas Saeed instructions in transcript text", () => {
     assert.equal(
       hasHighAuthorityStakeholderInstruction({
         author: null,
@@ -81,6 +81,43 @@ describe("sourceAuthority", () => {
         body: "Update the CTA copy.",
       }),
       true
+    );
+    assert.equal(
+      hasHighAuthorityStakeholderInstruction({
+        author: "Lucas Saeed",
+        title: "Design review",
+        body: "Please update the button styles.",
+      }),
+      true
+    );
+    assert.equal(
+      hasHighAuthorityStakeholderInstruction({
+        author: "Matt Pettit",
+        title: "Product sync",
+        body: "Please prioritise the onboarding flow.",
+      }),
+      true
+    );
+  });
+
+  it("does NOT fire for Matthew Adams or Lucas Thomas — the defect fix", () => {
+    assert.equal(
+      hasHighAuthorityStakeholderInstruction({
+        author: "Matthew Adams",
+        title: "Bug triage",
+        body: "Please look into the crash.",
+      }),
+      false,
+      "Matthew Adams must not match the Matt alias"
+    );
+    assert.equal(
+      hasHighAuthorityStakeholderInstruction({
+        author: "Lucas Thomas",
+        title: "PR review",
+        body: "Update the styles.",
+      }),
+      false,
+      "Lucas Thomas must not earn the Lucas Saeed boost"
     );
   });
 
@@ -282,6 +319,6 @@ describe("sourceAuthority", () => {
       },
     ]);
     assert.ok(boost.score >= 300);
-    assert.ok(boost.notes.some((note) => /Matt or Lucas/i.test(note)));
+    assert.ok(boost.notes.some((note) => /Matt Pettit or Lucas Saeed/i.test(note)));
   });
 });

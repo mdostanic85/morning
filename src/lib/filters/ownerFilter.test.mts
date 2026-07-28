@@ -6,6 +6,7 @@ import {
   taskEligibleForBriefPriority,
   taskMatchesOwner,
   myOwnerFilter,
+  extractDisplayName,
 } from "./ownerFilter.ts";
 
 describe("ownerFilter null-owner classification", () => {
@@ -200,5 +201,52 @@ describe("classifyTaskOwnership", () => {
       ),
       "mine"
     );
+  });
+});
+
+describe("diacritic folding — the defect fix", () => {
+  it("Miloš Dostanić (diacritics) matches Milos Dostanic (ASCII) in taskMatchesOwner", () => {
+    const selected = myOwnerFilter("Milos Dostanic");
+    assert.equal(
+      taskMatchesOwner({ owner: "Miloš Dostanić" }, selected, "Milos Dostanic"),
+      true,
+      "diacritic owner must match ASCII profile name"
+    );
+  });
+
+  it("ASCII owner matches profile name with diacritics", () => {
+    const selected = myOwnerFilter("Miloš Dostanić");
+    assert.equal(
+      taskMatchesOwner({ owner: "Milos Dostanic" }, selected, "Miloš Dostanić"),
+      true
+    );
+  });
+});
+
+describe("extractDisplayName", () => {
+  it("strips angle-bracket email wrapper, returning only the display name", () => {
+    assert.equal(extractDisplayName("Alice Smith <alice@example.com>"), "Alice Smith");
+    assert.equal(extractDisplayName("Lucas Saeed <lucas@spaceinch.com>"), "Lucas Saeed");
+  });
+
+  it("returns null for bare email addresses", () => {
+    assert.equal(extractDisplayName("alice@example.com"), null);
+    assert.equal(extractDisplayName("lucas@spaceinch.com"), null);
+  });
+
+  it("returns null for the 'Unknown attendee' calendar placeholder", () => {
+    assert.equal(extractDisplayName("Unknown attendee"), null);
+    assert.equal(extractDisplayName("Unknown"), null);
+    assert.equal(extractDisplayName("UNKNOWN ATTENDEE"), null);
+  });
+
+  it("returns plain names unchanged", () => {
+    assert.equal(extractDisplayName("Alice Smith"), "Alice Smith");
+    assert.equal(extractDisplayName("Lucas Saeed"), "Lucas Saeed");
+  });
+
+  it("returns null for empty or whitespace", () => {
+    assert.equal(extractDisplayName(""), null);
+    assert.equal(extractDisplayName("   "), null);
   });
 });

@@ -4,7 +4,7 @@ import type { ConnectorSyncContext } from "@/lib/connectors/registry";
 import type { ShouldCancelSync } from "@/lib/imports/syncCancellation";
 import { fetchConfluencePageIfUpdated, fetchConfluenceSpacePages } from "@/lib/connectors/confluence";
 import { fetchGitHubPrSignalsForRepo } from "@/lib/connectors/github";
-import { fetchFigmaFileIfUpdated } from "@/lib/connectors/figma";
+import { fetchFigmaFileIfUpdated, fetchFigmaCommentsForFile } from "@/lib/connectors/figma";
 import { fetchDiscordChannelMessages } from "@/lib/connectors/discord";
 import { githubRepositoriesForSync } from "@/lib/connectors/github";
 import {
@@ -20,14 +20,18 @@ import {
 } from "@/lib/imports/githubConnectionCursor";
 import {
   commitFigmaFileCursorOnSuccess,
+  commitFigmaCommentsCursorOnSuccess,
   figmaFileCursorKey,
   loadFigmaFileSinceIso,
+  loadFigmaCommentsSinceIso,
 } from "@/lib/imports/figmaConnectionCursor";
 import {
   commitDiscordChannelCursorOnSuccess,
   loadDiscordChannelAfterSnowflake,
 } from "@/lib/imports/discordConnectionCursor";
 import { syncResourceScopes } from "@/lib/imports/syncResourceScopes";
+import { discoverFigmaFileKeys } from "@/lib/figma/discoverFigmaFileKeys";
+import { getSourceItemsForProjectIds } from "@/services/sourceItems";
 import type { ProviderSyncOutcome } from "@/lib/imports/syncProvider";
 
 function unique(values: string[]): string[] {
@@ -139,28 +143,56 @@ export async function syncFigmaIncremental(
   connectionId: number,
   shouldCancel?: ShouldCancelSync
 ): Promise<ProviderSyncOutcome> {
-  const figmaFileKeys = unique(context.projects.flatMap((project) => project.figmaFileKeys));
+  // Discover file keys from both project settings and source-linked URLs.
+  const projectIds = context.projects.map((p) => p.id);
+  const linkedSources =
+    projectIds.length > 0 ? await getSourceItemsForProjectIds(projectIds) : [];
+  const discovery = discoverFigmaFileKeys({
+    projects: context.projects,
+    sourceItems: linkedSources,
+  });
+  const { fileKeys, projectIdByFileKey } = discovery;
+
   const syncedAt = () => new Date().toISOString();
 
-  return syncResourceScopes({
-    provider: "figma",
-    shouldCancel,
-    scopes: figmaFileKeys.map((fileKey) => ({
-      label: `file:${fileKey}`,
-      fetch: async () => {
-        const sinceIso = await loadFigmaFileSinceIso(connectionId, fileKey);
-        return fetchFigmaFileIfUpdated({ fileKey, updatedSinceIso: sinceIso });
+  // Build two scopes per file key: one for the file structure, one for comments.
+  const scopes = fileKeys.flatMap((fileKey) => {
+    const projectId = projectIdByFileKey.get(fileKey) ?? null;
+    return [
+      {
+        label: `file:${fileKey}`,
+        fetch: async () => {
+          const sinceIso = await loadFigmaFileSinceIso(connectionId, fileKey);
+          return fetchFigmaFileIfUpdated({ fileKey, updatedSinceIso: sinceIso });
+        },
+        commit: async (candidates: Parameters<typeof commitFigmaFileCursorOnSuccess>[0]["candidates"]) => {
+          await commitFigmaFileCursorOnSuccess({
+            connectionId,
+            fileKey,
+            candidates,
+            syncedAt: syncedAt(),
+          });
+        },
       },
-      commit: async (candidates) => {
-        await commitFigmaFileCursorOnSuccess({
-          connectionId,
-          fileKey,
-          candidates,
-          syncedAt: syncedAt(),
-        });
+      {
+        label: `comments:${fileKey}`,
+        fetch: async () => {
+          const sinceIso = await loadFigmaCommentsSinceIso(connectionId, fileKey);
+          return fetchFigmaCommentsForFile({ fileKey, projectId, sinceIso });
+        },
+        commit: async (candidates: Parameters<typeof commitFigmaCommentsCursorOnSuccess>[0]["candidates"]) => {
+          await commitFigmaCommentsCursorOnSuccess({
+            connectionId,
+            fileKey,
+            candidates,
+            syncedAt: syncedAt(),
+          });
+        },
       },
-    })),
+    ];
   });
+
+  return syncResourceScopes({ provider: "figma", shouldCancel, scopes });
 }
 
 export async function syncDiscordIncremental(

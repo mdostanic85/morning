@@ -1,6 +1,7 @@
 import "server-only";
 import { getConnectionSecret } from "@/services/connectionSecrets";
 import { fetchWithTimeout } from "@/lib/http";
+import { shapeFigmaCommentCandidates } from "./figmaComments";
 import { figmaDesignUrl } from "./figmaUrl";
 import type { ConnectorSourceCandidate } from "./types";
 
@@ -51,6 +52,38 @@ interface FigmaNodesResponse {
 
 interface FigmaImagesResponse {
   images?: Record<string, string | null>;
+}
+
+// ---- Comment types (Figma REST API) ----
+
+interface FigmaCommentClientMeta {
+  /** Node ID the comment is pinned to (FrameOffset / FrameOffsetRegion). */
+  node_id?: string;
+  node_offset?: { x: number; y: number };
+  /** Canvas-absolute coordinates (Vector / Region). */
+  x?: number;
+  y?: number;
+  region_height?: number;
+  region_width?: number;
+}
+
+interface FigmaComment {
+  id: string;
+  /** Present on replies; root comments have no parent_id. */
+  parent_id?: string;
+  message: string;
+  file_key: string;
+  user: { id?: string; handle?: string; email?: string };
+  created_at: string;
+  resolved_at?: string | null;
+  /** Only set on root (top-level) comments. */
+  order_id?: number;
+  client_meta?: FigmaCommentClientMeta;
+}
+
+interface FigmaCommentsResponse {
+  comments?: FigmaComment[];
+  err?: string;
 }
 
 async function getToken(): Promise<string> {
@@ -253,4 +286,38 @@ export async function fetchFigmaFrameEvidenceViaApi(input: {
     screenshotNote: null,
     screenshotUrl,
   };
+}
+
+/**
+ * Fetch active (unresolved) Figma comments for a file and return them as
+ * `ConnectorSourceCandidate` items, one per comment/reply.
+ *
+ * Requires `file_comments:read` scope on the personal access token. When the
+ * token lacks that scope, Figma returns a 403; this is surfaced as a thrown
+ * error so `syncResourceScopes` can record a provider sync error rather than
+ * silently skipping comments.
+ *
+ * Replies inherit the root pin's node id and include the parent message so
+ * merge can attach feedback to the same task as the thread (Figma's API omits
+ * `client_meta` on replies).
+ *
+ * @param sinceIso  Only return comments whose `created_at` is at or after this
+ *                  ISO timestamp. Resolved comments are always excluded.
+ */
+export async function fetchFigmaCommentsForFile(input: {
+  fileKey: string;
+  /** Optional: project to associate with resulting source candidates. */
+  projectId?: number | null;
+  /** ISO timestamp; comments older than this are skipped. */
+  sinceIso?: string;
+}): Promise<ConnectorSourceCandidate[]> {
+  const response = await figmaFetch<FigmaCommentsResponse>(
+    `/v1/files/${encodeURIComponent(input.fileKey)}/comments`
+  );
+  return shapeFigmaCommentCandidates({
+    fileKey: input.fileKey,
+    projectId: input.projectId,
+    comments: response.comments ?? [],
+    sinceIso: input.sinceIso,
+  });
 }

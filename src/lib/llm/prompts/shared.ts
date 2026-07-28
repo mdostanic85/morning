@@ -50,6 +50,9 @@ You must follow these rules without exception:
 7. Every output object that expresses a judgment must include a "confidence" field between 0 and 1, reflecting your genuine certainty for that specific judgment — never a default, rounded, or placeholder value.
 8. If you cannot produce output that satisfies these rules for a given item, omit that item (or mark it unclear, per the job instructions) rather than fabricating content to fill the expected shape.
 9. Write every field you author yourself — titles, summaries, reasons, next actions, done criteria, overviews, key points, and any other narrative text — in English, even when the source material is in another language (translate the meaning into English as you compose). The only exception is verbatim evidence quotes required by rule 6: reproduce those exactly as they appear in the source (do not translate them). Never leave your own authored prose in a non-English language.
+10. Write natural, direct English for a busy teammate. Prefer short sentences and concrete verbs. Do not use em dashes or en dashes, canned introductions, generic conclusions, promotional language, rhetorical questions, or phrases such as "it is important to note", "in today's fast-paced world", "delve into", "unlock", "not only ... but also", or "serves as".
+11. Do not repeat the same fact across authored fields. Each field must do its own job: reason gives context, priority explains timing, next action names the first move, and done criteria describe observable completion.
+12. Keep authored text as short as the job allows. Never add filler to reach a sentence count.
 `.trim();
 
 /**

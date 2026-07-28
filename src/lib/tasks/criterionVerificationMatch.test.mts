@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { matchCriteriaToVerificationReport } from "./criterionVerificationMatch";
+import {
+  matchCriteriaToDeliveryChecks,
+  matchCriteriaToVerificationReport,
+} from "./criterionVerificationMatch";
 
 test("returns not_checked for every criterion when there is no report", () => {
   const verdicts = matchCriteriaToVerificationReport(
@@ -62,4 +65,55 @@ test("does not match on a single generic shared word", () => {
     { matches: ["Update the roadmap document"], missing: [] }
   );
   assert.deepEqual(verdicts, ["not_checked"]);
+});
+
+test("falls back to sync-review ok/notOk when verification did not classify a criterion", () => {
+  const results = matchCriteriaToDeliveryChecks(
+    ["Ship the empty-state illustration", "Wire the primary CTA"],
+    {
+      verification: {
+        matches: ["Wired the primary CTA on the focus card"],
+        missing: [],
+      },
+      syncReview: {
+        ok: ["Empty-state illustration is present on the Figma frame"],
+        notOk: [],
+      },
+    }
+  );
+  assert.equal(results[0]?.verdict, "met");
+  assert.equal(results[0]?.source, "sync_review");
+  assert.match(results[0]?.detail ?? "", /Empty-state illustration/i);
+  assert.equal(results[1]?.verdict, "met");
+  assert.equal(results[1]?.source, "verification");
+});
+
+test("keeps verification verdict when both reports could match", () => {
+  const results = matchCriteriaToDeliveryChecks(["Share the prototype branch link with Matt"], {
+    verification: {
+      matches: ["Shared the prototype branch link with Matt"],
+      missing: [],
+    },
+    syncReview: {
+      ok: [],
+      notOk: ["Prototype branch link with Matt is missing from Figma"],
+    },
+  });
+  assert.equal(results[0]?.verdict, "met");
+  assert.equal(results[0]?.source, "verification");
+});
+
+test("matches explicit Outcome N prefixes from sync-review lines", () => {
+  const results = matchCriteriaToDeliveryChecks(
+    ["Ship the empty-state illustration", "Wire the primary CTA"],
+    {
+      syncReview: {
+        ok: ["Outcome 1: empty-state illustration on Figma frame Home / Empty"],
+        notOk: ["Outcome 2: primary CTA still missing from the audited frame"],
+      },
+    }
+  );
+  assert.equal(results[0]?.verdict, "met");
+  assert.equal(results[1]?.verdict, "missing");
+  assert.match(results[0]?.detail ?? "", /Figma frame Home/i);
 });

@@ -23,6 +23,36 @@ export function normalizePersonName(name: string): string {
     .replace(/\s+/g, " ");
 }
 
+/**
+ * Extracts the display name from common composite strings that connectors
+ * emit before passing a name to the identity pipeline:
+ *
+ * - "Alice Smith <alice@example.com>"  → "Alice Smith"
+ * - "alice@example.com"               → null  (bare email, not a displayable name)
+ * - "Unknown attendee"                → null  (calendar placeholder)
+ * - "Unknown"                         → null
+ * - anything else                     → the original string (trimmed)
+ */
+export function extractDisplayName(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  // "Display Name <email>" — take the part before the angle bracket.
+  const angleMatch = trimmed.match(/^(.+?)\s*<[^>]+>$/);
+  if (angleMatch) {
+    const display = angleMatch[1].trim();
+    return display || null;
+  }
+
+  // Bare email address (contains @ but no space before it).
+  if (/^[^\s]+@[^\s]+$/.test(trimmed)) return null;
+
+  // Calendar / connector placeholder strings.
+  if (/^unknown(\s+attendee)?$/i.test(trimmed)) return null;
+
+  return trimmed;
+}
+
 export interface PersonAliasRecord {
   personId: number;
   alias: string;

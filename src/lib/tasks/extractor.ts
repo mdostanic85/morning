@@ -38,7 +38,8 @@ import {
   resolveTranscriptMergeTarget,
   type MergeCandidateTask,
 } from "@/lib/tasks/transcriptTaskMerge";
-import { myOwnerFilter, personMatchesFilter, classifyTaskOwnership } from "@/lib/filters/ownerFilter";
+import { enrichFigmaCommentSourceForMerge } from "@/lib/tasks/enrichFigmaCommentSource";
+import { myOwnerFilter, personMatchesFilter, classifyTaskOwnership, NON_PERSON_ACTORS } from "@/lib/filters/ownerFilter";
 import { isQuoteRelevantToTask, taskDomainText } from "@/lib/tasks/evidenceRelevance";
 import { computeTaskConfidence } from "@/lib/tasks/taskConfidence";
 import { getApplicableIngestionRules } from "@/services/ingestionRules";
@@ -90,17 +91,28 @@ function toMergeCandidates(tasks: WorkTask[]): MergeCandidateTask[] {
     status: task.status,
     projectId: task.projectId,
     owner: task.owner,
+    figmaFrameUrl: task.figmaFrameUrl,
   }));
 }
 
 /** WL-10: best-effort identity resolution — must never block extraction on failure. */
-async function resolvePersonIdForOwner(ownerName: string | null): Promise<number | null> {
-  if (!ownerName?.trim()) return null;
+async function resolvePersonIdForOwner(
+  ownerName: string | null
+): Promise<{ personId: number | null; verified: boolean }> {
+  const trimmed = ownerName?.trim() ?? "";
+  if (!trimmed) return { personId: null, verified: false };
+
+  // Skip person creation for strings that are not plausible person names.
+  const firstName = trimmed.toLowerCase().split(/\s+/)[0] ?? "";
+  if (firstName.length < 3 || NON_PERSON_ACTORS.has(firstName)) {
+    return { personId: null, verified: false };
+  }
+
   try {
-    const { personId } = await resolveOrCreatePerson(ownerName);
-    return personId;
+    const { personId, created } = await resolveOrCreatePerson(trimmed);
+    return { personId, verified: !created };
   } catch {
-    return null;
+    return { personId: null, verified: false };
   }
 }
 
@@ -227,7 +239,8 @@ function upsertMeetingContext(
 export async function extractTasksFromSourceItem(
   options: ExtractTasksOptions
 ): Promise<TaskExtractionRunResult> {
-  const { sourceItem, project = null, currentUserName = null } = options;
+  const { project = null, currentUserName = null } = options;
+  const sourceItem = await enrichFigmaCommentSourceForMerge(options.sourceItem);
   const existingTasks = (await getWorkTasks())
     .filter((task) => task.status !== "done")
     .filter(
@@ -352,11 +365,19 @@ export async function extractTasksFromSourceItem(
       if (!existing) continue;
 
       // EV-03: strip lines that belong to a different task before they persist.
-      const targetEvidenceInput = filterEvidenceForTarget(evidenceInput, existing, {
-        sourceType: sourceItem.sourceType,
-        sourceExternalId: sourceItem.sourceExternalId,
-        sourceDate: sourceItem.sourceDate,
-      });
+      // Figma comments have already passed deterministic Jira/thread/node or
+      // ownership+topic resolution. Their extracted quote is often only the
+      // short reply ("make them lighter"), while the domain context lives in
+      // the inherited parent message. Re-running the generic per-quote filter
+      // loses that thread context and incorrectly drops valid feedback.
+      const targetEvidenceInput =
+        sourceItem.metadata?.importedFrom === "figma_comment"
+          ? evidenceInput
+          : filterEvidenceForTarget(evidenceInput, existing, {
+              sourceType: sourceItem.sourceType,
+              sourceExternalId: sourceItem.sourceExternalId,
+              sourceDate: sourceItem.sourceDate,
+            });
       // A multi-topic meeting may mention this task while the particular
       // extracted quote belongs to another topic. Do not update the task or
       // attach meeting context without at least one relevant individual quote.
@@ -393,6 +414,7 @@ export async function extractTasksFromSourceItem(
       });
 
       const mergedOwner = primary.owner ?? existing.owner;
+      const mergedPersonResolution = await resolvePersonIdForOwner(mergedOwner);
       const mergedConfidence = incomingIsLatest
         ? computeTaskConfidence({
             ownerName: mergedOwner,
@@ -404,7 +426,8 @@ export async function extractTasksFromSourceItem(
             primarySource: sourceItem,
             hasProject: (existing.projectId ?? sourceItem.projectId) != null,
             evidenceSources: [sourceItem, ...existingSources],
-            resolvedPersonId: await resolvePersonIdForOwner(mergedOwner),
+            resolvedPersonId: mergedPersonResolution.personId,
+            resolvedPersonVerified: mergedPersonResolution.verified,
           })
         : null;
 
@@ -421,7 +444,14 @@ export async function extractTasksFromSourceItem(
                 : existing.status,
             reason,
             nextAction: primary.nextAction,
-            doneCriteria: doneCriteria.length > 0 ? doneCriteria : primary.doneCriteria,
+            // Figma comments may add new scope requests on top of existing
+            // outcomes; union rather than replace so nothing is lost.
+            doneCriteria:
+              sourceItem.metadata?.importedFrom === "figma_comment"
+                ? uniqueCriteria([existing.doneCriteria, doneCriteria.length > 0 ? doneCriteria : primary.doneCriteria])
+                : doneCriteria.length > 0
+                  ? doneCriteria
+                  : primary.doneCriteria,
             meetingContext: upsertMeetingContext(
               existing.meetingContext,
               meetingContextEntry
@@ -445,6 +475,19 @@ export async function extractTasksFromSourceItem(
         sourceItem.id,
         targetEvidenceInput
       );
+      // For Figma comments, rebuild criterion-evidence links so the new
+      // criteria added by the comment are traceable back to the source quote.
+      if (incomingIsLatest && sourceItem.metadata?.importedFrom === "figma_comment") {
+        const criterionLinks = buildCriterionEvidenceLinks(
+          (updated ?? existing).doneCriteria,
+          primary.doneCriteriaEvidence ?? [],
+          replacedEvidence,
+          new Map([[sourceItem.id, sourceItem.body]])
+        );
+        if (criterionLinks.length > 0) {
+          await replaceCriterionEvidenceLinks(existing.id, criterionLinks);
+        }
+      }
       savedTasks.push(updated ?? existing);
       savedEvidence.push(...replacedEvidence);
       continue;
@@ -477,6 +520,7 @@ export async function extractTasksFromSourceItem(
 
     // WL-05: decomposed, deterministic confidence — the LLM only supplies
     // `extractionConfidence`; everything else is derived from real signals.
+    const personResolution = await resolvePersonIdForOwner(primary.owner);
     const newTaskConfidence = computeTaskConfidence({
       ownerName: primary.owner,
       extractionConfidence: primary.confidence,
@@ -487,7 +531,8 @@ export async function extractTasksFromSourceItem(
       primarySource: sourceItem,
       hasProject: sourceItem.projectId != null,
       evidenceSources: [sourceItem],
-      resolvedPersonId: await resolvePersonIdForOwner(primary.owner),
+      resolvedPersonId: personResolution.personId,
+      resolvedPersonVerified: personResolution.verified,
     });
 
     // Extracted tasks go straight into the Today queue — no manual approval step.

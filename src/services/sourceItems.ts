@@ -130,6 +130,19 @@ export async function getSourceItemsForProject(projectId: number): Promise<Sourc
   return rows.map(toSourceItem);
 }
 
+export async function getSourceItemsForProjectIds(projectIds: number[]): Promise<SourceItem[]> {
+  if (projectIds.length === 0) return [];
+  const unique = Array.from(new Set(projectIds));
+  const rows = await fetchAll(
+    db
+      .select()
+      .from(sourceItemsTable)
+      .where(inArray(sourceItemsTable.projectId, unique))
+      .orderBy(desc(sourceItemsTable.sourceDate))
+  );
+  return rows.map(toSourceItem);
+}
+
 /** Simple substring search over title and body. Good enough until FTS5 lands. */
 export async function searchSourceItems(query: string): Promise<SourceItem[]> {
   const trimmed = query.trim();

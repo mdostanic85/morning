@@ -2,6 +2,12 @@ import type { ConnectionProvider } from "@/lib/connectors/providers";
 import type { SourceItem } from "@/domain/sourceItem";
 import type { SourceType } from "@/domain/sourceItem";
 import { DEFAULT_HYDRA_CONFIG } from "@/domain/hydraReport";
+import {
+  effectiveStakeholderPeople,
+  matchesStakeholder,
+  stakeholderLabel,
+  type HighAuthorityPerson,
+} from "@/lib/tasks/highAuthorityPeople";
 
 /**
  * Source hierarchy for Sync My Day and task ranking:
@@ -45,6 +51,11 @@ export function isSyncMyDayProvider(provider: ConnectionProvider): boolean {
 }
 
 export const HIGH_AUTHORITY_STAKEHOLDERS = DEFAULT_HYDRA_CONFIG.stakeholders;
+
+/** @internal kept for backwards-compat in sourceAuthorityScoreBoost; prefer `hasHighAuthorityStakeholderInstruction` with people param */
+function _defaultStakeholderPeople(): readonly HighAuthorityPerson[] {
+  return effectiveStakeholderPeople(HIGH_AUTHORITY_STAKEHOLDERS as unknown as string[]);
+}
 
 const PRD_TITLE_PATTERN =
   /\b(prd|product requirements?(?:\s+doc(?:ument)?)?|requirements?\s+doc(?:ument)?|acceptance criteria)\b/i;
@@ -209,27 +220,38 @@ export function isRecentAttendedTranscript(
   return now - time <= ATTENDED_TRANSCRIPT_COMMITMENT_WINDOW_MS;
 }
 
-/** True when Matt/Lucas (or configured stakeholders) authored or are quoted giving the instruction. */
+/**
+ * True when a high-authority stakeholder authored or is quoted giving the
+ * instruction in `source`.
+ *
+ * Accepts a pre-resolved `people` list (from `effectiveStakeholderPeople`) or
+ * falls back to the default table.  Uses word-boundary matching throughout, so
+ * "Matthew Adams" does NOT match the "Matt" alias.
+ */
 export function hasHighAuthorityStakeholderInstruction(
   source: {
     author?: string | null;
     title?: string | null;
     body?: string | null;
   },
-  stakeholders: readonly string[] = HIGH_AUTHORITY_STAKEHOLDERS
+  people?: readonly HighAuthorityPerson[]
 ): boolean {
-  const haystack = `${source.author ?? ""}\n${source.title ?? ""}\n${source.body ?? ""}`;
-  return stakeholders.some((name) => {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const authorHit =
-      Boolean(source.author) &&
-      new RegExp(`\\b${escaped}\\b`, "i").test(source.author ?? "");
-    // Speaker / directive patterns common in transcripts.
-    const spokenHit = new RegExp(
-      `\\b${escaped}\\b[^\\n]{0,80}\\b(said|says|asked|wants?|needs?|told|please|can you|you should|you need)\\b|\\b(said|says|asked|wants?|needs?|told)\\b[^\\n]{0,40}\\b${escaped}\\b`,
-      "i"
-    ).test(haystack);
-    return authorHit || spokenHit;
+  const effectivePeople = people ?? _defaultStakeholderPeople();
+  const authorHit =
+    Boolean(source.author) &&
+    matchesStakeholder(source.author ?? "", effectivePeople, { authorField: true });
+  if (authorHit) return true;
+  // Speaker / directive patterns common in transcripts.
+  const haystack = `${source.title ?? ""}\n${source.body ?? ""}`;
+  return effectivePeople.some(({ fullName, aliases }) => {
+    const tokens = [fullName, ...aliases];
+    return tokens.some((token) => {
+      const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(
+        `\\b${escaped}\\b[^\\n]{0,80}\\b(said|says|asked|wants?|needs?|told|please|can you|you should|you need)\\b|\\b(said|says|asked|wants?|needs?|told)\\b[^\\n]{0,40}\\b${escaped}\\b`,
+        "i"
+      ).test(haystack);
+    });
   });
 }
 
@@ -344,14 +366,13 @@ export function sourceAuthorityScoreBoost(
       }
     }
 
+    const stakeholderPeople = _defaultStakeholderPeople();
     const stakeholderTranscript = transcripts.find((source) =>
-      hasHighAuthorityStakeholderInstruction(source)
+      hasHighAuthorityStakeholderInstruction(source, stakeholderPeople)
     );
     if (stakeholderTranscript) {
       score += 160;
-      notes.push(
-        `Explicit instruction from ${HIGH_AUTHORITY_STAKEHOLDERS.join(" or ")}`
-      );
+      notes.push(`Explicit instruction from ${stakeholderLabel(stakeholderPeople)}`);
     }
 
     const newestTranscript = Math.max(...transcripts.map(sourceTime));

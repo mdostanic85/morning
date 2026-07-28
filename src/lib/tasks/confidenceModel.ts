@@ -58,13 +58,20 @@ export interface IdentitySignals {
   ownerName: string | null;
   /** A durable person-entity id once WL-10 exists. Always `null` until then. */
   resolvedPersonId?: number | null;
+  /**
+   * True only when `resolvedPersonId` came from an existing alias record — i.e.
+   * the name was recognised, not invented.  A person that was just created by
+   * `resolveOrCreatePerson` is a persisted guess, so it earns 0.6 (same as an
+   * unresolved name), not the maximum 1.0.
+   */
+  resolvedPersonVerified?: boolean;
 }
 
 /** Is the named owner a verified identity (WL-10) or just a string match ("guessed")? */
 export function computeIdentityConfidence(signals: IdentitySignals): number {
   if (!signals.ownerName?.trim()) return 1; // nothing to resolve — task is self-scoped
-  if (signals.resolvedPersonId != null) return 1; // durable identity match (WL-10)
-  return 0.6; // named but never resolved against a known identity — a guess, not a verified match
+  if (signals.resolvedPersonId != null && signals.resolvedPersonVerified) return 1; // durable identity match (WL-10)
+  return 0.6; // named but unresolved or newly minted — a guess, not a verified match
 }
 
 // --- Component: project match (deterministic + LLM matcher score) --------

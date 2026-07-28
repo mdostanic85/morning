@@ -40,6 +40,18 @@ export async function getEvidenceForTask(taskId: number): Promise<Evidence[]> {
   return rows.map(toEvidence);
 }
 
+/** First task that already cites this source item as evidence, if any. */
+export async function getTaskIdForSourceItem(sourceItemId: number): Promise<number | null> {
+  const rows = await fetchAll(
+    db
+      .select({ taskId: evidenceTable.taskId })
+      .from(evidenceTable)
+      .where(eq(evidenceTable.sourceItemId, sourceItemId))
+      .limit(1)
+  );
+  return rows[0]?.taskId ?? null;
+}
+
 export async function deleteEvidence(id: number): Promise<void> {
   await execute(db.delete(evidenceTable).where(eq(evidenceTable.id, id)));
 }

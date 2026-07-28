@@ -13,6 +13,7 @@ import {
   fetchVisibleJiraProjectsViaMcp,
   type JiraProjectSnapshot,
 } from "@/lib/connectors/mcp/adapters/atlassian";
+import { projectForJiraKey } from "./projectForJiraKey";
 
 const STALE_LLM_DESCRIPTION_PREFIX = "Multiple issues in Jira point to a project with the key";
 
@@ -32,7 +33,7 @@ function isActiveHydraBoard(name: string): boolean {
 }
 
 function findByJiraKey(projects: Project[], key: string): Project | null {
-  return projects.find((project) => project.jiraKeys.includes(key)) ?? null;
+  return projectForJiraKey(projects, key) as Project | null;
 }
 
 function findHydraUmbrella(projects: Project[]): Project | null {

@@ -8,16 +8,23 @@ export async function replaceCriterionEvidenceLinks(
   taskId: number,
   links: StoredCriterionEvidenceLink[]
 ): Promise<void> {
-  await db.delete(taskCriterionEvidenceTable).where(eq(taskCriterionEvidenceTable.taskId, taskId));
-  if (links.length === 0) return;
+  const createdAt = new Date().toISOString();
 
-  await db.insert(taskCriterionEvidenceTable).values(
-    links.map((link) => ({
-      taskId,
-      criterionItemId: link.criterionItemId,
-      evidenceId: link.evidenceId,
-    }))
-  );
+  // Delete + insert must share a transaction: a failing insert would otherwise
+  // leave the task with no criterion evidence at all.
+  await db.transaction(async (tx) => {
+    await tx.delete(taskCriterionEvidenceTable).where(eq(taskCriterionEvidenceTable.taskId, taskId));
+    if (links.length === 0) return;
+
+    await tx.insert(taskCriterionEvidenceTable).values(
+      links.map((link) => ({
+        taskId,
+        criterionItemId: link.criterionItemId,
+        evidenceId: link.evidenceId,
+        createdAt,
+      }))
+    );
+  });
 }
 
 export async function listCriterionEvidenceLinks(

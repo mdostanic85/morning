@@ -29,12 +29,32 @@ export function buildCoverageWarnings(input: {
   }
 
   const figmaSources = input.sources.filter((source) => source.sourceType === "figma");
+  // Collect the set of file keys that have at least one imported comment row.
+  const fileKeysWithComments = new Set<string>();
+  for (const source of figmaSources) {
+    const externalId = source.sourceExternalId ?? "";
+    // Comment rows: "{fileKey}:comment:{commentId}"
+    const commentMatch = externalId.match(/^(.+):comment:.+$/);
+    if (commentMatch) {
+      fileKeysWithComments.add(commentMatch[1]);
+      continue;
+    }
+    // Structure rows that explicitly flagged commentsImported.
+    if (source.metadata?.commentsImported === true) {
+      const fileKey = source.metadata.fileKey;
+      if (typeof fileKey === "string") fileKeysWithComments.add(fileKey);
+    }
+  }
+
   for (const figma of figmaSources) {
-    const hasNode =
-      Boolean(figma.url && /node-id=/i.test(figma.url)) ||
-      figma.metadata?.nodeId != null;
-    const commentsImported = figma.metadata?.commentsImported === true;
-    if (!hasNode || !commentsImported) {
+    const externalId = figma.sourceExternalId ?? "";
+    // Only evaluate structure rows here — comment rows are not task sources.
+    if (!externalId.endsWith(":structure")) continue;
+    const structureFileKey = figma.metadata?.fileKey;
+    const commentsImported =
+      (typeof structureFileKey === "string" && fileKeysWithComments.has(structureFileKey)) ||
+      figma.metadata?.commentsImported === true;
+    if (!commentsImported) {
       warnings.push({
         code: "figma_not_verified",
         message: "Figma file link present without comments/node audit",
