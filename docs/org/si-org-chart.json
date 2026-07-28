@@ -1,0 +1,836 @@
+{
+  "provenance": {
+    "fileKey": "DHfQm8F66zFlWB9dxC7CeV",
+    "boardUrl": "https://www.figma.com/board/DHfQm8F66zFlWB9dxC7CeV/SI-org-chart-full",
+    "lastModified": "2026-07-16T08:42:04Z",
+    "extractedAt": "2026-07-28T11:40:16.969Z",
+    "ruleVersion": 1,
+    "shapeCount": 92,
+    "connectorCount": 91,
+    "rosterCount": 92
+  },
+  "roster": [
+    {
+      "figmaNodeId": "1:223",
+      "name": "Joshua Segall",
+      "title": "CEO",
+      "location": "Nashville, TN",
+      "managerName": null,
+      "depth": 0
+    },
+    {
+      "figmaNodeId": "1:225",
+      "name": "David Brubacher",
+      "title": "CPO/COO",
+      "location": "San Francisco, CA",
+      "managerName": "Joshua Segall",
+      "depth": 1
+    },
+    {
+      "figmaNodeId": "1:227",
+      "name": "Ashley Frericks",
+      "title": "Assistant to the CEO",
+      "location": "Brentwood, TN",
+      "managerName": "Joshua Segall",
+      "depth": 1
+    },
+    {
+      "figmaNodeId": "1:229",
+      "name": "Ivan Vučak",
+      "title": "CTO",
+      "location": "Zagreb, Croatia",
+      "managerName": "Joshua Segall",
+      "depth": 1
+    },
+    {
+      "figmaNodeId": "16:347",
+      "name": "Mitchell Maddox",
+      "title": "",
+      "location": "Austin, TX",
+      "managerName": "Joshua Segall",
+      "depth": 1
+    },
+    {
+      "figmaNodeId": "12:150",
+      "name": "Matt Pettit",
+      "title": "Product Manager",
+      "location": "Delmar, NY",
+      "managerName": "David Brubacher",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "12:174",
+      "name": "Nadim Yazdani",
+      "title": "Product Manager",
+      "location": "Areguea, Paraguay",
+      "managerName": "David Brubacher",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "12:198",
+      "name": "Pedro Thomé",
+      "title": "Product Manager",
+      "location": "Goiânia, Brazil",
+      "managerName": "David Brubacher",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "12:305",
+      "name": "Luka Dugi",
+      "title": "Director of People",
+      "location": "Zagreb, Croatia",
+      "managerName": "David Brubacher",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "12:452",
+      "name": "Marko Barić",
+      "title": "SVP of Engineering",
+      "location": "Split, Croatia",
+      "managerName": "Ivan Vučak",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "12:473",
+      "name": "Sandi Zeher",
+      "title": "Engineering Manager",
+      "location": "Zagreb, Croatia",
+      "managerName": "Ivan Vučak",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "12:502",
+      "name": "Mateo Premuš",
+      "title": "Director of Engineering",
+      "location": "Rijeka, Croatia",
+      "managerName": "Ivan Vučak",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "16:378",
+      "name": "Connor McLaren",
+      "title": "Assistant Product Manager",
+      "location": "Austin, TX",
+      "managerName": "Mitchell Maddox",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "18:244",
+      "name": "Ivan Pavao Lozančić",
+      "title": "Software Engineer",
+      "location": "Kaštel Gomilica, Croatia",
+      "managerName": "Ivan Vučak",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "270:528",
+      "name": "Michael Ballard",
+      "title": "Sr. Dir of Product Management",
+      "location": "New York, NY",
+      "managerName": "David Brubacher",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "4:171",
+      "name": "Lucas Saeed",
+      "title": "Design Team Lead",
+      "location": "Buenos Aires, Argentina",
+      "managerName": "David Brubacher",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "74:576",
+      "name": "Brandon Scott",
+      "title": "Product Manager",
+      "location": "Cookeville, TN",
+      "managerName": "David Brubacher",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "74:597",
+      "name": "Jason Ary",
+      "title": "Product Manager",
+      "location": "Denver, CO",
+      "managerName": "David Brubacher",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "74:618",
+      "name": "Matan Barnea",
+      "title": "Product Manager",
+      "location": "Havertown, PA",
+      "managerName": "David Brubacher",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "75:677",
+      "name": "Neven Mendrila",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Ivan Vučak",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "76:871",
+      "name": "Goran Nikšić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Ivan Vučak",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "76:967",
+      "name": "Kristijan Kotris",
+      "title": "QA Engineering Manager",
+      "location": "Zagreb, Croatia",
+      "managerName": "Ivan Vučak",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "79:1428",
+      "name": "Maria Jimena Ormeno Salinas",
+      "title": "Director of Finance",
+      "location": "Lima, Peru",
+      "managerName": "David Brubacher",
+      "depth": 2
+    },
+    {
+      "figmaNodeId": "12:337",
+      "name": "Katarina Milanović-Litre",
+      "title": "Sr. Talent Acquisition Specialist",
+      "location": "Zagreb, Croatia",
+      "managerName": "Luka Dugi",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "12:667",
+      "name": "Ivan Lozić",
+      "title": "Software Engineer",
+      "location": "Kraljevica, Croatia",
+      "managerName": "Mateo Premuš",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "12:716",
+      "name": "Josip Pavlović",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Mateo Premuš",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "16:201",
+      "name": "Lisa Amelina",
+      "title": "Designer",
+      "location": "Charlotte, NC",
+      "managerName": "Lucas Saeed",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "16:241",
+      "name": "Sebastian Zamora",
+      "title": "Designer",
+      "location": "Valencia, Spain",
+      "managerName": "Lucas Saeed",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "16:262",
+      "name": "Tania Montoya",
+      "title": "Recruiter",
+      "location": "Lima, Peru",
+      "managerName": "Luka Dugi",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "19:282",
+      "name": "Joao Pedro Vieira Leao",
+      "title": "Software Engineer",
+      "location": "Sao Paulo, Brazil",
+      "managerName": "Ivan Pavao Lozančić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "19:331",
+      "name": "Lucas Thomas",
+      "title": "Software Engineer",
+      "location": "Braga, Portugal",
+      "managerName": "Ivan Pavao Lozančić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "19:388",
+      "name": "Karlo Siladi",
+      "title": "Software Engineer",
+      "location": "Križevci, Croatia",
+      "managerName": "Marko Barić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "19:409",
+      "name": "Tassio Jordao Silva",
+      "title": "Software Engineer",
+      "location": "Sao Paulo, Brazil",
+      "managerName": "Marko Barić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "19:430",
+      "name": "Ivan Dumančić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Marko Barić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "19:444",
+      "name": "Renato-Zaneto Lukež",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Marko Barić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "21:548",
+      "name": "Paulo Radicchi",
+      "title": "Software Engineer",
+      "location": "Florianopolis, Brazil",
+      "managerName": "Marko Barić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "270:604",
+      "name": "David Davtian",
+      "title": "Product Manager",
+      "location": "New York, NY",
+      "managerName": "Michael Ballard",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "270:676",
+      "name": "Halley Lisieski",
+      "title": "Product Manager",
+      "location": "New York, NY",
+      "managerName": "Michael Ballard",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "322:425",
+      "name": "Jelena Šverko",
+      "title": "Sr. Talent Acquisition Specialist",
+      "location": "Zagreb, Croatia",
+      "managerName": "Luka Dugi",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "323:1041",
+      "name": "Ivan Lacković",
+      "title": "Software Engineer",
+      "location": "Rijeka, Croatia",
+      "managerName": "Marko Barić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "323:1375",
+      "name": "Kristian Radoš",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Marko Barić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "323:1544",
+      "name": "Zlatko Vlašić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Goran Nikšić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "323:662",
+      "name": "Filip Gadžo",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Marko Barić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "323:702",
+      "name": "Jakob Yousri",
+      "title": "Software Engineer",
+      "location": "Vukovar, Croatia",
+      "managerName": "Marko Barić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "363:501",
+      "name": "Gabriel de Castro Michelassi",
+      "title": "Software Engineer",
+      "location": "Sao Paulo, Brazil",
+      "managerName": "Goran Nikšić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "488:472",
+      "name": "Tomislav Vrbošić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Neven Mendrila",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "488:658",
+      "name": "Leonardo Balsalobre",
+      "title": "Software Engineer",
+      "location": "Sao Paulo, Brazil",
+      "managerName": "Marko Barić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "525:518",
+      "name": "Mihaela Kenđel",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Goran Nikšić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "547:431",
+      "name": "Mario Tupek",
+      "title": "QA Automation Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Kristijan Kotris",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "550:447",
+      "name": "Matea Korbar",
+      "title": "Head of Administration",
+      "location": "Zagreb, Croatia",
+      "managerName": "Maria Jimena Ormeno Salinas",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "577:469",
+      "name": "Fabio Rachid",
+      "title": "Software Engineer",
+      "location": "Sao Paulo, Brazil",
+      "managerName": "Sandi Zeher",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "577:501",
+      "name": "Ante Ristovski",
+      "title": "Software Engineer",
+      "location": "Vrlika, Croatia",
+      "managerName": "Sandi Zeher",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "577:584",
+      "name": "Antonio Vogrin",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Sandi Zeher",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "586:446",
+      "name": "Alex Diaz",
+      "title": "Software Engineer",
+      "location": "Madrid, Spain",
+      "managerName": "Goran Nikšić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "610:446",
+      "name": "Marian Jones",
+      "title": "Bookkeeper/Accountant",
+      "location": "Henderson, NV",
+      "managerName": "Maria Jimena Ormeno Salinas",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "636:470",
+      "name": "Andrea Fresa",
+      "title": "Software Engineer",
+      "location": "Naples, Italy",
+      "managerName": "Goran Nikšić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "636:494",
+      "name": "Piero Desenzi",
+      "title": "Software Engineer",
+      "location": "Sao Paulo, Brazil",
+      "managerName": "Goran Nikšić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "652:468",
+      "name": "Ivan Tamarut",
+      "title": "Software Engineer",
+      "location": "Novalja, Croatia",
+      "managerName": "Goran Nikšić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "68:505",
+      "name": "Sofija Zec-Baškarad",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Ivan Pavao Lozančić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "68:541",
+      "name": "Daniel Breda",
+      "title": "Software Engineer",
+      "location": "Florianopolis, Brazil",
+      "managerName": "Ivan Pavao Lozančić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "68:583",
+      "name": "Jurica Ćapin",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Ivan Pavao Lozančić",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "76:1228",
+      "name": "Borna Raić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Sandi Zeher",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "76:808",
+      "name": "Krešimir Ćosić",
+      "title": "Software Engineer",
+      "location": "Velika Gorica, Croatia",
+      "managerName": "Neven Mendrila",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "8:350",
+      "name": "Miloš Dostanić",
+      "title": "Designer",
+      "location": "Lapovo, Serbia",
+      "managerName": "Lucas Saeed",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "8:388",
+      "name": "Nenad Veljković",
+      "title": "Designer",
+      "location": "Kragujevac, Serbia",
+      "managerName": "Lucas Saeed",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "85:380",
+      "name": "Šime Andrijašević",
+      "title": "Software Engineer",
+      "location": "Split, Croatia",
+      "managerName": "Neven Mendrila",
+      "depth": 3
+    },
+    {
+      "figmaNodeId": "12:1101",
+      "name": "Luka Vilagoš",
+      "title": "Software Engineer",
+      "location": "Pula, Croatia",
+      "managerName": "Ivan Lozić",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "12:984",
+      "name": "Marin Glavaš",
+      "title": "Software Engineer",
+      "location": "Osijek, Croatia",
+      "managerName": "Josip Pavlović",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "22:1000",
+      "name": "Vinko Ivanković",
+      "title": "Software Engineer",
+      "location": "Solin, Croatia",
+      "managerName": "Karlo Siladi",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "22:1063",
+      "name": "Ivan Augustinović",
+      "title": "Software Engineer",
+      "location": "Sv. Ivan Zelina, Croatia",
+      "managerName": "Tassio Jordao Silva",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "22:1125",
+      "name": "Luciano Santos",
+      "title": "Software Engineer",
+      "location": "Rio de Janeiro, Brazil",
+      "managerName": "Paulo Radicchi",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "22:1181",
+      "name": "Renato De Matos",
+      "title": "Software Engineer",
+      "location": "Florianopolis, Brazil",
+      "managerName": "Paulo Radicchi",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "22:1213",
+      "name": "Luka Renjić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Renato-Zaneto Lukež",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "22:1257",
+      "name": "Neven Vučinić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Renato-Zaneto Lukež",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "22:937",
+      "name": "Karlo Mijaljević",
+      "title": "Software Engineer",
+      "location": "Vodice, Croatia",
+      "managerName": "Karlo Siladi",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "22:961",
+      "name": "Leo Govorko",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Karlo Siladi",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "241:509",
+      "name": "Anton Lovrić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Karlo Siladi",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "322:614",
+      "name": "Marijo Kiš",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Paulo Radicchi",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "323:1211",
+      "name": "Luka Pancirov",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Renato-Zaneto Lukež",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "323:1340",
+      "name": "Michel Carlos",
+      "title": "Software Engineer",
+      "location": "Sao Paulo, Brazil",
+      "managerName": "Filip Gadžo",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "323:1396",
+      "name": "Mirko Bojčić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Jakob Yousri",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "323:1464",
+      "name": "Alex Junior Valerio Moreira",
+      "title": "Software Engineer",
+      "location": "Sao Paulo, Brazil",
+      "managerName": "Ivan Lacković",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "488:838",
+      "name": "Alen Štruklec",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Leonardo Balsalobre",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "488:929",
+      "name": "Mateo Mataja",
+      "title": "Software Engineer",
+      "location": "Rijeka, Croatia",
+      "managerName": "Ivan Lacković",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "525:471",
+      "name": "Jakov Ćurić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Karlo Siladi",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "536:441",
+      "name": "Vedran Lebo",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Renato-Zaneto Lukež",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "556:441",
+      "name": "Ante Radić",
+      "title": "Software Engineer",
+      "location": "Split, Croatia",
+      "managerName": "Karlo Siladi",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "595:451",
+      "name": "Felipe Leal Luppo",
+      "title": "Software Engineer",
+      "location": "Curitiba, Brazil",
+      "managerName": "Ivan Lozić",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "595:501",
+      "name": "Robert Dokša",
+      "title": "Software Engineer",
+      "location": "Varaždin, Croatia",
+      "managerName": "Josip Pavlović",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "625:458",
+      "name": "Matej Luburić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Tassio Jordao Silva",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "75:754",
+      "name": "Ugo Castro",
+      "title": "Software Engineer",
+      "location": "Eusebio, Brazil",
+      "managerName": "Karlo Siladi",
+      "depth": 4
+    },
+    {
+      "figmaNodeId": "94:510",
+      "name": "Goran Malić",
+      "title": "Software Engineer",
+      "location": "Zagreb, Croatia",
+      "managerName": "Karlo Siladi",
+      "depth": 4
+    }
+  ],
+  "anomalies": [
+    {
+      "kind": "missing_title",
+      "name": "Mitchell Maddox",
+      "figmaNodeId": "16:347",
+      "detail": "No known title found in: \"Mitchell Maddox Austin, TX\""
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Ivan Pavao Lozančić",
+      "figmaNodeId": "18:244",
+      "detail": "Title \"Software Engineer\" is an IC role but has 5 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Neven Mendrila",
+      "figmaNodeId": "75:677",
+      "detail": "Title \"Software Engineer\" is an IC role but has 3 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Goran Nikšić",
+      "figmaNodeId": "76:871",
+      "detail": "Title \"Software Engineer\" is an IC role but has 7 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Ivan Lozić",
+      "figmaNodeId": "12:667",
+      "detail": "Title \"Software Engineer\" is an IC role but has 2 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Josip Pavlović",
+      "figmaNodeId": "12:716",
+      "detail": "Title \"Software Engineer\" is an IC role but has 2 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Karlo Siladi",
+      "figmaNodeId": "19:388",
+      "detail": "Title \"Software Engineer\" is an IC role but has 8 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Tassio Jordao Silva",
+      "figmaNodeId": "19:409",
+      "detail": "Title \"Software Engineer\" is an IC role but has 2 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Renato-Zaneto Lukež",
+      "figmaNodeId": "19:444",
+      "detail": "Title \"Software Engineer\" is an IC role but has 4 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Paulo Radicchi",
+      "figmaNodeId": "21:548",
+      "detail": "Title \"Software Engineer\" is an IC role but has 3 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Ivan Lacković",
+      "figmaNodeId": "323:1041",
+      "detail": "Title \"Software Engineer\" is an IC role but has 2 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Filip Gadžo",
+      "figmaNodeId": "323:662",
+      "detail": "Title \"Software Engineer\" is an IC role but has 1 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Jakob Yousri",
+      "figmaNodeId": "323:702",
+      "detail": "Title \"Software Engineer\" is an IC role but has 1 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    },
+    {
+      "kind": "ic_with_reports",
+      "name": "Leonardo Balsalobre",
+      "figmaNodeId": "488:658",
+      "detail": "Title \"Software Engineer\" is an IC role but has 1 direct report(s) in the chart. These are column-head artifacts — the column-head decoding rule already treats them correctly; this anomaly records the tension with the stated title."
+    }
+  ]
+}
