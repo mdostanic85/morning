@@ -3,6 +3,14 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { XIcon } from "lucide-react";
+import styles from "./HumanReadableTodayView.module.css";
+
+function css(value: string): string {
+  return value
+    .split(/\s+/)
+    .map((name) => styles[name] ?? name)
+    .join(" ");
+}
 
 interface DismissibleDayChangeProps {
   text: string;
@@ -25,18 +33,20 @@ export function DismissibleDayChange({
 
   return (
     <section
-      className={`brief-change-alert${tone === "warning" ? " brief-change-alert--warning" : ""}`}
+      className={css(
+        `brief-change-alert${tone === "warning" ? " brief-change-alert--warning" : ""}`
+      )}
       role="status"
     >
-      <div className="brief-change-mark" aria-hidden>
+      <div className={css("brief-change-mark")} aria-hidden>
         {icon}
       </div>
-      <div className="brief-change-content">
-        <p className="brief-kicker">{title}</p>
+      <div className={css("brief-change-content")}>
+        <p className={css("brief-kicker")}>{title}</p>
         <p>{text}</p>
       </div>
       <button
-        className="brief-change-dismiss"
+        className={css("brief-change-dismiss")}
         type="button"
         aria-label={dismissLabel}
         title="Dismiss"

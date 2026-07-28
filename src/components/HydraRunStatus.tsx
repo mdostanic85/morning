@@ -24,7 +24,7 @@ export function HydraRunStatus({ status, compact = false }: { status: string; co
   return (
     <span
       className={cn(
-        "inline-flex w-fit items-center gap-2 rounded-full border px-2.5 py-1 font-mono text-[14px] font-semibold uppercase tracking-[0.08em]",
+        "inline-flex w-fit items-center gap-2 rounded-full border px-2.5 py-1 font-utility text-[14px] font-semibold uppercase tracking-[0.08em]",
         done && "border-good/30 bg-good/10 text-good",
         partial && "border-waiting/30 bg-waiting/10 text-waiting",
         failed && "border-danger/30 bg-danger/10 text-danger",
@@ -50,7 +50,7 @@ export function HydraRunRail({ status }: { status: string }) {
         return (
           <li key={step} className="min-w-0">
             <div className={cn("h-1 rounded-full", reached ? "bg-accent" : "bg-border")} />
-            <span className={cn("mt-2 hidden truncate font-mono text-[14px] uppercase tracking-wide md:block", reached ? "text-foreground" : "text-muted-soft")}>
+            <span className={cn("mt-2 hidden truncate font-utility text-[14px] uppercase tracking-wide md:block", reached ? "text-foreground" : "text-muted-soft")}>
               {step.replaceAll("_", " ")}
             </span>
           </li>

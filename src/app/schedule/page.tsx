@@ -4,6 +4,7 @@ import { HydraScheduleSettings } from "@/components/HydraScheduleSettings";
 import { SettingsBackLink } from "@/components/SettingsBackLink";
 import { ensureHydraSetup } from "@/services/hydra";
 import Link from "next/link";
+import { Heading } from "@/components/Heading";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,10 @@ export default async function SchedulePage() {
       <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <SettingsBackLink section="Automation" />
-          <h1 className="mt-2 font-display text-4xl font-semibold tracking-[-0.04em]">Schedule</h1>
+          <Heading level={1} visualLevel={2} className="mt-2">Schedule</Heading>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-            Two predictable weekday reports in your timezone. Manual runs use the same evidence and
-            validation pipeline without moving the next scheduled time.{" "}
+            Choose when weekday reports run in your timezone. A manual report will not change the
+            next scheduled time.{" "}
             <Link href="/reports" className="text-accent hover:underline">
               Report history
             </Link>

@@ -8,6 +8,14 @@ import { Toast } from "@heroui/react/toast";
 import { Button } from "@heroui/react/button";
 import type { DailyBriefV2 } from "@/domain/dailyBrief";
 import { AppBadge } from "@/components/AppBadge";
+import styles from "./NeedsInputRail.module.css";
+
+function css(value: string): string {
+  return value
+    .split(/\s+/)
+    .map((name) => styles[name] ?? name)
+    .join(" ");
+}
 
 type BlockedItem = DailyBriefV2["blockedWaiting"][number];
 type ConflictItem = DailyBriefV2["sourceConflicts"][number];
@@ -35,7 +43,7 @@ function OwnershipRow({
       });
       if (!res.ok) throw new Error("Task update failed.");
       Toast.toast.success(
-        action === "mine" ? "Added to your queue." : "Removed — marked not yours.",
+        action === "mine" ? "Added to your queue." : "Removed and marked not yours.",
       );
       if (item.taskId != null) onResolved(item.taskId);
       router.refresh();
@@ -46,21 +54,21 @@ function OwnershipRow({
   }
 
   return (
-    <div className="ni-row">
-      <div className="ni-row-head">
+    <div className={css("ni-row")}>
+      <div className={css("ni-row-head")}>
         <AppBadge tone="warning">{isWaiting ? "Waiting" : "Clarify ownership"}</AppBadge>
         {item.jiraKey ? <AppBadge tone="neutral">{item.jiraKey}</AppBadge> : null}
       </div>
       {item.taskId != null ? (
-        <Link href={`/tasks/${item.taskId}`} className="ni-row-title">
+        <Link href={`/tasks/${item.taskId}`} className={css("ni-row-title")}>
           {item.title}
         </Link>
       ) : (
-        <p className="ni-row-title">{item.title}</p>
+        <p className={css("ni-row-title")}>{item.title}</p>
       )}
-      <p className="ni-row-reason">{item.description?.trim() || item.reason}</p>
+      <p className={css("ni-row-reason")}>{item.description?.trim() || item.reason}</p>
       {item.taskId != null ? (
-        <div className="ni-row-actions">
+        <div className={css("ni-row-actions")}>
           <Button
             type="button"
             size="sm"
@@ -93,11 +101,11 @@ function OwnershipRow({
 
 function ConflictRow({ conflict }: { conflict: ConflictItem }) {
   return (
-    <div className="ni-row ni-row--conflict">
-      <div className="ni-row-head">
+    <div className={css("ni-row ni-row--conflict")}>
+      <div className={css("ni-row-head")}>
         <AppBadge tone="danger">Source conflict</AppBadge>
       </div>
-      <p className="ni-row-reason">{conflict.summary}</p>
+      <p className={css("ni-row-reason")}>{conflict.summary}</p>
     </div>
   );
 }
@@ -131,24 +139,26 @@ export function NeedsInputRail({
   const ctaCopy = total === 1 ? "Review" : `Review ${total} items`;
 
   return (
-    <div className="ni-rail" aria-live="polite">
+    <div className={css("ni-rail")} aria-live="polite">
       <button
         type="button"
-        className="ni-trigger"
+        className={css("ni-trigger")}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        <AlertTriangle className="ni-trigger-icon" aria-hidden />
-        <span className="ni-trigger-copy">{countCopy}</span>
-        <span className="ni-trigger-cta">{ctaCopy}</span>
+        <AlertTriangle className={css("ni-trigger-icon")} aria-hidden />
+        <span className={css("ni-trigger-copy")}>{countCopy}</span>
+        <span className={css("ni-trigger-cta")}>{ctaCopy}</span>
         <ChevronDown
-          className={`ni-trigger-chevron${open ? " ni-trigger-chevron--open" : ""}`}
+          className={css(
+            `ni-trigger-chevron${open ? " ni-trigger-chevron--open" : ""}`
+          )}
           aria-hidden
         />
       </button>
 
       {open ? (
-        <div className="ni-tray">
+        <div className={css("ni-tray")}>
           {visibleBlocked.map((item) => (
             <OwnershipRow
               key={item.jiraKey ?? item.title}

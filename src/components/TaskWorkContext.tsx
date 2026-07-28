@@ -226,7 +226,7 @@ export function TaskWorkContext({
 
  <div className="mt-4 space-y-3">
  <label className="block">
- <span className="text-xs font-medium text-foreground">Figma frame link</span>
+ <span className="text-metadata font-medium text-foreground">Figma frame link</span>
  <Input
  fullWidth
  value={figmaUrl}
@@ -237,14 +237,14 @@ export function TaskWorkContext({
  </label>
 
  {!hasTask ? (
- <p className="text-xs text-muted">
+ <p className="text-metadata text-muted">
  Jira-only focus — add repo/GitHub links here for Review Status, or run Sync my day to
  attach a local task.
  </p>
  ) : null}
 
  <div>
- <span className="text-xs font-medium text-foreground">Local git repo</span>
+ <span className="text-metadata font-medium text-foreground">Local git repo</span>
  <div className="mt-1.5 flex flex-wrap gap-2">
  <Input
  fullWidth
@@ -265,7 +265,7 @@ export function TaskWorkContext({
  </div>
 
  <label className="block">
- <span className="text-xs font-medium text-foreground">GitHub repository</span>
+ <span className="text-metadata font-medium text-foreground">GitHub repository</span>
  <Input
  fullWidth
  value={github}
@@ -304,7 +304,7 @@ export function TaskWorkContext({
  .. {browseData.parent}
  </Button>
  ) : null}
- <div className="px-4 py-2 text-xs text-muted-soft">{browseData.path}</div>
+ <div className="px-4 py-2 text-metadata text-muted-soft">{browseData.path}</div>
  {browseData.entries.length === 0 ? (
  <p className="px-4 py-3 text-sm text-muted">No subfolders here.</p>
  ) : (
@@ -324,7 +324,7 @@ export function TaskWorkContext({
  className="flex w-full justify-between rounded-none px-4"
  >
  <span>{entry.name}</span>
- <span className="text-xs text-muted-soft">
+ <span className="text-metadata text-muted-soft">
  {entry.isGitRepo ? "Use repo" : "Open"}
  </span>
  </Button>
@@ -373,7 +373,7 @@ function SyncReviewSummary({ report }: { report: SyncReviewReport }) {
  <p className="eyebrow text-foreground/70">Latest sync</p>
  <p className="mt-2 leading-relaxed text-foreground">{report.summary}</p>
  {report.githubBranch || report.figmaUrl ? (
- <p className="mt-2 text-xs text-muted">
+ <p className="mt-2 text-metadata text-muted">
  {report.githubBranch ? `Branch: ${report.githubBranch}` : null}
  {report.githubBranch && report.figmaUrl ? " · " : null}
  {report.figmaUrl ? "Figma frame checked via MCP" : null}
@@ -385,7 +385,7 @@ function SyncReviewSummary({ report }: { report: SyncReviewReport }) {
  {report.conflicts.length > 0 ? <ReportList title="Conflicts" items={report.conflicts} /> : null}
  {report.recommendedNextAction ? (
  <div>
- <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+ <p className="mb-1 text-metadata font-semibold uppercase tracking-wide text-muted">
  Recommended next action
  </p>
  <p className="leading-relaxed text-foreground">{report.recommendedNextAction}</p>
@@ -398,7 +398,7 @@ function SyncReviewSummary({ report }: { report: SyncReviewReport }) {
 function ReportList({ title, items }: { title: string; items: string[] }) {
  return (
  <div>
- <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">{title}</p>
+ <p className="mb-1.5 text-metadata font-semibold uppercase tracking-wide text-muted">{title}</p>
  <ul className="space-y-1">
  {items.map((item) => (
  <li key={item} className="flex gap-2 leading-relaxed">

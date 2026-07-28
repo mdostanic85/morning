@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowRight, ExternalLink } from "lucide-react";
+import { AlertTriangle, ExternalLink } from "lucide-react";
 import { getWorkTaskById } from "@/services/workTasks";
 import { getSourceItems } from "@/services/sourceItems";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
@@ -10,6 +10,14 @@ import { TaskActionButtons } from "@/components/TaskActionButtons";
 import { buildTaskSupportingSources } from "@/lib/tasks/taskSupportingSources";
 import { SOURCE_TYPES, type SourceType } from "@/domain/sourceItem";
 import { filterMeetingContextForTask } from "@/lib/tasks/evidenceRelevance";
+import { humanizeReason } from "@/lib/tasks/humanizeReason";
+import { ReasonText } from "@/components/ReasonText";
+import { Heading } from "@/components/Heading";
+import { TaskOutcomesPanel } from "@/components/TaskOutcomesPanel";
+import {
+  matchCriteriaToDeliveryChecks,
+  type CriterionCheckResult,
+} from "@/lib/tasks/criterionVerificationMatch";
 
 function isKnownSourceType(value: string): value is SourceType {
   return (SOURCE_TYPES as readonly string[]).includes(value);
@@ -57,6 +65,38 @@ function normalizeQuoteText(value: string | null): string {
   return (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+function EvidenceText({ text }: { text: string }) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={index}>{part.slice(2, -2)}</strong>
+    ) : (
+      part
+    )
+  );
+}
+
+/** Where sync looked and which job reported it — shown inside the accordion. */
+function outcomeSyncMeta(
+  check: CriterionCheckResult,
+  sync: { figmaUrl: string | null; githubBranch: string | null } | null
+): string | null {
+  const locations = [
+    check.verdict === "met" && sync?.figmaUrl ? "Figma frame" : null,
+    check.verdict === "met" && sync?.githubBranch ? `branch ${sync.githubBranch}` : null,
+  ].filter((value): value is string => Boolean(value));
+
+  const parts = [
+    locations.length > 0 ? `Found in ${locations.join(", ")}` : null,
+    check.source === "sync_review"
+      ? "delivery sync"
+      : check.source === "verification"
+        ? "delivery check"
+        : null,
+  ].filter((value): value is string => Boolean(value));
+
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 export default async function TaskDetailPage({
  params,
 }: {
@@ -100,13 +140,37 @@ export default async function TaskDetailPage({
     supporting.groups.find((g) => g.jiraStatus)?.jiraStatus ??
     null;
 
+  const outcomeChecks = matchCriteriaToDeliveryChecks(task.doneCriteria, {
+    verification: task.latestVerificationReport,
+    syncReview: task.latestSyncReviewReport,
+  });
+  // Only "done" vs "still to do" is surfaced here. The verdict wording and the
+  // sync report line live on the corrections page, one outcome at a time.
+  const outcomes = task.doneCriteria.map((criterion, index) => {
+    const check = outcomeChecks[index] ?? {
+      verdict: "not_checked" as const,
+      detail: null,
+      source: null,
+    };
+    const evidence = task.evidence[index] ?? task.evidence[0] ?? null;
+    return {
+      number: index + 1,
+      criterion,
+      isDone: check.verdict === "met",
+      detail: check.detail,
+      meta: outcomeSyncMeta(check, task.latestSyncReviewReport),
+      evidenceQuote: evidence?.quote || evidence?.summary || null,
+      evidenceUrl: evidence?.url ?? null,
+    };
+  });
+
  return (
  <div className="mx-auto w-full max-w-[77.5rem] py-8 pb-20">
  <div className="mb-7">
  <BackToTodayButton />
  </div>
 
- <header className="border-b border-border pb-7">
+      <header className="pb-7">
  <div className="flex flex-wrap gap-2">
  <AppBadge tone={task.status === "waiting" || task.status === "unclear" ? "warning" : "danger"}>
  {task.status === "waiting" ? "Waiting" : task.status === "unclear" ? "Needs your input" : "Do first"}
@@ -116,83 +180,45 @@ export default async function TaskDetailPage({
  <AppBadge tone={jiraStatusTone(jiraStatus)}>{jiraStatus}</AppBadge>
  ) : null}
  </div>
- <h1 className="ft-screen-title mt-4 max-w-4xl font-display">{task.title}</h1>
- <div className="mt-4 max-w-3xl">
+ <Heading level={1} className="mt-4 max-w-4xl">{task.title}</Heading>
+ <div className="mt-4 w-full">
  <strong className="block text-sm uppercase tracking-[0.08em] text-accent-strong">
  Why this matters
  </strong>
- <p className="ft-screen-lead mt-2 text-muted">{task.reason}</p>
+ <ReasonText
+ text={humanizeReason(task.reason, task.title, { maxSentences: 4, maxLength: 1200 })}
+ sentencePerLine
+ className="ft-screen-lead mt-2 text-muted"
+ />
  </div>
  </header>
 
  <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1.45fr)_minmax(22rem,.75fr)] lg:items-start">
- <main className="grid min-w-0 gap-6 [overflow-wrap:anywhere]">
- {task.latestSyncReviewReport ? (
- <section className="rounded-[20px] border border-border bg-surface p-6">
- <div className="flex flex-wrap items-start justify-between gap-3">
- <div>
- <h2 className="ft-panel-title font-display">Figma requirement audit</h2>
- <p className="mt-2 text-sm leading-relaxed text-muted">
- {task.latestSyncReviewReport.summary}
- </p>
- </div>
- {task.latestSyncReviewReport.figmaUrl ? (
- <a
- href={task.latestSyncReviewReport.figmaUrl}
- target="_blank"
- rel="noreferrer"
- className="inline-flex items-center gap-2 text-sm font-semibold text-accent-strong"
- >
- Open audited frame <ExternalLink className="size-4" />
- </a>
- ) : null}
- </div>
- <div className="mt-5 grid gap-5 sm:grid-cols-2">
- <MeetingContextList
- title="Matches requirement"
- items={task.latestSyncReviewReport.ok}
- />
- <MeetingContextList
- title="Missing or incomplete"
- items={task.latestSyncReviewReport.notOk}
- />
- {task.latestSyncReviewReport.conflicts.length > 0 ? (
- <MeetingContextList
- title="Conflicts"
- items={task.latestSyncReviewReport.conflicts}
- />
- ) : null}
- </div>
- <p className="mt-5 rounded-2xl border border-accent/20 bg-accent/8 p-4 text-sm leading-relaxed">
- <strong>Next:</strong> {task.latestSyncReviewReport.recommendedNextAction}
- </p>
- </section>
- ) : null}
-
+ <div className="grid min-w-0 gap-6 [overflow-wrap:anywhere]">
  {relevantMeetingContext.length > 0 ? (
- <section className="rounded-[20px] border border-border bg-surface p-6">
- <h2 className="ft-panel-title font-display">What was said in meetings</h2>
- <p className="mt-2 text-sm leading-relaxed text-muted">
- Decisions, requested changes, and open questions linked to this task.
- </p>
- <div className="mt-5 grid gap-5">
+              <section className="rounded-[20px] bg-surface p-7 shadow-[var(--elevation-section)]">
+                <Heading level={2} visualLevel={3}>What was said in meetings</Heading>
+                <p className="mt-2.5 text-sm leading-relaxed text-muted">
+                  Decisions, requested changes, and open questions linked to this task.
+                </p>
+                <div className="mt-6 grid gap-5">
  {relevantMeetingContext.map((context) => (
- <article
- key={context.sourceItemId}
- className="overflow-hidden rounded-2xl border border-border bg-surface"
- >
- <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border bg-surface-soft/55 px-5 py-4">
- <strong className="text-[15px] font-bold">{context.sourceTitle}</strong>
- <span className="text-xs font-medium text-muted-soft">
- {meetingDate(context.sourceDate)}
- </span>
- </header>
+                    <article
+                      key={context.sourceItemId}
+                      className="overflow-hidden rounded-2xl bg-surface-soft"
+                    >
+                      <header className="flex flex-wrap items-baseline justify-between gap-2 px-5 pt-4">
+                        <Heading level={3} visualLevel={5}>{context.sourceTitle}</Heading>
+                        <span className="text-metadata font-medium text-muted-soft">
+                          {meetingDate(context.sourceDate)}
+                        </span>
+                      </header>
 
- <p className="px-5 py-4 text-sm leading-7 text-foreground">
- {context.overview}
- </p>
+                      <p className="px-5 pb-1 pt-2 text-sm leading-7 text-foreground">
+                        {context.overview}
+                      </p>
 
- <div className="divide-y divide-border border-t border-border px-5">
+                      <div className="divide-y divide-border px-5">
  {context.requestedChanges.length > 0 ? (
  <MeetingContextList
  title="Requested changes"
@@ -213,10 +239,10 @@ export default async function TaskDetailPage({
  ) : null}
  </div>
 
- <details className="group border-t border-border px-5 py-4">
+                      <details className="group px-5 pb-4 pt-3">
  <summary className="cursor-pointer list-none text-sm font-semibold text-accent-strong marker:content-none">
  <span className="inline-flex items-center gap-2">
- <span aria-hidden className="text-xs transition-transform group-open:rotate-90">▶</span>
+ <span aria-hidden className="text-metadata transition-transform group-open:rotate-90">▶</span>
  {context.evidenceQuotes.length} supporting {context.evidenceQuotes.length === 1 ? "quote" : "quotes"}
  </span>
  </summary>
@@ -226,7 +252,7 @@ export default async function TaskDetailPage({
  key={quote}
  className="border-l-2 border-border-strong pl-3 text-sm leading-relaxed text-muted"
  >
- “{quote}”
+ “<EvidenceText text={quote} />”
  </blockquote>
  ))}
  </div>
@@ -237,43 +263,42 @@ export default async function TaskDetailPage({
  </section>
  ) : null}
 
- <section className="rounded-[20px] border border-border bg-surface p-6">
- <h2 className="ft-panel-title font-display">All required outcomes</h2>
- <p className="mt-2 text-sm text-muted">Open an outcome to see the instruction, evidence, and expected result.</p>
- <div className="mt-5 grid gap-2.5">
- {task.doneCriteria.map((criterion, index) => (
- <Link
- key={`${index}-${criterion}`}
- href={`/tasks/${task.id}/corrections/${index + 1}`}
- className="group grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-border bg-surface p-4 transition hover:border-border-strong hover:"
- >
- <span className="grid size-10 place-items-center rounded-xl bg-accent-soft-surface text-xs font-bold text-accent-strong">
- {String(index + 1).padStart(2, "0")}
- </span>
- <span>
- <strong className="block text-[15px]">{criterion}</strong>
- </span>
- <ArrowRight className="size-5 text-accent-strong transition-transform group-hover:translate-x-1" />
- </Link>
- ))}
- </div>
- </section>
+          <section className="rounded-[20px] bg-surface p-7 shadow-[var(--elevation-section)]">
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <Heading level={2} visualLevel={3}>All required outcomes</Heading>
+              {task.latestSyncReviewReport?.figmaUrl ? (
+                <a
+                  href={task.latestSyncReviewReport.figmaUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-accent-strong"
+                >
+                  Open audited frame <ExternalLink className="size-4" />
+                </a>
+              ) : null}
+            </div>
+            <p className="mt-2.5 text-sm leading-relaxed text-muted">
+              Sync marks an outcome done once it finds it in the delivery. Expand one to see what
+              sync found, the source quote, and the full instruction.
+            </p>
+            <TaskOutcomesPanel taskId={task.id} outcomes={outcomes} />
+          </section>
 
- </main>
+ </div>
 
  <aside className="grid min-w-0 gap-4 [overflow-wrap:anywhere] lg:sticky lg:top-24">
-            <section className="focus-soft-gradient rounded-[20px] border border-border-strong p-6">
-              <h2 className="ft-panel-subtitle font-display">Supporting sources</h2>
+            <section className="rounded-[20px] bg-surface p-6 shadow-[var(--elevation-section)]">
+              <Heading level={2} visualLevel={4}>Supporting sources</Heading>
               <p className="mt-1.5 text-sm leading-relaxed text-muted">
                 Verify the task against the source, date, and quote.
               </p>
-              <div className="mt-4 flex items-center gap-3 rounded-[14px] border border-border bg-surface px-4 py-3">
+              <div className="mt-4 flex items-center gap-3 rounded-[14px] bg-surface-soft px-4 py-3">
                 <strong
                   className={`font-display text-2xl leading-none tracking-[-0.04em] ${confidenceToneClass(task.confidence)}`}
                 >
-                  {confidence == null ? "—" : `${confidence}%`}
+                  {confidence == null ? "Not scored" : `${confidence}%`}
                 </strong>
-                <span className="h-8 w-px bg-border" aria-hidden />
+                <span className="h-8 w-px bg-border-strong" aria-hidden />
                 <span className={`text-sm font-bold ${confidenceToneClass(task.confidence)}`}>
                   {confidenceLabel(task.confidence)}
                 </span>
@@ -282,7 +307,7 @@ export default async function TaskDetailPage({
               {supporting.conflicts.map((conflict) => (
                 <div
                   key={conflict.summary}
-                  className="mt-4 rounded-[14px] border border-danger/35 bg-danger-soft-surface p-4"
+                  className="mt-4 rounded-[14px] bg-danger-soft-surface p-4"
                 >
                   <AppBadge tone="danger" icon={<AlertTriangle className="size-3.5" aria-hidden />}>
                     Conflict
@@ -298,10 +323,8 @@ export default async function TaskDetailPage({
                   supporting.groups.map((group) => (
                     <article
                       key={group.sourceItemId}
-                      className={`flex flex-col gap-3 rounded-[14px] border p-4 ${
-                        group.inConflict
-                          ? "border-danger/40 bg-danger-soft-surface/40"
-                          : "border-border bg-surface"
+                      className={`flex flex-col gap-3 rounded-[14px] p-4 ${
+                        group.inConflict ? "bg-danger-soft-surface" : "bg-surface-soft"
                       }`}
                     >
                       <div className="flex flex-wrap items-center gap-2">
@@ -321,9 +344,9 @@ export default async function TaskDetailPage({
                       </div>
 
                       <div className="grid gap-1">
-                        <h3 className="text-xl font-semibold leading-7 text-foreground [overflow-wrap:anywhere]">
+                        <Heading level={3} visualLevel={5} className="text-foreground [overflow-wrap:anywhere]">
                           {group.title}
-                        </h3>
+                        </Heading>
                         <span className="text-sm font-medium leading-5 text-muted-soft">
                           {meetingDate(group.sourceDate)}
                         </span>
@@ -335,7 +358,7 @@ export default async function TaskDetailPage({
                             What this asks for
                           </span>
                           <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-foreground [overflow-wrap:anywhere]">
-                            “{group.actionSnippet}”
+                            “<EvidenceText text={group.actionSnippet} />”
                           </p>
                         </div>
                       ) : null}
@@ -380,7 +403,7 @@ export default async function TaskDetailPage({
                                       key={quote.id}
                                       className="w-full border-l-2 border-border-strong pl-3.5 text-sm leading-[22.75px] text-muted [overflow-wrap:anywhere]"
                                     >
-                                      “{quote.text}”
+                                      “<EvidenceText text={quote.text} />”
                                     </li>
                                   ))}
                                 </ul>
@@ -394,7 +417,7 @@ export default async function TaskDetailPage({
                     </article>
                   ))
                 ) : (
-                  <p className="rounded-[14px] border border-danger/35 bg-danger-soft-surface p-4 text-sm text-muted">
+                  <p className="rounded-[14px] bg-danger-soft-surface p-4 text-sm text-muted">
                     No source evidence is attached. Verify this task before acting.
                   </p>
                 )}
@@ -402,8 +425,8 @@ export default async function TaskDetailPage({
             </section>
 
             {/* WL-12: corrections reachable from Today → task detail, using the existing write-confirmation pattern (TaskActionButtons already gates Done/Delete behind a confirm dialog). */}
-            <section className="rounded-[20px] border border-border bg-surface p-6">
-              <h2 className="ft-panel-subtitle font-display">Change status</h2>
+            <section className="rounded-[20px] bg-surface p-6 shadow-[var(--elevation-section)]">
+              <Heading level={2} visualLevel={4}>Change status</Heading>
               <p className="mt-2 text-sm leading-relaxed text-muted">
                 <span className="font-semibold text-foreground">Next: </span>
                 {task.nextAction}
@@ -413,7 +436,6 @@ export default async function TaskDetailPage({
                   taskId={task.id}
                   linkedJiraKey={linkedJiraKey}
                   latestVerificationReport={task.latestVerificationReport}
-                  latestSyncReviewReport={task.latestSyncReviewReport}
                 />
               </div>
             </section>
@@ -426,9 +448,9 @@ export default async function TaskDetailPage({
 function MeetingContextList({ title, items }: { title: string; items: string[] }) {
  return (
  <section className="grid gap-2.5 py-4 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-5">
- <h3 className="text-xs font-bold leading-6 text-muted">
- {title}
- </h3>
+			<Heading level={4} visualLevel={6} className="text-muted">
+				{title}
+			</Heading>
  <ul className="grid gap-2">
  {items.map((item) => (
  <li key={item} className="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5 text-sm leading-6">

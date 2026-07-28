@@ -1,7 +1,4 @@
-"use client";
-
 import type { SourceType } from "@/domain/sourceItem";
-import { Tooltip } from "@heroui/react/tooltip";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
 
 const SOURCE_TYPE_LABEL: Record<SourceType, string> = {
@@ -48,20 +45,10 @@ const SOURCE_TYPE_TONE: Record<SourceType, AppBadgeTone> = {
 
 export function SourceBadge({ sourceType }: { sourceType: SourceType }) {
   return (
-    <Tooltip delay={400}>
-      <Tooltip.Trigger>
-        <AppBadge tone={SOURCE_TYPE_TONE[sourceType] ?? "neutral"} className="font-normal">
-          {SOURCE_TYPE_LABEL[sourceType] ?? sourceType}
-        </AppBadge>
-      </Tooltip.Trigger>
-      <Tooltip.Content
-        placement="top"
-        showArrow
-        className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background"
-      >
-        <Tooltip.Arrow />
-        {SOURCE_TYPE_DESCRIPTION[sourceType] ?? `Source: ${sourceType}`}
-      </Tooltip.Content>
-    </Tooltip>
+    <span title={SOURCE_TYPE_DESCRIPTION[sourceType] ?? `Source: ${sourceType}`}>
+      <AppBadge tone={SOURCE_TYPE_TONE[sourceType] ?? "neutral"} className="font-normal">
+        {SOURCE_TYPE_LABEL[sourceType] ?? sourceType}
+      </AppBadge>
+    </span>
   );
 }

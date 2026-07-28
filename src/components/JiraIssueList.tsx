@@ -1,5 +1,6 @@
 import type { JiraPendingSnapshot } from "@/lib/connectors/jiraPending";
 import { AppBadge } from "@/components/AppBadge";
+import { Heading } from "@/components/Heading";
 
 interface JiraIssueListProps {
   issues: JiraPendingSnapshot[];
@@ -25,12 +26,12 @@ export function JiraIssueList({
                   href={issue.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-mono text-[14px] text-accent hover:underline"
+                  className="font-utility text-[14px] text-accent hover:underline"
                 >
                   {issue.key}
                 </a>
               ) : (
-                <span className="font-mono text-[14px] text-muted">{issue.key}</span>
+                <span className="font-utility text-[14px] text-muted">{issue.key}</span>
               )}
               <AppBadge tone="neutral">{issue.status}</AppBadge>
               {issue.priority ? (
@@ -41,7 +42,7 @@ export function JiraIssueList({
               {new Date(issue.updatedAt).toLocaleDateString()}
             </span>
           </div>
-          <h3 className="mt-2 text-[15px] font-medium leading-snug">{issue.title}</h3>
+          <Heading level={3} visualLevel={6} className="mt-2">{issue.title}</Heading>
           {issue.excerpt ? (
             <p className="mt-3 border-t border-border/60 pt-3 text-[14px] leading-relaxed text-muted">
               {issue.excerpt}

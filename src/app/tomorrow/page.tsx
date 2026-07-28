@@ -4,6 +4,7 @@ import { getTodayQueue } from "@/services/workTasks";
 import { getSourceItems } from "@/services/sourceItems";
 import { TaskCard } from "@/components/TaskCard";
 import { EmptyState } from "@/components/EmptyState";
+import { Heading } from "@/components/Heading";
 
 export const dynamic = "force-dynamic";
 
@@ -15,24 +16,38 @@ export default async function TomorrowPage() {
   ]);
   const sourceById = new Map(sourceItems.map((source) => [source.id, source]));
   const planned = queue.tomorrow[0] ?? queue.next[0] ?? null;
+  const normalize = (value: string) => value.trim().toLocaleLowerCase();
+  const savedPlanMatchesQueue =
+    Boolean(memory?.firstTomorrow && planned) &&
+    (normalize(memory!.firstTomorrow!).includes(normalize(planned!.title)) ||
+      normalize(planned!.title).includes(normalize(memory!.firstTomorrow!)));
+  const showSavedPlan =
+    Boolean(memory?.firstTomorrow && planned) && savedPlanMatchesQueue;
+  const savedPlanIsOutdated = Boolean(memory?.firstTomorrow) && !showSavedPlan;
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-4xl font-semibold tracking-tight">Tomorrow</h1>
+        <Heading level={1} visualLevel={2}>Tomorrow</Heading>
         <p className="mt-3 text-[15px] leading-relaxed text-muted">
-          The first planned task from the latest end-of-day memory and current queue.
+          Your next planned task, based on the current queue.
         </p>
       </div>
 
-      {memory?.firstTomorrow ? (
+      {showSavedPlan && memory?.firstTomorrow ? (
         <section className="app-card p-6 sm:p-7">
-          <h2 className="eyebrow">Planned first task</h2>
+          <Heading level={2} visualLevel={6} className="eyebrow">Saved plan</Heading>
           <p className="mt-3 text-[15px] leading-relaxed">{memory.firstTomorrow}</p>
-          <p className="mt-3 text-xs text-muted-soft">
+          <p className="mt-3 text-metadata text-muted-soft">
             Saved {new Date(memory.createdAt).toLocaleString()}
           </p>
         </section>
+      ) : null}
+
+      {savedPlanIsOutdated ? (
+        <p className="rounded-xl border border-border bg-surface-soft px-4 py-3 text-sm text-muted">
+          The saved end-of-day plan is out of date. Worklight is showing the current queue.
+        </p>
       ) : null}
 
       {planned ? (

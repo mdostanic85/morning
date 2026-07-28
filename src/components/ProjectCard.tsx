@@ -7,6 +7,7 @@ import { Toast } from "@heroui/react/toast";
 import type { ProjectStatus } from "@/domain/project";
 import { AppBadge } from "@/components/AppBadge";
 import { ProjectStatusToggle } from "@/components/ProjectStatusToggle";
+import { Heading } from "@/components/Heading";
 
 interface ProjectCardProps {
   id: number;
@@ -66,15 +67,15 @@ export function ProjectCard({
 
   return (
     <div className="app-card flex items-start gap-3 p-5 transition-colors hover:border-border-strong hover:bg-surface-raised">
-      <Link href={`/projects/${id}?tab=tasks`} className="min-w-0 flex-1">
-        <h3 className="text-base font-medium leading-snug">{name}</h3>
+      <Link href={`/projects/${id}?tab=overview`} className="min-w-0 flex-1">
+        <Heading level={2} visualLevel={6}>{name}</Heading>
         {description ? (
           <p className="mt-1.5 text-sm leading-relaxed text-muted line-clamp-2">{description}</p>
         ) : null}
         {jiraKeys.length > 0 ? (
-          <p className="mt-2 text-xs text-muted-soft">Jira: {jiraKeys.join(" · ")}</p>
+          <p className="mt-2 text-metadata text-muted-soft">Jira: {jiraKeys.join(" · ")}</p>
         ) : keywords.length > 0 ? (
-          <p className="mt-2.5 text-xs text-muted-soft">{keywords.join(" · ")}</p>
+          <p className="mt-2.5 text-metadata text-muted-soft">{keywords.join(" · ")}</p>
         ) : null}
       </Link>
       <div className="flex shrink-0 items-center gap-2 self-start">

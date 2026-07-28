@@ -18,6 +18,7 @@ import { OPEN_QUEUE_STATUSES } from "@/domain/workTask";
 import { fetchJiraIssuesForProject } from "@/lib/projects/jiraIssues";
 import { JiraIssueList } from "@/components/JiraIssueList";
 import type { WorkTaskWithEvidence } from "@/services/workTasks";
+import { Heading } from "@/components/Heading";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +43,21 @@ const KNOWLEDGE_GROUPS: { type: KnowledgeItemType; title: string }[] = [
 ];
 
 function coerceTab(value: string | undefined): ProjectTab {
-  return TABS.includes(value as ProjectTab) ? (value as ProjectTab) : "tasks";
+  return TABS.includes(value as ProjectTab) ? (value as ProjectTab) : "overview";
 }
 
 function preview(text: string, max = 220): string {
   const trimmed = text.trim();
   return trimmed.length > max ? `${trimmed.slice(0, max)}...` : trimmed;
+}
+
+function sourcePreview(source: SourceItem): string {
+  if (source.sourceType !== "jira") return preview(source.body);
+  const description = source.body.match(
+    /\bDescription:\s*([\s\S]*?)(?:\bComments:\s*|$)/i
+  )?.[1]?.trim();
+  if (description && description !== "(empty)") return preview(description);
+  return "Open the Jira issue for its latest details.";
 }
 
 function formatDate(value: string): string {
@@ -62,11 +72,11 @@ function renderSourceList(items: SourceItem[], emptyTitle: string) {
       {items.map((source) => (
         <article key={source.id} className="card p-5">
           <div className="flex items-start justify-between gap-3">
-            <h3 className="text-base font-medium leading-snug">{source.title}</h3>
+            <Heading level={3} visualLevel={6}>{source.title}</Heading>
             <SourceBadge sourceType={source.sourceType} />
           </div>
-          <p className="mt-2 text-sm leading-relaxed text-muted">{preview(source.body)}</p>
-          <p className="mt-3 text-xs text-muted-soft">{formatDate(source.sourceDate)}</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted [overflow-wrap:anywhere]">{sourcePreview(source)}</p>
+          <p className="mt-3 text-metadata text-muted-soft">{formatDate(source.sourceDate)}</p>
         </article>
       ))}
     </div>
@@ -85,13 +95,13 @@ function renderVerificationList(
         <article key={report.id} className="card p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-base font-medium leading-snug">
+              <Heading level={3} visualLevel={6}>
                 {taskTitleById.get(report.taskId) ?? `Task ${report.taskId}`}
-              </h3>
-              <p className="mt-1 text-xs capitalize text-muted">{report.verdict}</p>
+              </Heading>
+              <p className="mt-1 text-metadata capitalize text-muted">{report.verdict}</p>
             </div>
             {report.confidence != null ? (
-              <span className="text-xs tabular-nums text-muted">
+              <span className="text-metadata tabular-nums text-muted">
                 {Math.round(report.confidence * 100)}%
               </span>
             ) : null}
@@ -99,7 +109,7 @@ function renderVerificationList(
           <p className="mt-2 text-sm leading-relaxed text-muted">
             {report.recommendedNextAction}
           </p>
-          <p className="mt-3 text-xs text-muted-soft">{formatDate(report.createdAt)}</p>
+          <p className="mt-3 text-metadata text-muted-soft">{formatDate(report.createdAt)}</p>
         </article>
       ))}
     </div>
@@ -141,6 +151,7 @@ export default async function ProjectDetailPage({
     return (
       <TaskCard
         key={task.id}
+        headingLevel={3}
         id={task.id}
         title={task.title}
         reason={task.reason}
@@ -191,14 +202,14 @@ export default async function ProjectDetailPage({
         {hasJiraIssues ? (
           <section>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="eyebrow text-foreground/70">
-                Jira
+              <Heading level={2} visualLevel={6} className="eyebrow text-foreground/70">
+                Jira issues
                 <span className="ml-2 font-normal tabular-nums text-muted-soft">
                   {jiraIssues.length}
                 </span>
-              </h2>
+              </Heading>
               {currentProject.jiraKeys.length > 0 ? (
-                <p className="text-xs text-muted-soft">
+                <p className="text-metadata text-muted-soft">
                   {currentProject.jiraKeys.join(" · ")}
                 </p>
               ) : null}
@@ -212,7 +223,7 @@ export default async function ProjectDetailPage({
         {hasLocalTasks ? (
           <section>
             {hasJiraIssues ? (
-              <h2 className="eyebrow text-foreground/70">From your sources</h2>
+              <Heading level={2} visualLevel={6} className="eyebrow text-foreground/70">Worklight tasks</Heading>
             ) : null}
             <div className={hasJiraIssues ? "mt-3 space-y-8" : "space-y-8"}>
               {statusesWithTasks.map((status) => {
@@ -227,7 +238,9 @@ export default async function ProjectDetailPage({
                     }
                   >
                     <div className="flex items-baseline gap-2">
-                      <h3
+                      <Heading
+                        level={2}
+                        visualLevel={6}
                         className={
                           status === "unclear"
                             ? "eyebrow text-unclear"
@@ -244,7 +257,7 @@ export default async function ProjectDetailPage({
                         >
                           {items.length}
                         </span>
-                      </h3>
+                      </Heading>
                     </div>
                     <div className="mt-3 space-y-4">{items.map((task) => renderTask(task))}</div>
                   </div>
@@ -271,18 +284,18 @@ export default async function ProjectDetailPage({
           <p className="mt-2 text-base font-medium leading-snug tracking-tight">
             {currentPriority}
           </p>
-          <p className="mt-2 text-sm text-muted">{counts.join(" · ")}</p>
+          <p className="mt-2 text-sm text-muted">{counts.join(", ")}</p>
         </section>
 
         <section>
-          <h2 className="eyebrow text-foreground/70">Latest source items</h2>
+          <Heading level={2} visualLevel={6} className="eyebrow text-foreground/70">Latest source items</Heading>
           <div className="mt-3">
             {renderSourceList(linkedSourceItems.slice(0, 3), "No linked sources yet.")}
           </div>
         </section>
 
         <section>
-          <h2 className="eyebrow text-foreground/70">Latest learnings from project sources</h2>
+          <Heading level={2} visualLevel={6} className="eyebrow text-foreground/70">Latest learnings from project sources</Heading>
           <div className="mt-3">
             <KnowledgeItemCardList
               items={knowledgeItems.slice(0, 3)}
@@ -295,7 +308,7 @@ export default async function ProjectDetailPage({
         <details className="card p-5">
           <summary className="cursor-pointer text-sm font-semibold tracking-tight">
             Project settings
-            <span className="ml-2 text-xs font-normal text-muted">
+            <span className="ml-2 text-metadata font-normal text-muted">
               repo paths and import hints
             </span>
           </summary>
@@ -326,20 +339,20 @@ export default async function ProjectDetailPage({
     return (
       <div className="space-y-8">
         <p className="text-sm text-muted">
-          Learnings from sources linked to this project. Knowledge is global by default — this is a
-          filtered view, not a separate bucket.
+          Learnings from sources linked to this project. This is a filtered view of your shared
+          knowledge, not a separate collection.
         </p>
         {KNOWLEDGE_GROUPS.map((group) => {
           const items = knowledgeItems.filter((item) => item.type === group.type);
           return (
             <section key={group.type}>
               <div className="flex items-baseline gap-2">
-                <h2 className="eyebrow text-foreground/70">
+                <Heading level={2} visualLevel={6} className="eyebrow text-foreground/70">
                   {group.title}
                   <span className="ml-2 font-normal tabular-nums text-muted-soft">
                     {items.length}
                   </span>
-                </h2>
+                </Heading>
               </div>
               <div className="mt-3">
                 <KnowledgeItemCardList
@@ -357,12 +370,12 @@ export default async function ProjectDetailPage({
   return (
     <div className="space-y-8">
       <div>
-        <Link href="/projects" className="text-sm text-muted hover:text-foreground">
+        <Link href="/projects" className="inline-flex min-h-11 items-center text-sm text-muted hover:text-foreground">
           ← Projects
         </Link>
-        <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight">
+        <Heading level={1} visualLevel={2} className="mt-3">
           {currentProject.name}
-        </h1>
+        </Heading>
         {currentProject.description ? (
           <p className="mt-3 text-base leading-relaxed text-muted">
             {currentProject.description}
@@ -383,8 +396,8 @@ export default async function ProjectDetailPage({
             aria-current={activeTab === item ? "page" : undefined}
             className={
               activeTab === item
-                ? "rounded-lg border border-border-strong bg-surface-raised px-4 py-2 text-sm font-semibold text-foreground"
-                : "rounded-lg border border-transparent px-4 py-2 text-sm text-muted hover:bg-surface-soft hover:text-foreground"
+                ? "inline-flex min-h-11 items-center rounded-lg border border-border-strong bg-surface-raised px-4 py-2 text-sm font-semibold text-foreground"
+                : "inline-flex min-h-11 items-center rounded-lg border border-transparent px-4 py-2 text-sm text-muted hover:bg-surface-soft hover:text-foreground"
             }
           >
             {TAB_LABEL[item]}

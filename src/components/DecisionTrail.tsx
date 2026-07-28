@@ -2,12 +2,13 @@
 
 import { ChevronDownIcon } from "lucide-react";
 import { Button } from "@heroui/react/button";
+import { Heading } from "./Heading";
 
 const DECISION_FLOW: { title: string; description: string }[] = [
   {
     title: "Meeting transcript",
     description:
-      "Newest Gemini/Granola/Drive transcript wins by date. If Matt or Lucas explicitly said it, that instruction still wins.",
+      "Newest Gemini/Granola/Drive transcript wins by date. If Matt Pettit or Lucas Saeed explicitly said it, that instruction still wins.",
   },
   {
     title: "Jira task state",
@@ -37,9 +38,9 @@ export function DecisionTrail({
   return (
     <section aria-labelledby="decision-trail-title" className="heading-host">
       <div>
-        <h2 id="decision-trail-title" className="heading-accent font-display text-[26px] font-semibold tracking-[-0.035em]">
+        <Heading level={2} visualLevel={3} id="decision-trail-title" className="heading-accent">
           Why the AI decided this way
-        </h2>
+        </Heading>
         <p className="mt-2.5 text-sm text-muted">
           The reasoning matters, but it stays visually secondary to the work.
         </p>
@@ -47,7 +48,7 @@ export function DecisionTrail({
 
       <div className="mt-5 grid items-start gap-[2.375rem] lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.82fr)]">
         <article className="focus-soft-gradient rounded-[22px] border border-border-strong p-7">
-          <h3 className="font-display text-[22px] font-semibold tracking-tight">Decision trail</h3>
+          <Heading level={3} visualLevel={4}>Decision trail</Heading>
           <p className="mt-2 mb-5 text-sm text-muted">
             The AI weighs directness, authority, recency, and source relevance.
           </p>

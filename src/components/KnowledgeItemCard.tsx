@@ -11,6 +11,7 @@ import { Chip } from "@heroui/react/chip";
 import { Button } from "@heroui/react/button";
 import { AlertDialog } from "@heroui/react/alert-dialog";
 import { Drawer } from "@heroui/react/drawer";
+import { Heading } from "@/components/Heading";
 
 export interface KnowledgeItemCardData {
  id: number;
@@ -70,7 +71,7 @@ function SourceLink({
  href={url}
  target="_blank"
  rel="noopener noreferrer"
- className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
+ className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm text-accent hover:bg-surface-soft hover:underline"
  >
  <ExternalLinkIcon className="size-3.5 shrink-0" aria-hidden />
  {title}
@@ -113,28 +114,28 @@ export function KnowledgeItemCard({
  <div className="flex items-start justify-between gap-3 border-b border-border/50 px-5 py-3">
  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
  <Chip variant="secondary">{TYPE_LABEL[item.type]}</Chip>
- <time className="text-xs tabular-nums text-muted-soft" dateTime={displayDate}>
+ <time className="text-metadata tabular-nums text-muted-soft" dateTime={displayDate}>
  {formatItemDate(displayDate)}
  </time>
  {item.confidence != null ? (
- <span className="text-xs tabular-nums text-muted">{Math.round(item.confidence * 100)}%</span>
+ <span className="text-metadata tabular-nums text-muted">{Math.round(item.confidence * 100)}%</span>
  ) : null}
  {item.projectName ? (
- <span className="text-xs text-muted-soft">{item.projectName}</span>
+ <span className="text-metadata text-muted-soft">{item.projectName}</span>
  ) : null}
  </div>
  {item.sourceType ? <SourceBadge sourceType={item.sourceType} /> : null}
  </div>
 
  <div className="px-5 py-4">
- <h3 className="text-base font-medium leading-snug">{item.title}</h3>
+ <Heading level={3} visualLevel={6}>{item.title}</Heading>
  <p className="mt-2 text-sm leading-relaxed text-muted">{preview(item.content, previewMax)}</p>
  </div>
 
  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/50 bg-surface-soft/30 px-5 py-3">
  <div className="flex flex-wrap items-center gap-2">
  <Drawer>
- <Drawer.Trigger render={(props) => <Button {...(props as ComponentProps<typeof Button>)} variant="outline" size="sm">Read more</Button>} />
+ <Drawer.Trigger render={(props) => <Button {...(props as ComponentProps<typeof Button>)} variant="outline" className="min-h-11">Read more</Button>} />
  <Drawer.Backdrop variant="blur" className="bg-background/75">
  <Drawer.Content placement="right" className="w-full">
  <Drawer.Dialog className="relative flex h-[100dvh] w-full max-w-xl flex-col gap-0 overflow-hidden border-l border-border bg-overlay pt-[env(safe-area-inset-top)] text-foreground outline-none">
@@ -149,7 +150,7 @@ export function KnowledgeItemCard({
  </div>
  <Drawer.Heading className="text-lg font-medium tracking-tight">{item.title}</Drawer.Heading>
  <p slot="description" className="text-sm text-muted">
- {[item.projectName, formatItemDate(displayDate)].filter(Boolean).join(" · ")}
+ {[item.projectName, formatItemDate(displayDate)].filter(Boolean).join(", ")}
  </p>
  </Drawer.Header>
  <Drawer.Body className="flex-1 overflow-y-auto space-y-6 px-6 py-5">
@@ -200,12 +201,12 @@ export function KnowledgeItemCard({
  <Button
  type="button"
  variant="danger-soft"
- size="sm"
+ className="min-h-11"
  isDisabled={isDeleting}
  onClick={() => setDeleteConfirmOpen(true)}
  >
  {isDeleting ? <Loader2Icon className="size-4 animate-spin" aria-hidden /> : null}
- Delete
+ Remove
  </Button>
  ) : null}
  </div>
@@ -216,12 +217,12 @@ export function KnowledgeItemCard({
  <AlertDialog.Container placement="center" size="xs" className="w-full max-w-none px-4">
  <AlertDialog.Dialog className="w-full max-w-sm rounded-surface border border-border bg-overlay p-5 text-foreground outline-none">
  <AlertDialog.Header className="flex flex-col items-start gap-1.5 text-left">
- <AlertDialog.Heading className="text-base font-medium">Delete this knowledge item?</AlertDialog.Heading>
+ <AlertDialog.Heading className="text-base font-medium">Remove this knowledge item?</AlertDialog.Heading>
  </AlertDialog.Header>
  <p slot="description" className="text-sm text-pretty text-muted">This permanently removes &ldquo;{item.title}&rdquo; from your memory. It will no longer appear in knowledge or search results.</p>
  <AlertDialog.Footer className="-mx-5 -mb-5 mt-5 flex flex-col-reverse gap-2 rounded-b-surface border-t border-border/70 bg-surface-soft/60 p-5 sm:flex-row sm:justify-end">
  <Button slot="close" variant="outline">Cancel</Button>
- <Button slot="close" variant="danger-soft" onClick={() => void runDelete()} isDisabled={isDeleting}>Delete knowledge item</Button>
+ <Button slot="close" variant="danger-soft" onClick={() => void runDelete()} isDisabled={isDeleting}>Remove knowledge item</Button>
  </AlertDialog.Footer>
  </AlertDialog.Dialog>
  </AlertDialog.Container>

@@ -1,13 +1,18 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { MenuIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { Button } from "@heroui/react/button";
 
 const LINKS = [
  { href: "/", label: "Today" },
+ { href: "/projects", label: "Projects" },
+ { href: "/knowledge", label: "Knowledge" },
  { href: "/how-ai-works", label: "How we decide" },
  { href: "/settings", label: "Settings" },
 ] as const;
@@ -34,6 +39,7 @@ function isNavActive(href: string, pathname: string): boolean {
 export function NavBar() {
  const pathname = usePathname();
  const [scrolled, setScrolled] = useState(false);
+ const [mobileOpen, setMobileOpen] = useState(false);
 
  useEffect(() => {
  const onScroll = () => setScrolled(window.scrollY > 8);
@@ -41,6 +47,15 @@ export function NavBar() {
  window.addEventListener("scroll", onScroll, { passive: true });
  return () => window.removeEventListener("scroll", onScroll);
  }, []);
+
+ useEffect(() => {
+ if (!mobileOpen) return;
+ const onKeyDown = (event: KeyboardEvent) => {
+ if (event.key === "Escape") setMobileOpen(false);
+ };
+ window.addEventListener("keydown", onKeyDown);
+ return () => window.removeEventListener("keydown", onKeyDown);
+ }, [mobileOpen]);
 
  return (
  <header
@@ -51,27 +66,24 @@ export function NavBar() {
  >
  <div
  className={cn(
- "relative mx-auto flex w-full max-w-content items-center justify-between gap-4 px-5 transition-[height] duration-300 sm:px-8",
+ "relative mx-auto flex w-full max-w-content items-center justify-between gap-3 px-4 transition-[height] duration-300 sm:px-8",
  scrolled ? "h-[62px]" : "h-[70px]"
  )}
  >
- {/* Brand: monogram tile + wordmark */}
- <Link
- href="/"
- className="group relative z-10 flex shrink-0 items-center gap-3 font-display text-[16px] font-semibold tracking-tight"
- >
- <span
- className="brand-mark transition-[transform,box-shadow] duration-[280ms] ease-[cubic-bezier(0.16,1.35,0.3,1)] group-hover:-rotate-3 group-hover:scale-106 group-hover:shadow-[0_10px_26px_color-mix(in_srgb,var(--accent)_20%,transparent)]"
- aria-hidden
- >
- W
- </span>
- Worklight
- </Link>
+        <Link href="/" className="group relative z-10 flex min-h-11 shrink-0 items-center">
+          <Image
+            src="/worklight-logo.svg"
+            alt="Worklight"
+            width={96}
+            height={34}
+            priority
+            unoptimized
+            className="h-[33.6px] w-[96px] transition-[transform,filter] duration-[280ms] ease-[cubic-bezier(0.16,1.35,0.3,1)] dark:brightness-110 group-hover:scale-105"
+          />
+        </Link>
 
- {/* Nav links — centered in the bar */}
  <nav
- className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 overflow-x-auto text-[14px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+ className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-1 text-[14px] md:flex"
  aria-label="Main navigation"
  >
  {LINKS.map((link) => {
@@ -94,10 +106,53 @@ export function NavBar() {
  })}
  </nav>
 
- <div className="relative z-10 shrink-0">
+ <div className="relative z-10 flex shrink-0 items-center gap-1">
  <ThemeSwitcher />
+ <Button
+ type="button"
+ variant="ghost"
+ isIconOnly
+ className="size-11 p-0 md:hidden"
+ aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+ aria-expanded={mobileOpen}
+ aria-controls="mobile-navigation"
+ onClick={() => setMobileOpen((value) => !value)}
+ >
+ {mobileOpen ? <XIcon className="size-5" aria-hidden /> : <MenuIcon className="size-5" aria-hidden />}
+ </Button>
  </div>
  </div>
+
+ <nav
+ id="mobile-navigation"
+ aria-label="Mobile navigation"
+ className={cn(
+ "border-t border-border/60 bg-background/95 px-4 pb-4 pt-3 backdrop-blur-xl md:hidden",
+ !mobileOpen && "hidden"
+ )}
+ >
+ <div className="mx-auto grid max-w-content gap-1">
+ {LINKS.map((link) => {
+ const active = isNavActive(link.href, pathname);
+ return (
+ <Link
+ key={link.href}
+ href={link.href}
+ onClick={() => setMobileOpen(false)}
+ aria-current={active ? "page" : undefined}
+ className={cn(
+ "flex min-h-11 items-center rounded-xl px-4 text-[15px] font-medium transition-colors",
+ active
+ ? "bg-action-primary text-action-primary-foreground"
+ : "text-muted hover:bg-surface hover:text-foreground"
+ )}
+ >
+ {link.label}
+ </Link>
+ );
+ })}
+ </div>
+ </nav>
  </header>
  );
 }

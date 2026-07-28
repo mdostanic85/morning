@@ -25,6 +25,8 @@ import { SourceBadge } from "./SourceBadge";
 import { TaskActionButtons } from "./TaskActionButtons";
 import { TaskWorkContext } from "./TaskWorkContext";
 import { cn } from "@/lib/utils";
+import { humanizeReason } from "@/lib/tasks/humanizeReason";
+import { Heading, type HeadingLevel } from "./Heading";
 
 export interface TaskCardProps {
  id: number;
@@ -46,13 +48,14 @@ export interface TaskCardProps {
  figmaFrameUrl?: string | null;
  localRepoPath?: string | null;
  githubRepo?: string | null;
+ headingLevel?: HeadingLevel;
 }
 
 const STATUS_DESCRIPTION: Record<WorkTaskStatus, string> = {
- now: "In focus — you are actively working on this",
+ now: "In focus. You are actively working on this.",
  next: "Up next when your current focus clears",
  later: "On the radar but not for today",
- waiting: "Blocked — waiting on someone else",
+ waiting: "Blocked. Waiting on someone else.",
  tomorrow: "Scheduled for tomorrow",
  unclear: "Needs your input before work can begin",
  done: "Completed",
@@ -98,6 +101,7 @@ export function TaskCard({
  figmaFrameUrl = null,
  localRepoPath = null,
  githubRepo = null,
+ headingLevel = 2,
 }: TaskCardProps) {
  const sourceTypes = Array.from(
  new Set(evidence.map((item) => item.sourceType).filter((t) => t != null))
@@ -137,16 +141,17 @@ export function TaskCard({
  const linkedJiraUrl =
  evidence.find((entry) => entry.sourceType === "jira" && entry.sourceUrl)?.sourceUrl ?? null;
  const linkifyOptions = { jiraKey: linkedJiraKey, jiraUrl: linkedJiraUrl };
+ const displayReason = humanizeReason(reason, title);
 
  return (
       <Card
         className={cn(
           "task-card overflow-hidden rounded-surface border ring-0",
  primary
- ? "border-warm/25 bg-surface-raised"
+ ? "border-[var(--card-shell-warning-border)] bg-surface-raised"
  : status === "unclear"
- ? "border-unclear/30 bg-unclear/[0.04] shadow-none"
- : "border-border bg-surface/90"
+ ? "border-[var(--card-shell-danger-border)] bg-unclear/[0.04] shadow-none"
+ : "border-[var(--card-shell-border)] bg-surface/90"
  )}
  >
  {primary ? <div className="horizon" aria-hidden /> : null}
@@ -154,16 +159,9 @@ export function TaskCard({
  <Card.Content className={cn(primary ? "p-7 sm:p-9" : "p-6 sm:p-7")}>
  <div className="flex items-start justify-between gap-5">
  <div className="min-w-0 flex-1">
- <h3
- className={cn(
- "leading-snug tracking-tight",
- primary
- ? "font-display text-3xl font-semibold sm:text-4xl"
- : "font-display text-xl font-medium"
- )}
- >
+ <Heading level={headingLevel} visualLevel={primary ? 2 : 4}>
  {title}
- </h3>
+ </Heading>
 
  <div className="mt-3 flex flex-wrap items-center gap-2">
  <Tooltip delay={400}>
@@ -194,13 +192,13 @@ export function TaskCard({
  {priorityScore != null ? (
  <Tooltip delay={400}>
  <Tooltip.Trigger>
- <span className="cursor-default font-mono text-sm text-muted-soft">
+ <span className="cursor-default font-utility text-sm text-muted-soft">
  {priorityScore.toFixed(2)}
  </span>
  </Tooltip.Trigger>
  <Tooltip.Content placement="top" showArrow className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background">
  <Tooltip.Arrow />
- Priority score — higher = more urgent.
+ Priority score. A higher score means the task is more urgent.
  </Tooltip.Content>
  </Tooltip>
  ) : null}
@@ -213,12 +211,12 @@ export function TaskCard({
  <p className="eyebrow text-foreground/70">Why this matters</p>
  {status === "unclear" ? (
  <p className="mt-2 rounded-xl border border-unclear/25 bg-unclear/8 px-4 py-3 text-[14px] font-medium leading-relaxed text-unclear">
- <span className="font-semibold">Unclear — </span>
- <ReasonText text={reason} className="inline" />
+ <span className="font-semibold">Unclear. </span>
+ <ReasonText text={displayReason} className="inline" />
  </p>
  ) : (
  <ReasonText
- text={reason}
+ text={displayReason}
  className={cn("mt-2 leading-relaxed", primary ? "text-[15px]" : "text-[14px]", "text-muted")}
  />
  )}
@@ -265,7 +263,7 @@ export function TaskCard({
  </ul>
  ) : (
  <p className="mt-3 text-[14px] font-medium text-danger">
- No done criteria — define what &ldquo;done&rdquo; means before starting.
+ No done criteria. Define what &ldquo;done&rdquo; means before starting.
  </p>
  )}
  </div>
@@ -299,7 +297,6 @@ export function TaskCard({
  taskId={id}
  linkedJiraKey={linkedJiraKey}
  latestVerificationReport={latestVerificationReport}
- latestSyncReviewReport={latestSyncReviewReport}
  />
  </section>
  </Card.Content>

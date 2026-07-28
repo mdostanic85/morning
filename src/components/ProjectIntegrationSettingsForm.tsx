@@ -6,6 +6,7 @@ import { Toast } from "@heroui/react/toast";
 import { GitHubRepoPicker } from "@/components/GitHubRepoPicker";
 import { Button } from "@heroui/react/button";
 import { TextArea } from "@heroui/react/textarea";
+import { Heading } from "@/components/Heading";
 
 interface ProjectIntegrationSettingsFormProps {
   projectId: number;
@@ -76,7 +77,7 @@ export function ProjectIntegrationSettingsForm({
   ) {
     return (
       <label className="block">
-        <span className="text-xs font-medium text-foreground">{label}</span>
+        <span className="text-metadata font-medium text-foreground">{label}</span>
         <TextArea
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -90,14 +91,14 @@ export function ProjectIntegrationSettingsForm({
 
   return (
     <form onSubmit={save} className="rounded-xl border border-border bg-surface-soft/50 p-4">
-      <h3 className="text-sm font-semibold tracking-tight">Connector hints</h3>
-      <p className="mt-0.5 text-xs text-muted">
+      <Heading level={3} visualLevel={6}>Connector hints</Heading>
+      <p className="mt-0.5 text-metadata text-muted">
         One value per line. These keep imports focused instead of pulling noisy sources.
       </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {textareaField("Jira project keys", jiraKeys, setJiraKeys, "PROJ")}
         <div className="sm:col-span-2">
-          <span className="text-xs font-medium text-foreground">GitHub repositories</span>
+          <span className="text-metadata font-medium text-foreground">GitHub repositories</span>
           <div className="mt-1.5">
             <GitHubRepoPicker value={githubRepositories} onChange={setGithubRepositories} />
           </div>
@@ -106,7 +107,7 @@ export function ProjectIntegrationSettingsForm({
             variant="ghost"
             size="sm"
             onPress={() => setShowManualGithub((value) => !value)}
-            className="mt-2 px-0 text-xs text-muted hover:text-foreground"
+            className="mt-2 min-h-11 px-0 text-metadata text-muted hover:text-foreground"
           >
             {showManualGithub ? "Hide manual entry" : "Add repo manually"}
           </Button>
@@ -126,8 +127,8 @@ export function ProjectIntegrationSettingsForm({
         {textareaField("Figma file keys", figmaFileKeys, setFigmaFileKeys, "AbCdEfGh or full figma.com/design/... URL")}
       </div>
       <div className="mt-4">
-        <Button type="submit" size="sm" isDisabled={saving}>
-          {saving ? "Saving…" : "Save connector hints"}
+        <Button type="submit" size="sm" className="min-h-11" isDisabled={saving}>
+          {saving ? "Saving..." : "Save connector hints"}
         </Button>
       </div>
     </form>

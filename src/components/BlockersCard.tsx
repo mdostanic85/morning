@@ -82,7 +82,7 @@ export function BlockersCard({
  return (
  <aside
  id={id}
- className="scroll-mt-24 rounded-today-card border border-border bg-surface p-6 sm:p-8 lg:col-span-5"
+ className="scroll-mt-24 rounded-today-card border border-[var(--card-shell-border)] bg-surface p-6 sm:p-8 lg:col-span-5"
  >
  <p className="eyebrow text-good">No active blocker</p>
  <p className="mt-3 text-sm leading-relaxed text-muted">
@@ -97,7 +97,7 @@ export function BlockersCard({
  return (
  <aside
  id={id}
- className="scroll-mt-24 rounded-today-card border border-waiting/25 bg-waiting/5 p-6 sm:p-8 lg:col-span-5"
+ className="scroll-mt-24 rounded-today-card border border-[var(--card-shell-warning-border)] bg-waiting/5 p-6 sm:p-8 lg:col-span-5"
  >
  <p className="eyebrow text-waiting">Blocked or waiting</p>
  {primary ? (
@@ -113,7 +113,7 @@ export function BlockersCard({
  key={entry.id}
  className={`rounded-xl border px-3.5 py-3 text-sm leading-relaxed ${meta.itemClassName}`}
  >
- <span className={`text-xs font-semibold uppercase tracking-wide ${meta.className}`}>
+ <span className={`text-metadata font-semibold uppercase tracking-wide ${meta.className}`}>
  {meta.label}
  </span>
  <p className="mt-1">{entry.text}</p>

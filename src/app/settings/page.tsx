@@ -13,6 +13,8 @@ import { GoogleConnectionPanel } from "@/components/GoogleConnectionPanel";
 import { GitHubConnectionSettings } from "@/components/GitHubConnectionSettings";
 import type { ConnectionTransport } from "@/domain/connection";
 import { Tabs } from "@heroui/react/tabs";
+import { Heading } from "@/components/Heading";
+import { SettingsHubLinks } from "@/components/SettingsHubLinks";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +42,7 @@ export default async function SettingsPage({
  const oauthSetupHint = (configured: boolean, vars: string, url: string) =>
  configured
  ? null
- : `To enable direct API Connect, add ${vars} to .env.local (create the OAuth app at ${url}), then restart the dev server. MCP Connect works without these.`;
+ : `To enable direct API access, add ${vars} to .env.local, create the OAuth app at ${url}, then restart the app. Connected app access works without these keys.`;
 
   const googleSetupHint = oauthSetupHint(
     hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"),
@@ -72,7 +74,7 @@ export default async function SettingsPage({
       provider: "jira",
  label: "Jira",
  description:
- "Read-only sync for issues assigned to you (any column) plus recent issues where you’re mentioned.",
+ "Read-only sync for issues assigned to you, plus recent issues where you're mentioned.",
  authType: "oauth" as const,
  supportsMcp: true,
  mcpConnectUrl: "/api/mcp/atlassian/connect",
@@ -100,7 +102,7 @@ export default async function SettingsPage({
  provider: "granola",
  label: "Granola",
  description:
- "Read-only sync for meeting notes and transcripts. Connect via MCP (recommended, browser sign-in) or paste a grn_ API key from the Granola app.",
+ "Read-only sync for meeting notes and transcripts. Sign in through the connected app, or paste a Granola API key.",
  authType: "api_key" as const,
  supportsMcp: true,
  mcpConnectUrl: "/api/mcp/granola/connect",
@@ -109,7 +111,7 @@ export default async function SettingsPage({
  provider: "github",
  label: "GitHub",
  description:
- "Read-only sync for your repositories — PRs, comments, and checks. Sign in, then pick repo and branch here.",
+ "Read-only sync for pull requests, comments, and checks. Sign in, then choose a repository and branch.",
  authType: "oauth" as const,
  patFallback: true,
  setupHint: oauthSetupHint(
@@ -122,7 +124,7 @@ export default async function SettingsPage({
  provider: "figma",
  label: "Figma",
  description:
- "Read-only design sync and frame context for delivery verification. Paste a personal access token from Figma → Settings → Security.",
+ "Read-only design context for delivery checks. Paste a personal access token from Figma Settings, under Security.",
  authType: "pat" as const,
  supportsMcp: hasEnv("FIGMA_MCP_CLIENT_ID", "FIGMA_MCP_CLIENT_SECRET"),
  mcpConnectUrl: hasEnv("FIGMA_MCP_CLIENT_ID", "FIGMA_MCP_CLIENT_SECRET")
@@ -163,15 +165,15 @@ export default async function SettingsPage({
  <div className="space-y-6">
 
  {/* Page header */}
- <div className="flex items-start justify-between gap-4">
+ <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
  <div>
- <h1 className="font-display text-2xl font-semibold tracking-tight">Settings</h1>
+ <Heading level={1} visualLevel={3}>Settings</Heading>
  <p className="mt-1.5 text-sm leading-relaxed text-muted">
  Local credentials for models and read-only source imports.
  Raw secrets never leave the browser.
  </p>
  </div>
- <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+ <div className="flex shrink-0 gap-4 pt-0.5 sm:flex-col sm:items-end sm:gap-1">
  <span className="text-sm font-semibold text-foreground">
                 {connectedCount}/{totalSources} sources
  </span>
@@ -196,33 +198,32 @@ export default async function SettingsPage({
  </div>
  ) : null}
 
- {/* Tabs — HeroUI primary (segmented) */}
  <Tabs defaultSelectedKey="connections" className="w-full gap-5">
  <Tabs.ListContainer className="w-full">
- <Tabs.List aria-label="Settings sections" className="w-full">
- <Tabs.Tab id="connections" className="flex-1">
+ <Tabs.List aria-label="Settings sections" className="grid w-full grid-cols-2 gap-1 sm:flex">
+ <Tabs.Tab id="connections" className="!h-11 !min-h-11 w-full min-w-0 sm:flex-1">
  Connections
  <span className="tabular-nums text-muted-soft">
                 {connectedCount}/{totalSources}
               </span>
  <Tabs.Indicator />
  </Tabs.Tab>
-          <Tabs.Tab id="transcript" className="flex-1">
+          <Tabs.Tab id="transcript" className="!h-11 !min-h-11 w-full min-w-0 sm:flex-1">
               Transcript
               <Tabs.Indicator />
             </Tabs.Tab>
-          <Tabs.Tab id="rules" className="flex-1">
+          <Tabs.Tab id="rules" className="!h-11 !min-h-11 w-full min-w-0 sm:flex-1">
               Rules
               <Tabs.Indicator />
             </Tabs.Tab>
- <Tabs.Tab id="model-keys" className="flex-1">
+ <Tabs.Tab id="model-keys" className="!h-11 !min-h-11 w-full min-w-0 sm:flex-1">
  Model keys
  <span className="tabular-nums text-muted-soft">
  {activeKeyCount}/{modelProviderCount}
  </span>
  <Tabs.Indicator />
  </Tabs.Tab>
- <Tabs.Tab id="profile" className="flex-1">
+ <Tabs.Tab id="profile" className="!h-11 !min-h-11 w-full min-w-0 sm:flex-1">
  Profile
  <Tabs.Indicator />
  </Tabs.Tab>
@@ -324,7 +325,7 @@ export default async function SettingsPage({
  <Tabs.Panel id="transcript" className="space-y-4">
  <div>
  <p className="text-sm leading-relaxed text-muted">
- Paste meeting notes or a transcript — tasks and knowledge go straight into Today.
+ Paste meeting notes or a transcript. Tasks and knowledge go straight into Today.
  </p>
  </div>
           <IngestForm />
@@ -366,6 +367,7 @@ export default async function SettingsPage({
  />
  </Tabs.Panel>
  </Tabs>
+ <SettingsHubLinks />
  </div>
  );
 }

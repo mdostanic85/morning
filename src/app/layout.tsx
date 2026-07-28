@@ -33,7 +33,7 @@ const themeInitScript = `
 `;
 
 export const metadata: Metadata = {
-  title: "Worklight — Daily Work Operator",
+  title: "Worklight | Daily Work Operator",
   description:
     "Evidence-backed daily direction for what matters, what to do next, and what done looks like.",
 };
@@ -57,11 +57,21 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        <a
+          href="#main-content"
+          className="sr-only fixed left-4 top-4 z-[100] rounded-lg bg-action-primary px-4 py-3 font-medium text-action-primary-foreground focus:not-sr-only"
+        >
+          Skip to main content
+        </a>
         <Suspense fallback={null}>
           <AskMemoryProvider>
             <WelcomeModal />
             <NavBar />
-            <main className="today-main mx-auto w-full max-w-content flex-1">
+            <main
+              id="main-content"
+              tabIndex={-1}
+              className="today-main mx-auto w-full max-w-content flex-1 outline-none"
+            >
               {children}
             </main>
             <AppFooter />

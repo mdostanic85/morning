@@ -1,0 +1,822 @@
+/* ── Human-readable morning brief ──────────────────────────────────────────
+   A quiet bento layout: primary focus plus next-up tasks beside meetings.
+   Cards size to their content — they do not stretch to fill the grid.
+─────────────────────────────────────────────────────────────────────────── */
+.brief-page {
+  padding: 2.5rem 0 5rem;
+}
+
+.brief-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.brief-header h1 {
+  max-width: 46rem;
+}
+
+.brief-kicker,
+.brief-pillar-label {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: var(--font-size-min);
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.brief-date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+.brief-date-sep {
+  color: var(--muted-soft);
+}
+
+.brief-date-meta {
+  color: var(--muted-soft);
+}
+
+.brief-header-actions {
+  display: flex;
+  max-width: 36rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.brief-change-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent-soft-surface) 62%, var(--surface));
+}
+
+.brief-change-alert--warning {
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+  background: color-mix(in srgb, var(--warning-soft-surface) 62%, var(--surface));
+}
+
+.brief-change-alert--warning .brief-change-mark {
+  background: var(--warning);
+  color: var(--warning-foreground);
+}
+
+.brief-change-alert--warning .brief-kicker {
+  color: var(--warning);
+}
+
+.brief-change-alert p:last-child {
+  margin: 0.2rem 0 0;
+  font-size: 0.9375rem;
+  font-weight: 550;
+  line-height: 1.45;
+}
+
+.brief-change-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.brief-change-dismiss {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.brief-change-dismiss:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--foreground);
+}
+
+.brief-change-dismiss:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.brief-change-dismiss svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.brief-change-mark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.brief-change-mark svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.brief-bento {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.brief-bento-primary {
+  grid-column: span 8;
+}
+
+.brief-bento-side {
+  display: grid;
+  grid-column: span 4;
+  align-content: start;
+  gap: 1.25rem;
+}
+
+.brief-next-stack {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+
+.brief-next-stack > .brief-kicker {
+  margin: 0;
+}
+
+/* Only this specific heading — a visual "you must look at this" flag,
+   never the neutral "Next up" heading next to it. */
+.brief-kicker-attention {
+  color: var(--danger);
+}
+
+.brief-next-stack > .brief-secondary-card {
+  margin-top: 0.1rem;
+}
+
+.brief-focus-card,
+.brief-empty {
+  border: 1px solid var(--card-shell-border);
+  border-radius: var(--radius-hero);
+  background: var(--surface);
+}
+
+.brief-focus-card {
+  position: relative;
+  padding: 1.35rem;
+  overflow: hidden;
+}
+
+/* The only card allowed to visually dominate the page — everything else stays quiet.
+   Its shell uses an accent-tinted semantic border. */
+.brief-focus-primary {
+  padding: 2.25rem;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--card-shell-border));
+  background: var(--surface);
+  box-shadow: var(--focus-hero-shadow);
+}
+
+@keyframes brief-top-line-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+/* Sync CTA mesh: each blob (comma-separated layer) drifts on its own path so
+   the colors bleed and recombine like a living mesh gradient. */
+
+.brief-focus-primary::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--gradient-magenta),
+    var(--gradient-violet),
+    var(--gradient-indigo),
+    var(--gradient-blue),
+    var(--gradient-cyan),
+    var(--gradient-magenta)
+  );
+  background-size: 200% 100%;
+  animation: brief-top-line-shimmer 5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brief-focus-primary::before {
+    animation: none;
+    background-size: 100% 100%;
+  }
+}
+
+.brief-focus-topline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brief-badge-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.brief-updated {
+  color: var(--muted-soft);
+  font-size: var(--font-size-min);
+}
+
+.brief-focus-heading {
+  margin-top: 1.35rem;
+}
+
+.brief-focus-heading a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.brief-focus-heading h2 {
+  max-width: 46rem;
+}
+
+.brief-focus-heading a:hover h2 {
+  color: var(--accent-strong);
+}
+
+.brief-focus-heading > p {
+  max-width: 48rem;
+  margin: 0.8rem 0 0;
+  color: var(--muted);
+  font-size: 0.975rem;
+  line-height: 1.65;
+}
+
+.brief-pillars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.6rem;
+}
+
+.brief-pillar {
+  min-width: 0;
+  padding: 1.2rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inset);
+  background: var(--surface);
+}
+
+/* Next action leads Done when: stronger tint + accent border make it the
+   visually dominant pillar, while Done when stays a quiet checklist. */
+.brief-pillar-action {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft-surface) 55%, var(--surface));
+  box-shadow: none;
+}
+
+.brief-pillar-done {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.brief-pillar-evidence {
+  grid-column: 1 / -1;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+}
+
+.brief-pillar-label {
+  margin-bottom: 0.85rem;
+  color: var(--accent-strong);
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+}
+
+.brief-pillar-label-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.brief-pillar-label-row .brief-pillar-label {
+  margin-bottom: 0;
+}
+
+.brief-pillar-action .brief-pillar-label {
+  color: var(--accent-strong);
+}
+
+.brief-pillar-done .brief-pillar-label {
+  color: var(--muted);
+}
+
+.brief-action-copy,
+.brief-pillar p:not(.brief-pillar-label),
+.brief-pillar ul {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.brief-action-copy {
+  color: var(--foreground);
+  font-size: 0.95rem;
+  font-weight: 680;
+  line-height: 1.58;
+}
+
+.brief-pillar ul {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0;
+  list-style: none;
+}
+
+.brief-pillar li {
+  position: relative;
+  padding-left: 1rem;
+}
+
+.brief-pillar-done li {
+  color: var(--foreground);
+  font-weight: 560;
+  line-height: 1.55;
+}
+
+.brief-pillar li::before {
+  content: "";
+  position: absolute;
+  top: 0.53rem;
+  left: 0;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.brief-source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--accent-strong);
+  font-size: var(--font-size-min);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.brief-source-link:hover {
+  text-decoration: underline;
+}
+
+.brief-evidence-body {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.brief-evidence-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.7rem;
+}
+
+.brief-evidence-title {
+  font-size: var(--font-size-min);
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.brief-evidence-quote {
+  display: -webkit-box;
+  margin: 0;
+  padding-left: 0.7rem;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-style: italic;
+  line-height: 1.5;
+  border-left: 2px solid color-mix(in srgb, var(--sky) 55%, var(--border));
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.brief-evidence-summary {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.brief-evidence-missing {
+  color: var(--danger);
+}
+
+.brief-focus-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Secondary tasks stay quiet by design: badge, headline, two-line summary.
+   Everything else is one click away on the task detail page. */
+.brief-secondary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--card-shell-border);
+  border-radius: var(--radius-inset);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.brief-secondary-card-link {
+  cursor: pointer;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.brief-secondary-card-link:hover {
+  transform: translateY(-1px);
+}
+
+.brief-secondary-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.brief-secondary-title {
+  font-size: var(--type-heading-5-size);
+  font-weight: var(--type-heading-5-weight);
+  line-height: var(--type-heading-5-line-height);
+  letter-spacing: var(--type-heading-5-letter-spacing);
+}
+
+.brief-secondary-reason {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  flex: 1;
+}
+
+.brief-secondary-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.1rem;
+  color: var(--muted-soft);
+  font-size: var(--font-size-min);
+  font-weight: 650;
+}
+
+.brief-secondary-card-link:hover .brief-secondary-more {
+  color: var(--accent-strong);
+}
+
+.brief-secondary-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.brief-secondary-title-link:hover .brief-secondary-title {
+  color: var(--accent-strong);
+}
+
+.brief-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
+.brief-section-heading h2 {
+  margin: 0.25rem 0 0;
+  font-size: var(--type-heading-5-size);
+  line-height: var(--type-heading-5-line-height);
+}
+
+.brief-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.75rem 0.8rem;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+.brief-alert p {
+  margin: 0;
+  font-size: var(--font-size-min);
+  line-height: 1.45;
+}
+
+.brief-alert strong {
+  color: var(--foreground);
+}
+
+.brief-alert-blocked {
+  border-left-color: var(--danger);
+  background: var(--danger-soft-surface);
+}
+
+.brief-alert-sync {
+  border-left-color: var(--waiting);
+  background: var(--waiting-soft-surface);
+}
+
+.brief-empty {
+  display: grid;
+  min-height: 18rem;
+  align-content: center;
+  padding: 2rem;
+}
+
+.brief-empty h2 {
+  font-size: var(--type-heading-3-size);
+}
+
+.brief-empty p {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+}
+
+.brief-source-details {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* Blocked/unclear items and conflicts now render as brief-secondary-card
+   items inside the sidebar's "Needs your attention" stack — this note is
+   the only leftover text (the "+N more" line under that stack). */
+.brief-conflicts-more {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted-soft);
+  font-size: var(--font-size-min);
+  font-style: italic;
+}
+
+.brief-source-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  font-weight: 700;
+}
+
+.brief-source-details > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.brief-source-details a,
+.brief-source-details span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  text-decoration: none;
+}
+
+.brief-source-details a:hover {
+  border-color: var(--border-strong);
+  color: var(--accent-strong);
+}
+
+.brief-footnote {
+  margin: 1.5rem 0 0;
+  color: var(--muted-soft);
+  font-size: var(--font-size-min);
+  text-align: center;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Next up tile — one bounded tile holding ≤2 rows, each its own
+   bounded card (per HeroUI Figma kit). Hover only shifts the row's
+   border; the row's title link is stretched (::after) so the whole
+   card opens the task.
+   ────────────────────────────────────────────────────────────── */
+.brief-nextup-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.1rem 1.25rem 1.25rem;
+  border: 1px solid var(--card-shell-border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.brief-nextup-tile > .brief-kicker {
+  margin: 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.brief-nextup-row {
+  position: relative;
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+.brief-nextup-row--linked {
+  cursor: pointer;
+}
+
+.brief-nextup-row--linked:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.brief-nextup-row-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.brief-nextup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.brief-nextup-title {
+  display: block;
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.9375rem;
+  font-weight: 640;
+  letter-spacing: -0.012em;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.brief-nextup-title-link {
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-decoration: none;
+}
+
+/* Stretches the title's hit-area to the full card (Bootstrap-style
+   "stretched link") so clicking anywhere on the row opens the task. */
+.brief-nextup-title-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.brief-nextup-action {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Static (no-URL) source label — same visual as the linked variant minus interaction */
+.brief-source-link--static {
+  cursor: default;
+}
+
+.brief-source-link--static:hover {
+  text-decoration: none;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Wide bento — no side rail: focus spans the full width with a
+   comfortable reading max-width.
+   ────────────────────────────────────────────────────────────── */
+.brief-bento--wide .brief-bento-primary {
+  grid-column: 1 / -1;
+  max-width: 52rem;
+}
+
+@media (max-width: 960px) {
+  /* 7/12 focus + 5/12 side for focus dominance on tablet */
+  .brief-bento-primary {
+    grid-column: span 7;
+  }
+
+  .brief-bento-side {
+    grid-column: span 5;
+  }
+
+  .brief-pillars {
+    grid-template-columns: 1fr;
+  }
+
+  .brief-pillar-evidence {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .brief-page {
+    padding-top: 1rem;
+  }
+
+  .brief-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .brief-header-actions {
+    justify-content: flex-start;
+  }
+
+  .brief-bento-primary,
+  .brief-bento-side {
+    grid-column: 1 / -1;
+  }
+
+  .brief-focus-card {
+    padding: 1.35rem;
+  }
+
+  .brief-pillars {
+    gap: 0.8rem;
+    margin-top: 1.25rem;
+  }
+
+  .brief-pillar {
+    padding: 1.05rem;
+  }
+
+  .brief-focus-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

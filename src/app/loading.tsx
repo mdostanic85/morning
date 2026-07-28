@@ -1,8 +1,9 @@
 import { Skeleton } from "@heroui/react/skeleton";
 
-export default function TodayLoading() {
+export default function AppLoading() {
  return (
- <div className="space-y-10" aria-label="Loading today">
+ <div className="space-y-10" role="status" aria-live="polite" aria-label="Loading page">
+ <span className="sr-only">Loading page</span>
  <div className="flex items-center justify-between border-b border-border pb-6">
  <div className="space-y-2">
  <Skeleton className="h-5 w-52 rounded-full" />

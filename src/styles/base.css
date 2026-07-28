@@ -1,0 +1,42 @@
+@layer base {
+/* ── Base layer ─────────────────────────────────────────────────────────── */
+html {
+  color-scheme: light dark;
+  /* Match the body's base color so macOS/iOS rubber-band overscroll never
+     flashes the browser's default white/black behind the page. */
+  background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  background: var(--page-background);
+  color: var(--foreground);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--foreground);
+}
+
+/* ── Accessibility / interaction base ──────────────────────────────────── */
+/* Native controls keep a visible fallback even when no component-specific
+   focus treatment is present. HeroUI primitives may replace this ring with
+   an equally visible one. */
+:where(button, a, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+}

@@ -9,7 +9,7 @@ const SPARKLE_COLORS = [
   "var(--mint)",
   "var(--sky)",
   "var(--sun)",
-  "var(--pink)",
+  "var(--violet)",
 ];
 
 export function burstSparkles(x: number, y: number, count = 8): void {

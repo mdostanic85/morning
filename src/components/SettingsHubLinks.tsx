@@ -4,17 +4,17 @@ const HUB_LINKS = [
   {
     href: "/schedule",
     label: "Automation",
-    description: "Weekday Hydra schedule, delivery, and manual runs.",
+    description: "Choose when weekday reports run and where they are delivered.",
   },
   {
     href: "/reports",
     label: "Report history",
-    description: "Past Hydra runs with evidence coverage and outcomes.",
+    description: "Review past reports, source coverage, and outcomes.",
   },
   {
     href: "/sources",
     label: "Source health",
-    description: "Last-run connection health — separate from connect/disconnect.",
+    description: "Check connection state, recent syncs, and report coverage.",
   },
   {
     href: "/audit",
@@ -24,12 +24,12 @@ const HUB_LINKS = [
   {
     href: "/knowledge",
     label: "Knowledge",
-    description: "Recent learnings with evidence — not part of today’s focus.",
+    description: "Browse recent evidence-backed learnings outside today's focus.",
   },
   {
     href: "/projects",
     label: "Work contexts",
-    description: "Jira boards and project settings used when syncing.",
+    description: "Manage the projects and Jira boards used during sync.",
   },
 ] as const;
 
@@ -42,7 +42,7 @@ export function SettingsHubLinks() {
           <li key={item.href}>
             <Link
               href={item.href}
-              className="group flex flex-col gap-0.5 py-3.5 transition-colors hover:bg-surface/60 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+              className="group flex min-h-14 flex-col justify-center gap-0.5 px-2 py-3.5 transition-colors hover:bg-surface/60 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
             >
               <span className="font-medium text-foreground group-hover:text-accent">
                 {item.label}

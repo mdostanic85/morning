@@ -226,13 +226,13 @@ export function GitHubConnectionSettings({
  return (
  <div className="space-y-3">
  <div>
- <p className="text-xs font-medium text-foreground">What are you working on?</p>
- <p className="mt-0.5 text-xs text-muted">
+ <p className="text-metadata font-medium text-foreground">What are you working on?</p>
+ <p className="mt-0.5 text-metadata text-muted">
  {login ? `Signed in as ${login}. ` : ""}
  Pick repo and branch for sync and delivery checks.
  </p>
  {needsSetup ? (
- <p className="mt-1 text-xs text-warm">Finish setup: choose repo and branch, then Save.</p>
+ <p className="mt-1 text-metadata text-warm">Finish setup: choose repo and branch, then Save.</p>
  ) : null}
  </div>
 
@@ -247,7 +247,7 @@ export function GitHubConnectionSettings({
 
  <div className="grid gap-3 sm:grid-cols-2">
  <label className="block space-y-1.5">
- <span className="text-xs font-medium text-muted-soft">Repository</span>
+ <span className="text-metadata font-medium text-muted-soft">Repository</span>
  <Select
  selectedKey={toKey(repository)}
  onSelectionChange={(key) => {
@@ -276,7 +276,7 @@ export function GitHubConnectionSettings({
  id="__no_matches__"
  textValue="No matches"
  isDisabled
- className="relative flex min-h-9 w-full cursor-default items-center rounded-md px-2 pr-8 text-xs text-muted outline-none"
+ className="relative flex min-h-9 w-full cursor-default items-center rounded-md px-2 pr-8 text-metadata text-muted outline-none"
  >
  No matches. Add repo manually below.
  </ListBox.Item>
@@ -304,7 +304,7 @@ export function GitHubConnectionSettings({
  </label>
 
  <label className="block space-y-1.5">
- <span className="text-xs font-medium text-muted-soft">Branch</span>
+ <span className="text-metadata font-medium text-muted-soft">Branch</span>
  <Select
  selectedKey={toKey(branch)}
  onSelectionChange={(key) => setBranch(fromKey(key))}
@@ -355,7 +355,7 @@ export function GitHubConnectionSettings({
  </div>
 
  <div className="space-y-2 rounded-lg border border-border bg-surface-soft/40 px-3 py-2">
- <p className="text-xs text-muted">
+ <p className="text-metadata text-muted">
  Org repo missing? Add manually, or authorize this app for the org on GitHub → Settings →
  Applications.
  </p>
@@ -384,7 +384,7 @@ export function GitHubConnectionSettings({
  {saving ? "Saving…" : saved ? "Saved" : "Save"}
  </Button>
  {initialRepository && initialBranch ? (
- <p className="text-xs text-muted-soft">
+ <p className="text-metadata text-muted-soft">
  Current: {initialRepository} @ {initialBranch}
  </p>
  ) : null}

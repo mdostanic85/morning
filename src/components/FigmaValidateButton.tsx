@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Button } from "@heroui/react";
+import { Button } from "@heroui/react/button";
 import type { ValidationRun } from "@/lib/tasks/figmaValidationRun";
 
 interface Props {
@@ -213,7 +213,7 @@ export function FigmaValidateButton({ taskId, taskTitle, hasJiraEvidence }: Prop
  run a delivery sync check using the strongest available model.
  </p>
  <p className="mt-2 text-[14px] leading-relaxed text-muted">
- The check is read-only and will take around 20–40 seconds.
+ The check is read-only and usually takes 20 to 40 seconds.
  </p>
  <div className="mt-5 flex gap-3">
  <Button className="flex-1" onPress={startRun} isDisabled={starting}>
@@ -305,7 +305,7 @@ export function FigmaValidateButton({ taskId, taskTitle, hasJiraEvidence }: Prop
  {isRunning ? (
  <>
  <p className="text-sm text-muted">
- Using strongest model — this takes 20–40 s.
+ Using the strongest available model. This takes 20 to 40 seconds.
  </p>
  <Button size="sm" variant="danger-soft" onPress={handleCancel}>
  Cancel

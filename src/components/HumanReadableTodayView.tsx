@@ -20,6 +20,8 @@ import type { SourceType } from "@/domain/sourceItem";
 import type { WorkTaskStatus } from "@/domain/workTask";
 import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
+import { JiraStatusBadge } from "@/components/JiraMetadataBadges";
+import { Heading } from "@/components/Heading";
 import { SyncMyDayButton } from "@/components/SyncMyDayButton";
 import { TodayMeetingsCard } from "@/components/TodayMeetingsCard";
 import { NeedsInputRail } from "@/components/NeedsInputRail";
@@ -31,11 +33,20 @@ import { dedupeBlockedWaiting } from "@/lib/dailyBrief/blockedWaitingDedupe";
 import { humanizeReason } from "@/lib/tasks/humanizeReason";
 import { taskEligibleForBriefPriority } from "@/lib/filters/ownerFilter";
 import { cn } from "@/lib/utils";
+import styles from "./HumanReadableTodayView.module.css";
+
+function css(value: string): string {
+  return value
+    .split(/\s+/)
+    .map((name) => styles[name] ?? name)
+    .join(" ");
+}
 
 export interface HumanReadableTask {
   id: number;
   title: string;
   status: WorkTaskStatus;
+  jiraStatus: string | null;
   reason: string;
   nextAction: string;
   doneCriteria: string[];
@@ -283,36 +294,36 @@ function EvidenceRow({
   const summary = evidence?.summary?.trim() || null;
 
   return (
-    <div className="brief-pillar brief-pillar-evidence">
-      <div className="brief-pillar-label-row">
-        <p className="brief-pillar-label">Evidence</p>
+    <div className={css("brief-pillar brief-pillar-evidence")}>
+      <div className={css("brief-pillar-label-row")}>
+        <h3 className={css("brief-pillar-label")}>Evidence</h3>
         {confidence != null ? <ConfidenceBadge level={confidence} /> : null}
       </div>
       {label || sourceType ? (
-        <div className="brief-evidence-body">
-          <div className="brief-evidence-source">
+        <div className={css("brief-evidence-body")}>
+          <div className={css("brief-evidence-source")}>
             {sourceType ? <SourceBadge sourceType={sourceType} /> : null}
             {url ? (
-              <a href={url} target="_blank" rel="noreferrer" className="brief-source-link">
+              <a href={url} target="_blank" rel="noreferrer" className={css("brief-source-link")}>
                 {label}
                 <ExternalLink className="size-3.5" aria-hidden />
               </a>
             ) : label ? (
-              <strong className="brief-evidence-title">{label}</strong>
+              <strong className={css("brief-evidence-title")}>{label}</strong>
             ) : null}
           </div>
           {quote ? (
-            <blockquote className="brief-evidence-quote">“{quote}”</blockquote>
+            <blockquote className={css("brief-evidence-quote")}>“{quote}”</blockquote>
           ) : summary ? (
-            <p className="brief-evidence-summary">{summary}</p>
+            <p className={css("brief-evidence-summary")}>{summary}</p>
           ) : (
-            <p className="brief-evidence-missing">
+            <p className={css("brief-evidence-missing")}>
               No direct quote confirms this yet. Open the source before acting.
             </p>
           )}
         </div>
       ) : (
-        <p className="brief-evidence-missing">No source excerpt is available. Clarify before acting.</p>
+        <p className={css("brief-evidence-missing")}>No source excerpt is available. Clarify before acting.</p>
       )}
     </div>
   );
@@ -341,34 +352,35 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
     entry.task?.priorityExplanation || entry.item?.reason || entry.task?.reason || "";
 
   return (
-    <article className="brief-focus-card brief-focus-primary">
-      <div className="brief-focus-topline">
-        <div className="brief-badge-row">
+    <article className={css("brief-focus-card brief-focus-primary")}>
+      <div className={css("brief-focus-topline")}>
+        <div className={css("brief-badge-row")}>
           <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
+          <JiraStatusBadge status={entry.task?.jiraStatus ?? null} />
           {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
-          {updated ? <span className="brief-updated">{updated}</span> : null}
+          {updated ? <span className={css("brief-updated")}>{updated}</span> : null}
         </div>
       </div>
 
-      <div className="brief-focus-heading">
+      <div className={css("brief-focus-heading")}>
         {href ? (
           <Link href={href}>
-            <h2>{title}</h2>
+            <Heading level={2} visualLevel={3}>{title}</Heading>
           </Link>
         ) : (
-          <h2>{title}</h2>
+          <Heading level={2} visualLevel={3}>{title}</Heading>
         )}
         <p>{reason}</p>
       </div>
 
-      <div className="brief-pillars">
-        <div className="brief-pillar brief-pillar-action">
-          <p className="brief-pillar-label">Next action</p>
-          <p className="brief-action-copy">{nextAction}</p>
+      <div className={css("brief-pillars")}>
+        <div className={css("brief-pillar brief-pillar-action")}>
+          <h3 className={css("brief-pillar-label")}>Next action</h3>
+          <p className={css("brief-action-copy")}>{nextAction}</p>
         </div>
 
-        <div className="brief-pillar brief-pillar-done">
-          <p className="brief-pillar-label">Done when</p>
+        <div className={css("brief-pillar brief-pillar-done")}>
+          <h3 className={css("brief-pillar-label")}>Done when</h3>
           <ul>
             {doneCriteria.slice(0, 3).map((criterion) => (
               <li key={criterion}>{criterion}</li>
@@ -379,7 +391,7 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
         <EvidenceRow entry={entry} confidence={entry.task?.confidence} />
       </div>
 
-      <div className="brief-focus-footer">
+      <div className={css("brief-focus-footer")}>
         {entry.task ? (
           <WhyThisButton whyFirst={whyFirst} evidence={entry.task.evidence} />
         ) : (
@@ -422,23 +434,31 @@ function NextUpRow({
   const confidence = entry.task?.confidence ?? null;
 
   return (
-    <div className={cn("brief-nextup-row", href && "brief-nextup-row--linked")}>
-      <div className="brief-nextup-row-badges">
+    <div
+      className={cn(
+        styles["brief-nextup-row"],
+        href && styles["brief-nextup-row--linked"]
+      )}
+    >
+      <div className={css("brief-nextup-row-badges")}>
         <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
+        <JiraStatusBadge status={entry.task?.jiraStatus ?? null} />
         {confidence != null ? <ConfidenceBadge level={confidence} withTooltip={false} /> : null}
         {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
       </div>
-      <div className="brief-nextup-body">
-        {href ? (
-          // Stretched link: the whole card opens the task, this anchor just
-          // supplies the accessible label and hit-area (see ::after in CSS).
-          <Link href={href} className="brief-nextup-title brief-nextup-title-link">
-            {title}
-          </Link>
-        ) : (
-          <p className="brief-nextup-title">{title}</p>
-        )}
-        <p className="brief-nextup-action">{nextAction}</p>
+      <div className={css("brief-nextup-body")}>
+        <h3 className={css("brief-nextup-title")}>
+          {href ? (
+            // Stretched link: the whole card opens the task, this anchor just
+            // supplies the accessible label and hit-area (see ::after in CSS).
+            <Link href={href} className={css("brief-nextup-title-link")}>
+              {title}
+            </Link>
+          ) : (
+            title
+          )}
+        </h3>
+        <p className={css("brief-nextup-action")}>{nextAction}</p>
       </div>
     </div>
   );
@@ -454,8 +474,8 @@ function NextUpTile({
 }) {
   if (entries.length === 0) return null;
   return (
-    <section className="brief-nextup-tile">
-      <p className="brief-kicker">Next up</p>
+    <section className={css("brief-nextup-tile")}>
+      <h2 className={css("brief-kicker")}>Next up</h2>
       {entries.map((entry, index) => (
         <NextUpRow
           key={entry.task?.id ?? entry.item?.jiraKey ?? entry.item?.title ?? index}
@@ -488,25 +508,25 @@ export function HumanReadableTodayView({
   const hasSideContent = nextTasks.length > 0 || calendarConnected || meetings.length > 0;
 
   return (
-    <div className="brief-page">
-      <header className="brief-header">
+    <div className={css("brief-page")}>
+      <header className={css("brief-header")}>
         <div>
-          <h1>{name ? `${name}'s focus for today` : "Your focus for today"}</h1>
-          <p className="brief-date">
+          <Heading level={1}>{name ? `${name}'s focus for today` : "Your focus for today"}</Heading>
+          <p className={css("brief-date")}>
             <span>{todayLabel()}</span>
-            <span className="brief-date-sep" aria-hidden>
+            <span className={css("brief-date-sep")} aria-hidden>
               ·
             </span>
-            <span className="brief-date-meta">What to do first today</span>
+            <span className={css("brief-date-meta")}>What to do first today</span>
           </p>
         </div>
-        <div className="brief-header-actions">
+        <div className={css("brief-header-actions")}>
           <SyncMyDayButton sources={connectedProviderLabels} lastSyncAt={lastSyncAt} />
         </div>
       </header>
 
       {!profileReady ? (
-        <div className="brief-alert brief-alert-blocked" role="status">
+        <div className={css("brief-alert brief-alert-blocked")} role="status">
           <AlertTriangle className="size-4 shrink-0" aria-hidden />
           <p>Add your name in Settings so this brief can filter work assigned to you.</p>
         </div>
@@ -528,14 +548,14 @@ export function HumanReadableTodayView({
       {/* Full-width attention rail — triage-only, never competes with focus work */}
       <NeedsInputRail blockedWaiting={dedupedBlockedWaiting} conflicts={conflicts} />
 
-      <main className={`brief-bento${hasSideContent ? "" : " brief-bento--wide"}`}>
+      <div className={css(`brief-bento${hasSideContent ? "" : " brief-bento--wide"}`)}>
         {primary ? (
-          <div className="brief-bento-primary">
+          <div className={css("brief-bento-primary")}>
             <FocusCard entry={primary} brief={dailyBrief} />
           </div>
         ) : (
-          <section className="brief-empty brief-bento-primary">
-            <h2>Nothing clearly yours yet</h2>
+          <section className={css("brief-empty brief-bento-primary")}>
+            <Heading level={2} visualLevel={3}>Nothing clearly yours yet</Heading>
             <p>
               No open work is explicitly assigned to you. Sync again after updates, or leave the
               board empty rather than guessing.
@@ -544,16 +564,16 @@ export function HumanReadableTodayView({
         )}
 
         {hasSideContent ? (
-          <aside className="brief-bento-side">
+          <aside className={css("brief-bento-side")}>
             {/* Next up first — work priority above the calendar */}
             <NextUpTile entries={nextTasks} brief={dailyBrief} />
             <TodayMeetingsCard meetings={meetings} calendarConnected={calendarConnected} />
           </aside>
         ) : null}
-      </main>
+      </div>
 
-      <p className="brief-footnote">
-        One focus, up to two next-up, and a compact meeting schedule — only work clearly yours.
+      <p className={css("brief-footnote")}>
+        Today shows one focus, up to two next tasks, and your meetings. Unclear work waits for your review.
         Ambiguous items stay in the attention rail above until you decide.
       </p>
     </div>

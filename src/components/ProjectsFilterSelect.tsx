@@ -46,7 +46,7 @@ export function ProjectsFilterSelect({ activeFilter, counts }: ProjectsFilterSel
  onSelectionChange={handleChange}
  aria-label="Filter projects"
  >
- <Select.Trigger className="flex h-9 w-fit items-center justify-between gap-1.5 rounded-lg border border-border bg-background/70 px-3 text-sm shadow-none">
+ <Select.Trigger className="flex h-11 w-fit items-center justify-between gap-1.5 rounded-lg border border-border bg-background/70 px-3 text-sm shadow-none">
  <Select.Value className="flex flex-1 text-left">
  {(state) => (state.isPlaceholder ? "Filter projects" : state.defaultChildren)}
  </Select.Value>
@@ -67,7 +67,7 @@ export function ProjectsFilterSelect({ activeFilter, counts }: ProjectsFilterSel
  key={filter}
  id={filter}
  textValue={label}
- className="relative flex min-h-9 w-full cursor-default items-center rounded-md px-2 pr-8 text-sm outline-none"
+ className="relative flex min-h-11 w-full cursor-default items-center rounded-md px-2 pr-8 text-sm outline-none"
  >
  {LABELS[filter]}
  <span className="ml-1 tabular-nums text-muted-soft">({counts[filter]})</span>

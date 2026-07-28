@@ -2,6 +2,15 @@ import { ExternalLink } from "lucide-react";
 import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
 import { AppBadge } from "@/components/AppBadge";
 import { cn } from "@/lib/utils";
+import { Heading } from "@/components/Heading";
+import styles from "./TodayMeetingsCard.module.css";
+
+function css(value: string): string {
+  return value
+    .split(/\s+/)
+    .map((name) => styles[name] ?? name)
+    .join(" ");
+}
 
 interface TodayMeetingsCardProps {
   meetings: TodayMeeting[];
@@ -22,7 +31,7 @@ function formatTimeRange(meeting: TodayMeeting): string {
   const end = new Date(meeting.endsAt);
   if (Number.isNaN(end.getTime())) return startLabel;
 
-  return `${startLabel} – ${end.toLocaleTimeString(undefined, {
+  return `${startLabel} to ${end.toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
   })}`;
@@ -110,9 +119,9 @@ export function TodayMeetingsCard({ meetings, calendarConnected }: TodayMeetings
   return (
     <section className="app-card flex flex-col px-5 py-4">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-medium tracking-tight text-foreground">
+        <Heading level={2} visualLevel={6} className="text-foreground">
           Today&apos;s meetings
-        </h2>
+        </Heading>
         <a
           href="https://calendar.google.com/"
           target="_blank"
@@ -139,7 +148,7 @@ export function TodayMeetingsCard({ meetings, calendarConnected }: TodayMeetings
         </div>
       ) : sorted.length === 0 ? (
         <p className="mt-5 py-3 text-center text-sm text-muted">
-          No meetings today — protect the day for focused work.
+          No meetings today. Protect the day for focused work.
         </p>
       ) : (
         <>
@@ -152,8 +161,8 @@ export function TodayMeetingsCard({ meetings, calendarConnected }: TodayMeetings
           ) : null}
 
           {upcomingExtra.length > 0 ? (
-            <details className="meetings-extra">
-              <summary className="meetings-extra-summary">
+            <details className={css("meetings-extra")}>
+              <summary className={css("meetings-extra-summary")}>
                 {upcomingExtra.length === 1
                   ? "Show 1 more meeting"
                   : `Show all ${upcomingExtra.length} more meetings`}
@@ -167,8 +176,8 @@ export function TodayMeetingsCard({ meetings, calendarConnected }: TodayMeetings
           ) : null}
 
           {ended.length > 0 ? (
-            <details className="meetings-ended">
-              <summary className="meetings-ended-summary">
+            <details className={css("meetings-ended")}>
+              <summary className={css("meetings-ended-summary")}>
                 {ended.length === 1 ? "1 completed" : `${ended.length} completed`}
               </summary>
               <ul className="mt-2 space-y-2">

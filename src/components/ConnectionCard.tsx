@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { AppBadge } from "@/components/AppBadge";
 import { Button } from "@heroui/react/button";
 import { Input } from "@heroui/react/input";
+import { Heading } from "@/components/Heading";
 
 interface ConnectionCardProps {
   provider: string;
@@ -124,10 +125,10 @@ export function ConnectionCard({
   return (
     <section className="app-card px-4 py-3">
       {/* Header row: label + status + actions */}
-      <div className="flex min-w-0 items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1 pt-0.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold">{label}</h3>
+            <Heading level={2} visualLevel={6}>{label}</Heading>
             <AppBadge className={cn(statusStyle)}>{statusLabel}</AppBadge>
             {usingMcp ? <AppBadge tone="neutral">MCP</AppBadge> : null}
           </div>
@@ -148,7 +149,7 @@ export function ConnectionCard({
           {errorText ? <p className="mt-1.5 text-sm text-danger">{errorText}</p> : null}
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0">
           {mcpHref ? (
             <a
               href={mcpHref}
@@ -162,7 +163,7 @@ export function ConnectionCard({
               <span
                 className="link-btn-primary disabled"
                 aria-disabled="true"
-                title="OAuth app credentials are missing — see details below."
+                title="OAuth app credentials are missing. See details below."
               >
                 {connected ? "Reconnect" : "Connect"}
               </span>
@@ -177,6 +178,7 @@ export function ConnectionCard({
               type="button"
               variant="ghost"
               size="sm"
+              className="min-h-11"
               onPress={disconnect}
               isDisabled={pending !== null}
             >
@@ -188,6 +190,7 @@ export function ConnectionCard({
               type="button"
               variant="ghost"
               size="sm"
+              className="min-h-11"
               onPress={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
             >
@@ -208,14 +211,14 @@ export function ConnectionCard({
           ) : null}
 
           {setupHint ? (
-            <p className="rounded-[var(--radius-md)] border border-warm/25 bg-warm/8 px-3 py-2.5 text-xs leading-relaxed text-warm">
+            <p className="rounded-[var(--radius-md)] border border-warm/25 bg-warm/8 px-3 py-2.5 text-metadata leading-relaxed text-warm">
               {setupHint}
             </p>
           ) : null}
 
           {supportsMcp && !usingMcp && showApiConnect ? (
             <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-soft">Direct API setup (optional)</p>
+              <p className="text-metadata font-medium text-muted-soft">Direct API setup (optional)</p>
               {setupHint ? (
                 <span className="link-btn-outline disabled" aria-disabled="true">
                   {connected ? "Reconnect (API)" : "Connect (API)"}
@@ -231,7 +234,7 @@ export function ConnectionCard({
           {hasTokenForm ? (
             <div className={showPatFallback ? "space-y-1.5" : undefined}>
               {showPatFallback ? (
-                <p className="text-xs font-medium text-muted-soft">
+                <p className="text-metadata font-medium text-muted-soft">
                   Personal access token (optional fallback)
                 </p>
               ) : null}
@@ -243,12 +246,13 @@ export function ConnectionCard({
                   onChange={(event) => setSecret(event.target.value)}
                   placeholder={secretPlaceholder}
                   aria-label={`${label} token`}
-                  className="h-10 border border-border bg-background/70 text-sm shadow-none"
+                  className="h-11 border border-border bg-background/70 text-sm shadow-none"
                 />
                 <Button
                   type="submit"
                   variant="outline"
                   size="sm"
+                  className="min-h-11"
                   isDisabled={pending !== null || !secret.trim()}
                 >
                   {pending === "secret" ? "Testing…" : connected ? "Replace" : "Connect"}

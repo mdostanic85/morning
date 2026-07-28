@@ -1,8 +1,18 @@
 import Link from "next/link";
 import { SettingsBackLink } from "@/components/SettingsBackLink";
 import { getAuditLog } from "@/services/hydra";
+import { Heading } from "@/components/Heading";
 
 export const dynamic = "force-dynamic";
+
+function formatAuditAction(action: string): string {
+  const label = action.replaceAll("_", " ").replaceAll(".", " ");
+  return label.charAt(0).toLocaleUpperCase() + label.slice(1);
+}
+
+function formatAuditEntity(entityType: string): string {
+  return entityType.replaceAll("_", " ");
+}
 
 export default async function AuditPage() {
   const logs = await getAuditLog(200);
@@ -10,10 +20,10 @@ export default async function AuditPage() {
     <div className="space-y-7">
       <header>
         <SettingsBackLink section="Trust trail" />
-        <h1 className="mt-2 font-display text-4xl font-semibold tracking-[-0.04em]">Audit log</h1>
+        <Heading level={1} visualLevel={2} className="mt-2">Trust trail</Heading>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-          Manual runs, schedule/config changes, outcomes, and delivery metadata. Source content and
-          secrets are intentionally excluded.
+          Review report runs, schedule changes, outcomes, and delivery details. Source content and
+          credentials are never shown here.
         </p>
       </header>
       <div className="app-card overflow-hidden">
@@ -26,22 +36,22 @@ export default async function AuditPage() {
                 key={log.id}
                 className="grid gap-2 p-5 sm:grid-cols-[11rem_minmax(0,1fr)_auto]"
               >
-                <time className="font-mono text-xs text-muted">
+                <time className="font-utility text-metadata text-muted">
                   {new Date(log.createdAt).toLocaleString()}
                 </time>
                 <div>
-                  <p className="font-medium">{log.action.replaceAll("_", " ")}</p>
-                  <p className="mt-1 text-xs text-muted">
-                    {log.entityType}
-                    {log.entityId ? ` #${log.entityId}` : ""} · {log.actor}
+                  <p className="font-medium">{formatAuditAction(log.action)}</p>
+                  <p className="mt-1 text-metadata text-muted">
+                    {formatAuditEntity(log.entityType)}
+                    {log.entityId ? ` #${log.entityId}` : ""}, {log.actor === "local-user" ? "created locally" : log.actor}
                   </p>
                 </div>
                 {log.entityType === "report_run" && log.entityId ? (
                   <Link
                     href={`/reports/${log.entityId}`}
-                    className="text-xs text-accent hover:underline"
+                    className="inline-flex min-h-11 items-center text-metadata text-accent hover:underline"
                   >
-                    Open run
+                    Open report
                   </Link>
                 ) : null}
               </article>

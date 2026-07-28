@@ -6,6 +6,7 @@ import { SettingsBackLink } from "@/components/SettingsBackLink";
 import { countIssuesForProjectKeys, countJiraIssuesByProjectKey } from "@/lib/projects/jiraIssues";
 import { getConnectionByProvider } from "@/services/connections";
 import { isMcpTransport } from "@/lib/connectors/transport";
+import { Heading } from "@/components/Heading";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function ProjectsPage({
     <div className="space-y-8">
       <div>
         <SettingsBackLink section="Work contexts" />
-        <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight">Projects</h1>
+        <Heading level={1} visualLevel={2} className="mt-2">Projects</Heading>
         <p className="mt-3 text-[15px] leading-relaxed text-muted">
           Jira boards and work contexts from your connected sources. Sync my day keeps these up to
           date.
@@ -74,7 +75,7 @@ export default async function ProjectsPage({
           }
           description={
             projects.length === 0
-              ? "Run Sync my day — projects are synced from Jira (via MCP) and other connected sources."
+              ? "Run Sync my day. Projects come from Jira and your other connected sources."
               : activeFilter === "inactive"
                 ? "Turn off a project with the switch to hide it from your active work."
                 : "Sync my day to refresh projects from connected sources."

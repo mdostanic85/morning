@@ -1,0 +1,85 @@
+/* ── Tailwind v4 theme mapping ─────────────────────────────────────────── */
+@theme inline {
+  /* App tokens → Tailwind utility classes  */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-soft: var(--surface-soft);
+  --color-muted: var(--muted);
+  --color-muted-soft: var(--muted-soft);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-default: var(--default);
+  --color-default-foreground: var(--default-foreground);
+  --color-segment: var(--segment);
+  --color-segment-foreground: var(--segment-foreground);
+  --color-action-primary: var(--action-primary);
+  --color-action-primary-hover: var(--action-primary-hover);
+  --color-action-primary-active: var(--action-primary-active);
+  --color-action-primary-foreground: var(--action-primary-foreground);
+  --color-warm: var(--warm);
+  --color-good: var(--good);
+  --color-outcome-done-surface: var(--outcome-done-surface);
+  --color-outcome-pending-surface: var(--outcome-pending-surface);
+  --color-outcome-done-accent: var(--outcome-done-accent);
+  --color-outcome-pending-accent: var(--outcome-pending-accent);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-danger: var(--danger);
+  --color-destructive: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-ring: var(--focus);
+  --color-now: var(--now);
+  --color-waiting: var(--waiting);
+  --color-tomorrow: var(--tomorrow);
+  --color-unclear: var(--unclear);
+  --color-sky: var(--sky);
+  --color-sky-soft: var(--sky-soft);
+  --color-sky-foreground: var(--sky-foreground);
+  --color-mint: var(--mint);
+  --color-mint-soft: var(--mint-soft);
+  --color-mint-foreground: var(--mint-foreground);
+  --color-sun: var(--sun);
+  --color-sun-soft: var(--sun-soft);
+  --color-sun-foreground: var(--sun-foreground);
+  /* Compatibility aliases for the existing decorative "pink" tone API. */
+  --color-pink: var(--violet);
+  --color-pink-soft: var(--violet-soft);
+  --color-pink-foreground: var(--violet-foreground);
+  --color-orange: var(--orange);
+  --color-orange-soft: var(--orange-soft);
+  --color-accent-soft-surface: var(--accent-soft-surface);
+  --color-danger-soft-surface: var(--danger-soft-surface);
+  --color-success-soft-surface: var(--success-soft-surface);
+  --color-waiting-soft-surface: var(--waiting-soft-surface);
+
+  /* Fonts – literal names only; no var() in @theme inline (Tailwind v4 parses at build time) */
+  --font-sans: "Inter", "Inter Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-utility: "Inter", "Inter Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", "Inter Fallback", ui-sans-serif, system-ui, sans-serif;
+
+  /* Keep the framework scale conventional; product metadata uses its own
+     readable 14px role instead of redefining xs. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-metadata: 0.875rem;
+  --text-metadata--line-height: 1.25rem;
+
+  --radius-sm: var(--radius-control);
+  --radius-md: var(--radius-inset);
+  --radius-lg: var(--radius-inset);
+  --radius-xl: var(--radius-card);
+  --radius-2xl: var(--radius-card);
+  --radius-surface: var(--radius-card);
+  --radius-today-card: var(--radius-card);
+
+  /* Main content column: reference 1280px content + room for the section nav */
+  --max-width-content: calc(80rem + 200px);
+}

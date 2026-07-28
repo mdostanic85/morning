@@ -94,7 +94,7 @@ function AskMemoryWidgetPanel({
           <div className="min-w-0">
             <p className="font-display text-[15px] font-semibold tracking-tight">Work assistant</p>
             <p className="truncate text-[14px] text-muted">
-              Grounded answers from your synced sources.
+              Answers with sources and clear uncertainty.
             </p>
           </div>
         </div>
@@ -104,7 +104,7 @@ function AskMemoryWidgetPanel({
             variant="ghost"
             size="sm"
             isIconOnly
-            className="size-9 p-0"
+            className="size-11 p-0"
             onClick={onToggleExpanded}
             aria-label={expanded ? "Make chat smaller" : "Expand chat"}
           >
@@ -119,7 +119,7 @@ function AskMemoryWidgetPanel({
             variant="ghost"
             size="sm"
             isIconOnly
-            className="size-9 p-0"
+            className="size-11 p-0"
             onClick={onClose}
             aria-label="Close work assistant"
           >

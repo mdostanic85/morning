@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Sparkles, X } from "lucide-react";
 import type { SyncNotification, SyncWhatsNew } from "@/lib/imports/syncWhatsNew";
+import { Heading } from "@/components/Heading";
 
 const KIND_LABEL: Record<SyncNotification["kind"], string> = {
   jira_done: "Jira",
@@ -67,12 +68,14 @@ export function SyncWhatsNewPanel({
           <p className="text-[14px] font-semibold uppercase tracking-[0.12em] text-muted">
             Sync update
           </p>
-          <h2
+          <Heading
+            level={2}
+            visualLevel={4}
             id="sync-whats-new-title"
-            className="mt-0.5 font-display text-xl font-semibold tracking-tight"
+            className="mt-0.5"
           >
             What&apos;s new
-          </h2>
+          </Heading>
         </div>
         <button
           type="button"

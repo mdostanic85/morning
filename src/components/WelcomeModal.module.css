@@ -1,0 +1,15 @@
+/* Keep the app theme in this entrypoint so branch restores invalidate Turbopack CSS output. */
+
+.welcome-beam {
+  height: 0.25rem;
+  background: linear-gradient(
+    90deg,
+    var(--gradient-magenta),
+    var(--gradient-violet) 28%,
+    var(--gradient-indigo) 52%,
+    var(--gradient-blue) 72%,
+    var(--gradient-cyan) 88%,
+    transparent
+  );
+  box-shadow: 0 0 28px var(--glow-sky);
+}

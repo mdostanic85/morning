@@ -1,0 +1,318 @@
+@layer components {
+  .font-utility {
+    font-variant-numeric: tabular-nums;
+  }
+
+/* Shared operational typography helpers used across task and report views. */
+.ft-eyebrow {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ft-hero-lead {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.ft-meta {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ft-body-lg {
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.ft-body {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.ft-strong-15 {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.ft-small {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.ft-source-meta {
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.ft-card-description {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ft-badge {
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.ft-screen-lead {
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.ft-section-label {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.ft-header-meta {
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .ft-body-lg { font-size: 15px; }
+}
+}
+
+/* ── Shared component classes ───────────────────────────────────────────
+   Centralized styling for recurring product-specific primitives that are
+   intentionally outside HeroUI
+   components: pill buttons, form fields, cards, and section labels.
+   Keeps every screen on the same spacing/type rhythm.                    */
+@layer components {
+  /* Signature motif: the sync animation spectrum fading into the surface. */
+  .horizon {
+    height: 1px;
+    border: 0;
+    background: linear-gradient(
+      90deg,
+      var(--gradient-magenta) 0%,
+      var(--gradient-violet) 24%,
+      var(--gradient-indigo) 46%,
+      var(--gradient-blue) 64%,
+      var(--gradient-cyan) 82%,
+      transparent 100%
+    );
+    opacity: 0.65;
+  }
+
+  /* Monogram tile used as the brand mark. */
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-control);
+    background: var(--action-primary);
+    color: var(--action-primary-foreground);
+    box-shadow: none;
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .app-card {
+    border-radius: var(--surface-radius);
+    border: 1px solid var(--card-shell-border);
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    box-shadow: none;
+  }
+
+  .surface-gradient {
+    background: var(--gradient-surface);
+  }
+
+  .accent-soft-gradient {
+    background: var(--gradient-accent-soft);
+  }
+
+  .focus-soft-gradient {
+    background: var(--gradient-focus-soft);
+  }
+
+  .focus-hero-gradient {
+    background: var(--gradient-focus-hero);
+  }
+
+  .drawer-gradient {
+    background: var(--gradient-drawer);
+  }
+
+  .current-action-gradient {
+    background: var(--current-action-surface);
+  }
+
+  .warm-hover-gradient:hover {
+    background: var(--gradient-warm-hover);
+  }
+
+  .eyebrow {
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .field {
+    width: 100%;
+    border-radius: var(--radius-control);
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--background) 72%, transparent);
+    padding: 0.75rem 1rem;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--foreground);
+    transition:
+      border-color 140ms ease,
+      box-shadow 140ms ease;
+  }
+  input.field,
+  select.field {
+    height: var(--control-height);
+    padding-block: 0;
+    line-height: 1.2;
+  }
+  .field::placeholder {
+    color: var(--muted-soft);
+  }
+  .field:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+
+  .form-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .form-inline > input.field,
+  .form-inline > select.field {
+    min-width: 0;
+    flex: 1 1 12rem;
+  }
+
+  .today-main {
+    padding: var(--today-main-padding-mobile) var(--today-main-padding-mobile)
+      calc(var(--today-main-padding-mobile) + 1rem);
+    scroll-behavior: smooth;
+  }
+
+  @media (min-width: 640px) {
+    .today-main {
+      padding: var(--today-main-padding-tablet) var(--today-main-padding-tablet)
+        calc(var(--today-main-padding-tablet) + 1.25rem);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .today-main {
+      padding: var(--today-main-padding) var(--today-main-padding)
+        calc(var(--today-main-padding) + 1.5rem);
+    }
+  }
+
+  :where(h1, h2, h3, h4, h5, h6, section).scroll-anchor,
+  :where(h1, h2, h3, h4, h5, h6, section)[id] {
+    scroll-margin-top: 6rem;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    height: var(--tag-height);
+    min-height: var(--tag-height);
+    padding-inline: var(--tag-padding-x);
+    border-radius: var(--radius-pill);
+    border: 1px solid transparent;
+    font-size: var(--tag-font-size);
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  select.tag {
+    padding-block: 0;
+    padding-inline-end: 1.75rem;
+    cursor: pointer;
+  }
+}
+@layer components {
+  .link-btn-primary,
+  .link-btn-outline,
+  .link-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-pill);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .link-btn-primary {
+    min-height: 2.75rem;
+    height: 2.75rem;
+    padding: 0 0.75rem;
+    font-size: 0.875rem;
+    background: var(--action-primary);
+    color: var(--action-primary-foreground);
+    border: 1px solid transparent;
+  }
+  .link-btn-primary:hover {
+    background: var(--action-primary-hover);
+  }
+  .link-btn-primary[aria-disabled="true"],
+  .link-btn-primary.disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .link-btn-outline {
+    min-height: 2.75rem;
+    height: 2.75rem;
+    padding: 0 0.75rem;
+    font-size: 0.875rem;
+    background: transparent;
+    color: var(--foreground);
+    border: 1px solid var(--border);
+  }
+  .link-btn-outline:hover {
+    background: var(--surface-soft);
+  }
+  .link-btn-ghost {
+    min-height: 2.75rem;
+    height: 2.75rem;
+    padding: 0 0.75rem;
+    font-size: 0.875rem;
+    background: transparent;
+    color: var(--foreground);
+    border: 1px solid transparent;
+  }
+  .link-btn-ghost:hover {
+    background: var(--surface-soft);
+  }
+  .link-btn-lg {
+    height: 3rem;
+    padding: 0 1.25rem;
+    font-size: 1rem;
+  }
+  .link-btn-md {
+    height: 2.75rem;
+    padding: 0 1rem;
+    font-size: 1rem;
+  }
+}

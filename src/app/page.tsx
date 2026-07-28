@@ -22,6 +22,7 @@ import {
 } from "@/lib/dailyBrief/needsInputRelevance";
 import { humanizeReason } from "@/lib/tasks/humanizeReason";
 import { HumanReadableTodayView } from "@/components/HumanReadableTodayView";
+import { buildTaskSupportingSources } from "@/lib/tasks/taskSupportingSources";
 
 export const dynamic = "force-dynamic";
 
@@ -171,10 +172,16 @@ export default async function TodayPage() {
   const sourceById = new Map(sourceItems.map((source) => [source.id, source]));
   const tasks = allOpenTasks.map((task) => {
     const focus = briefingFocusByTaskId.get(task.id);
+    const supporting = buildTaskSupportingSources({ task, sourceById });
+    const jiraStatus =
+      supporting.groups.find((group) => group.isAnchor && group.jiraStatus)?.jiraStatus ??
+      supporting.groups.find((group) => group.jiraStatus)?.jiraStatus ??
+      null;
     return {
       id: task.id,
       title: task.title,
       status: task.status,
+      jiraStatus,
       reason: focus?.reason || task.reason,
       nextAction: focus?.nextAction || task.nextAction,
       actionSteps: focus?.actionSteps ?? [],

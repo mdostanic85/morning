@@ -6,6 +6,7 @@ import { Input } from "@heroui/react/input";
 import { Switch } from "@heroui/react/switch";
 import { Toast } from "@heroui/react/toast";
 import type { LocalLlmStatus } from "@/services/settings";
+import { Heading } from "@/components/Heading";
 
 export function LocalLlmForm({ initialStatus }: { initialStatus: LocalLlmStatus }) {
   const [status, setStatus] = useState(initialStatus);
@@ -109,12 +110,12 @@ export function LocalLlmForm({ initialStatus }: { initialStatus: LocalLlmStatus 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-2">
-            <h3 className="text-sm font-medium">Local LLM</h3>
-            <span className="text-xs text-muted-soft">
+            <Heading level={3} visualLevel={6}>Local LLM</Heading>
+            <span className="text-metadata text-muted-soft">
               · Emergency fallback after cloud models
             </span>
           </div>
-          <p className="mt-0.5 text-xs text-muted">
+          <p className="mt-0.5 text-metadata text-muted">
             {status.configured
               ? `${status.model} · ${status.enabled ? "Active" : "Paused"}`
               : "Not configured"}
@@ -153,7 +154,7 @@ export function LocalLlmForm({ initialStatus }: { initialStatus: LocalLlmStatus 
       <form onSubmit={saveConfiguration} className="mt-4 grid gap-3">
         <div className="grid gap-3 md:grid-cols-2">
           <label>
-            <span className="text-xs font-medium text-muted">Base URL</span>
+            <span className="text-metadata font-medium text-muted">Base URL</span>
             <Input
               className="mt-1.5"
               value={baseUrl}
@@ -161,12 +162,12 @@ export function LocalLlmForm({ initialStatus }: { initialStatus: LocalLlmStatus 
               placeholder="http://127.0.0.1:8080/v1"
               disabled={environmentManaged}
             />
-            <span className="mt-1 block text-xs text-muted-soft">
+            <span className="mt-1 block text-metadata text-muted-soft">
               OpenAI-compatible endpoint; /chat/completions is added automatically.
             </span>
           </label>
           <label>
-            <span className="text-xs font-medium text-muted">Model</span>
+            <span className="text-metadata font-medium text-muted">Model</span>
             <Input
               className="mt-1.5"
               value={model}
@@ -174,13 +175,13 @@ export function LocalLlmForm({ initialStatus }: { initialStatus: LocalLlmStatus 
               placeholder="mlx-community/Qwen3.6-35B-A3B-4bit"
               disabled={environmentManaged}
             />
-            <span className="mt-1 block text-xs text-muted-soft">
+            <span className="mt-1 block text-metadata text-muted-soft">
               Use the exact model id exposed by your local server.
             </span>
           </label>
         </div>
         <label>
-          <span className="text-xs font-medium text-muted">Access token (optional)</span>
+          <span className="text-metadata font-medium text-muted">Access token (optional)</span>
           <Input
             className="mt-1.5"
             type="password"
@@ -192,12 +193,12 @@ export function LocalLlmForm({ initialStatus }: { initialStatus: LocalLlmStatus 
             autoComplete="off"
             disabled={environmentManaged}
           />
-          <span className="mt-1 block text-xs text-muted-soft">
+          <span className="mt-1 block text-metadata text-muted-soft">
             Most localhost MLX servers do not require a token.
           </span>
         </label>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs leading-relaxed text-muted-soft">
+          <p className="text-metadata leading-relaxed text-muted-soft">
             When active, the local model is used only if enabled cloud models fail.
             Embeddings still use OpenAI.
           </p>
@@ -230,7 +231,7 @@ export function LocalLlmForm({ initialStatus }: { initialStatus: LocalLlmStatus 
       </form>
 
       {environmentManaged ? (
-        <p className="mt-3 text-xs leading-relaxed text-muted-soft">
+        <p className="mt-3 text-metadata leading-relaxed text-muted-soft">
           Managed through LOCAL_LLM_BASE_URL and LOCAL_LLM_MODEL environment variables.
         </p>
       ) : null}

@@ -1,0 +1,24 @@
+/* ──────────────────────────────────────────────────────────────
+   Meetings tile disclosure — 3+ meetings and ended-meetings
+   collapse so they never push planned work out of sight.
+   ────────────────────────────────────────────────────────────── */
+.meetings-extra,
+.meetings-ended {
+  margin-top: 0.6rem;
+
+.meetings-extra-summary,
+.meetings-ended-summary {
+  cursor: pointer;
+  padding: 0.35rem 0;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  font-weight: 700;
+  list-style: none;
+  user-select: none;
+}
+
+.meetings-extra-summary:hover,
+.meetings-ended-summary:hover {
+  color: var(--accent-strong);
+}
+}

@@ -1,0 +1,47 @@
+.type-heading {
+    margin: 0;
+    font-family: var(--type-heading-font-family);
+    text-wrap: balance;
+  }
+
+  .type-heading-1 {
+    font-size: var(--type-heading-1-size);
+    font-weight: var(--type-heading-1-weight);
+    line-height: var(--type-heading-1-line-height);
+    letter-spacing: var(--type-heading-1-letter-spacing);
+  }
+
+  .type-heading-2 {
+    font-size: var(--type-heading-2-size);
+    font-weight: var(--type-heading-2-weight);
+    line-height: var(--type-heading-2-line-height);
+    letter-spacing: var(--type-heading-2-letter-spacing);
+  }
+
+  .type-heading-3 {
+    font-size: var(--type-heading-3-size);
+    font-weight: var(--type-heading-3-weight);
+    line-height: var(--type-heading-3-line-height);
+    letter-spacing: var(--type-heading-3-letter-spacing);
+  }
+
+  .type-heading-4 {
+    font-size: var(--type-heading-4-size);
+    font-weight: var(--type-heading-4-weight);
+    line-height: var(--type-heading-4-line-height);
+    letter-spacing: var(--type-heading-4-letter-spacing);
+  }
+
+  .type-heading-5 {
+    font-size: var(--type-heading-5-size);
+    font-weight: var(--type-heading-5-weight);
+    line-height: var(--type-heading-5-line-height);
+    letter-spacing: var(--type-heading-5-letter-spacing);
+  }
+
+  .type-heading-6 {
+    font-size: var(--type-heading-6-size);
+    font-weight: var(--type-heading-6-weight);
+    line-height: var(--type-heading-6-line-height);
+    letter-spacing: var(--type-heading-6-letter-spacing);
+}

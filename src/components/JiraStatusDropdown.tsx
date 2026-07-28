@@ -189,7 +189,7 @@ export function JiraStatusDropdown({
  </AlertDialog.Header>
  <p slot="description" className="text-sm text-pretty text-muted">
  This will transition{" "}
- <span className="font-mono font-medium text-foreground">{jiraKey}</span>
+ <span className="font-utility font-medium text-foreground">{jiraKey}</span>
  {jiraStatus ? (
  <>
  {" "}

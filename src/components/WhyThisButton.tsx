@@ -80,7 +80,7 @@ function EvidenceCard({
         </span>
       </div>
 
-      <p className="mt-2 text-xs text-muted-soft">{formatDate(item.sourceDate)}</p>
+      <p className="mt-2 text-metadata text-muted-soft">{formatDate(item.sourceDate)}</p>
 
       {body ? (
         isQuote ? (
@@ -145,7 +145,7 @@ export function WhyThisButton({ whyFirst, evidence }: WhyThisButtonProps) {
                   Why this
                 </Drawer.Heading>
                 <p slot="description" className="text-sm text-muted">
-                  Sources AI used — strongest first.
+                  Sources used for this recommendation, strongest first.
                 </p>
               </Drawer.Header>
 

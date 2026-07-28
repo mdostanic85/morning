@@ -6,6 +6,7 @@ import { Toast } from "@heroui/react/toast";
 import { Button } from "@heroui/react/button";
 import type { IngestionRule } from "@/domain/ingestionRule";
 import { SOURCE_TYPES, type SourceType } from "@/domain/sourceItem";
+import { Heading } from "@/components/Heading";
 
 const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
   manual_transcript: "Manual transcript",
@@ -97,9 +98,9 @@ export function IngestionRulesPanel({
 
   return (
     <section className="app-card p-6">
-      <h2 className="font-display text-lg font-medium">Extraction rules</h2>
+      <Heading level={2} visualLevel={5}>Extraction rules</Heading>
       <p className="mt-2 text-sm leading-relaxed text-muted">
-        Plain-language preferences that steer what gets extracted from a source — e.g. &ldquo;ignore
+        Plain-language preferences that guide what gets extracted from a source. For example, &ldquo;ignore
         GitHub CI status noise&rdquo; or &ldquo;attribute this repo to Project X&rdquo;. Scope a rule to a
         connector, a project, both, or leave it applying everywhere.
       </p>
@@ -115,7 +116,7 @@ export function IngestionRulesPanel({
                 <p className={`text-sm ${rule.active ? "text-foreground" : "text-muted-soft line-through"}`}>
                   {rule.rule}
                 </p>
-                <p className="mt-0.5 text-xs text-muted-soft">
+                <p className="mt-0.5 text-metadata text-muted-soft">
                   {scopeLabel(rule, projectNameById.get(rule.projectId ?? -1) ?? null)}
                 </p>
               </div>
@@ -123,14 +124,14 @@ export function IngestionRulesPanel({
                 <button
                   type="button"
                   onClick={() => toggleActive(rule)}
-                  className="text-xs font-medium text-muted hover:text-foreground"
+                  className="text-metadata font-medium text-muted hover:text-foreground"
                 >
                   {rule.active ? "Disable" : "Enable"}
                 </button>
                 <button
                   type="button"
                   onClick={() => removeRule(rule)}
-                  className="text-xs font-medium text-danger hover:opacity-80"
+                  className="text-metadata font-medium text-danger hover:opacity-80"
                 >
                   Delete
                 </button>

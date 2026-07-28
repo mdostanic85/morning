@@ -6,6 +6,7 @@ import { Toast } from "@heroui/react/toast";
 import { Button } from "@heroui/react/button";
 import { Input } from "@heroui/react/input";
 import { Switch } from "@heroui/react/switch";
+import { Heading } from "@/components/Heading";
 
 interface ScheduleData {
   id: number;
@@ -57,7 +58,7 @@ export function HydraScheduleSettings({ initialSchedules }: { initialSchedules: 
       {schedules.map((schedule) => (
         <section key={schedule.id} className="app-card p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
-            <div><p className="eyebrow">Weekdays</p><h2 className="mt-1 font-display text-xl font-semibold capitalize">{schedule.type} report</h2></div>
+            <div><p className="eyebrow">Weekdays</p><Heading level={2} visualLevel={4} className="mt-1 capitalize">{schedule.type} report</Heading></div>
             <Switch
               size="sm"
               isSelected={schedule.enabled}
@@ -72,11 +73,11 @@ export function HydraScheduleSettings({ initialSchedules }: { initialSchedules: 
             </Switch>
           </div>
           <div className="mt-5 grid gap-4">
-            <label><span className="text-xs font-medium text-muted">Local time</span><Input className="mt-1.5" type="time" value={asTime(schedule)} onChange={(event) => { const [hour, minute] = event.target.value.split(":").map(Number); update(schedule.id, { hour, minute }); }} /></label>
-            <label><span className="text-xs font-medium text-muted">Timezone</span><Input className="mt-1.5" value={schedule.timezone} onChange={(event) => update(schedule.id, { timezone: event.target.value })} /></label>
+            <label><span className="text-metadata font-medium text-muted">Local time</span><Input className="mt-1.5" type="time" value={asTime(schedule)} onChange={(event) => { const [hour, minute] = event.target.value.split(":").map(Number); update(schedule.id, { hour, minute }); }} /></label>
+            <label><span className="text-metadata font-medium text-muted">Timezone</span><Input className="mt-1.5" value={schedule.timezone} onChange={(event) => update(schedule.id, { timezone: event.target.value })} /></label>
           </div>
-          <p className="mt-4 text-xs leading-relaxed text-muted">Runs Monday–Friday. The idempotency key prevents duplicate reports for the same date and run type.</p>
-          <Button className="mt-5 w-full" variant="outline" onClick={() => save(schedule)} isDisabled={saving === schedule.id}>{saving === schedule.id ? "Saving…" : "Save schedule"}</Button>
+          <p className="mt-4 text-metadata leading-relaxed text-muted">Runs Monday through Friday. Worklight skips duplicate reports for the same date and report type.</p>
+          <Button className="mt-5 min-h-11 w-full" variant="outline" onClick={() => save(schedule)} isDisabled={saving === schedule.id}>{saving === schedule.id ? "Saving..." : "Save schedule"}</Button>
         </section>
       ))}
     </div>

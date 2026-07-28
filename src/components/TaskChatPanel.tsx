@@ -21,6 +21,7 @@ import type {
   TaskQaAnswerSource,
 } from "@/lib/tasks/taskQa";
 import { cn } from "@/lib/utils";
+import styles from "./TaskChatPanel.module.css";
 
 interface ChatMessage {
   id: string;
@@ -60,9 +61,9 @@ function AssistantAvatar({ className }: { className?: string }) {
 function TypingDots() {
   return (
     <span className="inline-flex items-center gap-1" aria-hidden>
-      <span className="chat-typing-dot" />
-      <span className="chat-typing-dot" style={{ animationDelay: "160ms" }} />
-      <span className="chat-typing-dot" style={{ animationDelay: "320ms" }} />
+      <span className={styles["chat-typing-dot"]} />
+      <span className={styles["chat-typing-dot"]} style={{ animationDelay: "160ms" }} />
+      <span className={styles["chat-typing-dot"]} style={{ animationDelay: "320ms" }} />
     </span>
   );
 }
@@ -155,7 +156,7 @@ function AnswerSources({ sources }: { sources: TaskQaAnswerSource[] }) {
 /** The API prefixes failures with a raw error kind (e.g. "missing_api_key:").
  *  Turn that into calm, actionable copy — with a Settings link where relevant. */
 function humanizeAnswerError(raw: string): { message: string; settingsLink: boolean } {
-  const match = raw.match(/^([a-z0-9_]+):\s*(.*)$/is);
+  const match = raw.match(/^([a-z0-9_]+):\s*([\s\S]*)$/i);
   const kind = match?.[1] ?? "";
   const rest = (match?.[2] ?? raw).trim();
 
@@ -499,7 +500,7 @@ export function TaskChatPanel({
                   size="sm"
                   onPress={() => setShowTaskFocus((current) => !current)}
                   aria-expanded={showTaskFocus}
-                  className="px-0 text-[14px] font-medium text-muted hover:text-foreground"
+                  className="min-h-11 px-0 text-[14px] font-medium text-muted hover:text-foreground"
                 >
                   <SlidersHorizontalIcon className="size-3.5" aria-hidden />
                   {showTaskFocus ? "Hide task focus" : "Focus on a specific task"}
@@ -554,7 +555,13 @@ export function TaskChatPanel({
           void askQuestion(input);
         }}
       >
-        <div className="chat-composer flex min-w-0 items-end gap-2 rounded-full border border-border bg-background/70 py-1 pl-4 pr-1.5 transition-[border-color,box-shadow] duration-150">
+        <div
+          className={cn(
+            styles["chat-composer"],
+            "flex min-w-0 items-end gap-2 rounded-full border border-border bg-background/70 py-1 pl-4 pr-1.5 transition-[border-color,box-shadow] duration-150"
+          )}
+          data-chat-composer
+        >
           <Input
             fullWidth
             value={input}
@@ -563,7 +570,7 @@ export function TaskChatPanel({
             disabled={loadingAnswer}
             aria-label={selectedTask ? "Ask about selected task" : "Ask about synced work"}
             className={cn(
-              "chat-composer-input h-10 min-w-0 flex-1 border-0 bg-transparent text-sm shadow-none ring-0 outline-none"
+              "h-11 min-w-0 flex-1 border-0 bg-transparent text-sm shadow-none ring-0 outline-none"
             )}
           />
           <Button
@@ -571,7 +578,7 @@ export function TaskChatPanel({
             isIconOnly
             isDisabled={loadingAnswer || !input.trim()}
             aria-label="Send"
-            className="size-10 shrink-0 bg-action-primary text-action-primary-foreground"
+            className="size-11 shrink-0 bg-action-primary text-action-primary-foreground"
           >
             <ArrowUpIcon className="size-4" aria-hidden />
           </Button>

@@ -9,7 +9,6 @@ import { Button } from "@heroui/react/button";
 import { Dropdown } from "@heroui/react/dropdown";
 import { AlertDialog } from "@heroui/react/alert-dialog";
 import type { VerificationReport } from "@/domain/verificationReport";
-import type { SyncReviewReport } from "@/domain/syncReviewReport";
 import { cn } from "@/lib/utils";
 
 interface FocusTaskSeed {
@@ -24,7 +23,6 @@ interface TaskActionButtonsProps {
   linkedJiraKey?: string | null;
   referenceLinks?: { label: string; url: string }[];
   latestVerificationReport?: VerificationReport | null;
-  latestSyncReviewReport?: SyncReviewReport | null;
   embedded?: boolean;
   layout?: "stack" | "focus";
   focusExtras?: ReactNode;
@@ -46,7 +44,6 @@ export function TaskActionButtons({
   linkedJiraKey = null,
   referenceLinks = [],
   latestVerificationReport = null,
-  latestSyncReviewReport = null,
   embedded = false,
   layout = "stack",
   focusExtras = null,
@@ -62,21 +59,12 @@ export function TaskActionButtons({
   const [verificationReport, setVerificationReport] = useState<VerificationReport | null>(
     latestVerificationReport
   );
-  const [syncReviewReport, setSyncReviewReport] = useState<SyncReviewReport | null>(
-    latestSyncReviewReport
-  );
-  // Follow the server-provided reports when they change. Render-time
+  // Follow the server-provided report when it changes. Render-time
   // adjustment instead of effects to avoid cascading re-renders.
   const [prevVerificationReport, setPrevVerificationReport] = useState(latestVerificationReport);
   if (prevVerificationReport !== latestVerificationReport) {
     setPrevVerificationReport(latestVerificationReport);
     setVerificationReport(latestVerificationReport);
-  }
-
-  const [prevSyncReviewReport, setPrevSyncReviewReport] = useState(latestSyncReviewReport);
-  if (prevSyncReviewReport !== latestSyncReviewReport) {
-    setPrevSyncReviewReport(latestSyncReviewReport);
-    setSyncReviewReport(latestSyncReviewReport);
   }
 
   const jiraKey = linkedJiraKey?.trim().toUpperCase() ?? null;
@@ -187,7 +175,7 @@ export function TaskActionButtons({
         isDisabled={isLoading}
         className={cn(
           "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-background/70 font-semibold text-sm",
-          buttonSize === "sm" ? "h-9 px-3" : "h-11 px-4",
+          buttonSize === "sm" ? "h-11 px-3" : "h-11 px-4",
           embeddedBtnClass,
           isFocusLayout && "h-12 w-full text-[15px]"
         )}
@@ -282,11 +270,11 @@ export function TaskActionButtons({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="text-muted-soft hover:bg-danger/10 hover:text-danger"
+                className="min-h-11 text-muted-soft hover:bg-danger/10 hover:text-danger"
                 onClick={() => setDeleteConfirmOpen(true)}
                 isDisabled={isLoading}
               >
-                Delete task
+                Remove task
               </Button>
             </div>
           ) : null}
@@ -298,7 +286,7 @@ export function TaskActionButtons({
               type="button"
               size={buttonSize}
               variant="primary"
-              className={embeddedBtnClass}
+              className={cn("min-h-11", embeddedBtnClass)}
               onClick={() => runStatusAction("start")}
               isDisabled={isLoading}
             >
@@ -316,11 +304,11 @@ export function TaskActionButtons({
               type="button"
               variant="ghost"
               size="sm"
-              className="text-muted-soft hover:bg-danger/10 hover:text-danger"
+              className="min-h-11 text-muted-soft hover:bg-danger/10 hover:text-danger"
               onClick={() => setDeleteConfirmOpen(true)}
               isDisabled={isLoading}
             >
-              Delete
+              Remove
             </Button>
           ) : null}
         </div>
@@ -359,7 +347,7 @@ export function TaskActionButtons({
           <AlertDialog.Container placement="center" size="xs" className="w-full max-w-none px-4">
             <AlertDialog.Dialog className="w-full max-w-sm rounded-surface border border-border bg-overlay p-5 text-foreground outline-none">
               <AlertDialog.Header className="flex flex-col items-start gap-1.5 text-left">
-                <AlertDialog.Heading className="text-base font-medium">Delete this task?</AlertDialog.Heading>
+                <AlertDialog.Heading className="text-base font-medium">Remove this task?</AlertDialog.Heading>
               </AlertDialog.Header>
               <p slot="description" className="text-sm text-pretty text-muted">
                 This removes the task and its linked evidence from your queue. Source items stay in
@@ -375,27 +363,13 @@ export function TaskActionButtons({
                   onClick={() => runDelete()}
                   isDisabled={isLoading}
                 >
-                  Delete task
+                  Remove task
                 </Button>
               </AlertDialog.Footer>
             </AlertDialog.Dialog>
           </AlertDialog.Container>
         </AlertDialog.Backdrop>
       </AlertDialog>
-
-      <AnimatePresence>
-        {syncReviewReport ? (
-          <motion.div
-            key="sync-review-report"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.2 }}
-          >
-            <SyncReviewSummary report={syncReviewReport} />
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
 
       <AnimatePresence>
         {verificationReport ? (
@@ -414,37 +388,6 @@ export function TaskActionButtons({
   );
 }
 
-function SyncReviewSummary({ report }: { report: SyncReviewReport }) {
-  return (
-    <section className="space-y-4 rounded-xl border border-border/70 bg-surface-soft/60 p-4 text-sm">
-      <div>
-        <p className="eyebrow text-foreground/70">Sync review</p>
-        <p className="mt-2 leading-relaxed text-foreground">{report.summary}</p>
-        {report.githubBranch || report.figmaUrl ? (
-          <p className="mt-2 text-xs text-muted">
-            {report.githubBranch ? `Branch: ${report.githubBranch}` : null}
-            {report.githubBranch && report.figmaUrl ? " · " : null}
-            {report.figmaUrl ? "Figma frame checked" : null}
-          </p>
-        ) : null}
-      </div>
-      {report.ok.length > 0 ? <ReportList title="OK" items={report.ok} tone="good" /> : null}
-      {report.notOk.length > 0 ? <ReportList title="Not OK" items={report.notOk} tone="warm" /> : null}
-      {report.conflicts.length > 0 ? (
-        <ReportList title="Conflicts" items={report.conflicts} tone="unclear" />
-      ) : null}
-      {report.recommendedNextAction ? (
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
-            Recommended next action
-          </p>
-          <p className="leading-relaxed text-foreground">{report.recommendedNextAction}</p>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
 function VerificationReportSummary({ report }: { report: VerificationReport }) {
   const verdictStyle =
     report.verdict === "done" || report.verdict === "mostly_done"
@@ -458,7 +401,7 @@ function VerificationReportSummary({ report }: { report: VerificationReport }) {
       <div className="flex flex-wrap items-baseline gap-3">
         <p className="font-semibold">{VERDICT_LABEL[report.verdict] ?? report.verdict}</p>
         {report.confidence != null ? (
-          <span className="text-xs opacity-60">
+          <span className="text-metadata opacity-60">
             {Math.round(report.confidence * 100)}% source confidence
           </span>
         ) : null}
@@ -468,7 +411,7 @@ function VerificationReportSummary({ report }: { report: VerificationReport }) {
       {report.risks.length > 0 ? <ReportList title="Risks" items={report.risks} /> : null}
       {report.recommendedNextAction ? (
         <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide opacity-50">
+          <p className="mb-1 text-metadata font-semibold uppercase tracking-wide opacity-50">
             Recommended next action
           </p>
           <p className="leading-relaxed">{report.recommendedNextAction}</p>
@@ -498,7 +441,7 @@ function ReportList({
 
   return (
     <div>
-      <p className={`mb-1.5 text-xs font-semibold uppercase tracking-wide ${titleClass}`}>
+      <p className={`mb-1.5 text-metadata font-semibold uppercase tracking-wide ${titleClass}`}>
         {title}
       </p>
       <ul className="space-y-1.5">

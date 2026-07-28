@@ -67,15 +67,15 @@ export function GitHubRepoPicker({ value, onChange }: GitHubRepoPickerProps) {
   }
 
   if (loading) {
-    return <p className="text-sm text-muted">Loading your GitHub repositories…</p>;
+    return <p className="text-sm text-muted">Loading your GitHub repositories...</p>;
   }
 
   if (error) {
     return (
       <div className="space-y-2">
         <p className="text-sm text-muted">{error}</p>
-        <p className="text-xs text-muted-soft">
-          <Link href="/settings" className="text-foreground underline-offset-2 hover:underline">
+        <p className="text-metadata text-muted-soft">
+          <Link href="/settings" className="inline-flex min-h-11 items-center text-foreground underline-offset-2 hover:underline">
             Connect GitHub in Settings
           </Link>{" "}
           to pick repositories from a list, or type <code className="text-foreground">owner/repo</code>{" "}
@@ -91,7 +91,7 @@ export function GitHubRepoPicker({ value, onChange }: GitHubRepoPickerProps) {
         fullWidth
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
-        placeholder="Filter repositories…"
+        placeholder="Filter repositories"
         aria-label="Filter GitHub repositories"
         className={cn("h-11 border border-border bg-background/70 text-sm shadow-none")}
       />
@@ -118,7 +118,7 @@ export function GitHubRepoPicker({ value, onChange }: GitHubRepoPickerProps) {
                     />
                     <span className="min-w-0 flex-1 truncate font-medium">{repo.fullName}</span>
                     {repo.private ? (
-                      <span className="shrink-0 text-xs text-muted-soft">private</span>
+                      <span className="shrink-0 text-metadata text-muted-soft">private</span>
                     ) : null}
                   </label>
                 </li>
@@ -128,16 +128,16 @@ export function GitHubRepoPicker({ value, onChange }: GitHubRepoPickerProps) {
         )}
       </div>
       {manualOnly.length > 0 ? (
-        <p className="text-xs text-muted-soft">
+        <p className="text-metadata text-muted-soft">
           Also tracking manually added repos not in this list: {manualOnly.join(", ")}
         </p>
       ) : null}
       {value.length > 0 ? (
-        <p className="text-xs text-muted-soft">
+        <p className="text-metadata text-muted-soft">
           {value.length} repositor{value.length === 1 ? "y" : "ies"} selected for this project.
         </p>
       ) : (
-        <p className="text-xs text-muted-soft">Select one or more repositories for GitHub sync.</p>
+        <p className="text-metadata text-muted-soft">Select one or more repositories for GitHub sync.</p>
       )}
     </div>
   );

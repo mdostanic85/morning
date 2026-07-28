@@ -4,16 +4,17 @@ import { AppBadge } from "@/components/AppBadge";
 import { SettingsBackLink } from "@/components/SettingsBackLink";
 import { getConnections } from "@/services/connections";
 import { listHydraRuns } from "@/services/hydra";
+import { Heading } from "@/components/Heading";
 
 export const dynamic = "force-dynamic";
 
 const SOURCES = [
-  { key: "granola", connection: "granola", label: "Granola", description: "Meetings, notes, transcripts, and capability limits." },
-  { key: "calendar", connection: "calendar", label: "Google Calendar", description: "Hydra/ASC events, participants, time, and links." },
-  { key: "gmail", connection: "gmail", label: "Gemini notes", description: "Gemini / Google Meet notes delivered through your Google account." },
-  { key: "jira", connection: "jira", label: "Jira", description: "Assigned unfinished UATL issues, comments, status, and blockers." },
-  { key: "confluence", connection: "confluence", label: "Confluence", description: "PRD, intake, and linked pages within configured scope." },
-  { key: "figma", connection: "figma", label: "Figma", description: "Read-only node-specific evidence and preliminary audits." },
+  { key: "granola", connection: "granola", label: "Granola", description: "Meeting notes and transcripts." },
+  { key: "calendar", connection: "calendar", label: "Google Calendar", description: "Work events, participants, times, and links." },
+  { key: "gmail", connection: "gmail", label: "Gemini notes", description: "Google Meet notes from your Google account." },
+  { key: "jira", connection: "jira", label: "Jira", description: "Assigned issues, comments, status, and blockers." },
+  { key: "confluence", connection: "confluence", label: "Confluence", description: "Requirements and linked project pages." },
+  { key: "figma", connection: "figma", label: "Figma", description: "Design evidence used to check completed work." },
 ];
 
 export default async function SourcesPage() {
@@ -26,10 +27,10 @@ export default async function SourcesPage() {
     <div className="space-y-7">
       <header>
         <SettingsBackLink section="Source health" />
-        <h1 className="mt-2 font-display text-4xl font-semibold tracking-[-0.04em]">Sources</h1>
+        <Heading level={1} visualLevel={2} className="mt-2">Sources</Heading>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-          Connection state and the most recent run-level health are shown separately, so a stale or
-          unavailable source cannot look silently complete.
+          See whether each source is connected, when it last synced, and whether the latest report
+          used it.
         </p>
       </header>
       <div className="grid gap-4 md:grid-cols-2">
@@ -37,31 +38,49 @@ export default async function SourcesPage() {
           const connection = byConnection.get(source.connection);
           const health = byHealth.get(source.key);
           const connected = connection?.status === "connected";
+          const lastConnectionSync =
+            typeof connection?.metadata?.lastSync === "string"
+              ? connection.metadata.lastSync
+              : null;
+          const connectionLabel =
+            connection?.status === "error"
+              ? "Needs attention"
+              : connected
+                ? "Connection ready"
+                : "Not connected";
           return (
             <section key={source.key} className="app-card p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="font-display text-lg font-semibold">{source.label}</h2>
+                  <Heading level={2} visualLevel={5}>{source.label}</Heading>
                   <p className="mt-2 text-sm leading-relaxed text-muted">{source.description}</p>
                 </div>
                 <AppBadge tone={connected ? "good" : "neutral"}>
-                  {connection?.status ?? "not connected"}
+                  {connectionLabel}
                 </AppBadge>
               </div>
               <div className="mt-5 border-t border-border pt-4">
-                <p className="text-sm text-muted">Latest run check</p>
+                <p className="text-sm text-muted">Report coverage</p>
                 <p
                   className={`mt-1 text-sm font-medium ${health?.status === "connected" ? "text-good" : "text-waiting"}`}
                 >
-                  {health?.status.replaceAll("_", " ") ?? "No run yet"}
+                  {health
+                    ? health.status.replaceAll("_", " ")
+                    : latestRun
+                      ? "Not included in the latest report"
+                      : "Not checked in a report yet"}
                 </p>
-                <p className="mt-2 text-xs text-muted">
+                <p className="mt-2 text-metadata text-muted">
                   {health?.lastSuccessfulSyncAt
                     ? `Last successful sync ${new Date(health.lastSuccessfulSyncAt).toLocaleString()}`
-                    : "No successful sync recorded"}
+                    : lastConnectionSync
+                      ? `Last source sync ${new Date(lastConnectionSync).toLocaleString()}`
+                      : connected
+                        ? "Connected, but no sync time is available yet."
+                        : "Connect this source to start syncing."}
                 </p>
                 {health?.warnings[0] ? (
-                  <p className="mt-2 text-xs text-waiting">{health.warnings[0]}</p>
+                  <p className="mt-2 text-metadata text-waiting">{health.warnings[0]}</p>
                 ) : null}
               </div>
             </section>

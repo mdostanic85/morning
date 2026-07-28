@@ -7,6 +7,7 @@ import { XIcon } from "lucide-react";
 import { Drawer } from "@heroui/react/drawer";
 import { SourceBadge } from "./SourceBadge";
 import { formatLocalTimestamp } from "@/lib/format/statusLabels";
+import { Heading } from "./Heading";
 
 export type AIExplanationSection = "overview" | "evidence";
 
@@ -81,7 +82,7 @@ function DrawerSection({
 }) {
  return (
  <section id={id} className="scroll-mt-24 border-t border-border/70 pt-6 first:border-t-0 first:pt-0">
- <h3 className="eyebrow text-foreground/70">{label}</h3>
+ <Heading level={3} visualLevel={6} className="eyebrow text-foreground/70">{label}</Heading>
  <div className="mt-3">{children}</div>
  </section>
  );
@@ -146,7 +147,7 @@ export function AIExplanationDrawer({
  <p className="text-[14px] leading-relaxed text-muted">{reasoning}</p>
  {confidence != null ? (
  <p className="mt-3 text-[14px] text-muted-soft">
- {extractionConfidenceLabel(confidence)} — this reflects how confidently the task was
+ {extractionConfidenceLabel(confidence)}. This reflects how confidently the task was
  extracted from sources, not how sure the app is you should do it first.
  </p>
  ) : null}
@@ -187,7 +188,7 @@ export function AIExplanationDrawer({
  <div className="space-y-6">
  {evidenceGroups.map((group) => (
  <div key={group.label}>
- <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+ <p className="text-metadata font-semibold uppercase tracking-wide text-muted">
  {group.label}
  </p>
  <ul className="mt-3 space-y-3">
@@ -205,7 +206,7 @@ export function AIExplanationDrawer({
  <p className="mt-2 text-[14px] leading-relaxed text-muted">
  {item.quote ?? item.summary}
  </p>
- <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-soft">
+ <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-metadata text-muted-soft">
  {item.sourceAuthor ? <span>By {item.sourceAuthor}</span> : null}
  {item.sourceDate ? (
  <span>{formatLocalTimestamp(item.sourceDate)}</span>

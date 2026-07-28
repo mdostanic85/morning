@@ -1,0 +1,401 @@
+/* ── How we decide ─────────────────────────────────────────────────────── */
+.decide-page {
+  padding: 2.25rem 0 5rem;
+
+.decide-hero {
+  max-width: 42rem;
+  margin-bottom: 2.25rem;
+}
+
+.decide-eyebrow {
+  margin: 0 0 0.75rem;
+  color: var(--accent-strong);
+  font-size: var(--font-size-min);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.decide-hero h1 {
+  font-size: var(--type-heading-2-size);
+  font-weight: var(--type-heading-2-weight);
+  line-height: var(--type-heading-2-line-height);
+  letter-spacing: var(--type-heading-2-letter-spacing);
+}
+
+.decide-lead {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.decide-jumpnav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.decide-jumpnav a {
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.decide-jumpnav a:hover {
+  color: var(--accent-strong);
+}
+
+.decide-jumpnav a:not(:last-child)::after {
+  content: "·";
+  margin-left: 0.6rem;
+  color: var(--border-strong);
+}
+
+#outcomes,
+#pipeline,
+#rules,
+#pillars {
+  scroll-margin-top: 5.5rem;
+}
+
+.decide-lead strong {
+  color: var(--foreground);
+  font-weight: 650;
+}
+
+.decide-outcomes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 2.5rem;
+}
+
+.decide-outcome {
+  padding: 1.1rem 1.15rem;
+  border: 1px solid var(--card-shell-border);
+  border-radius: var(--radius-inset);
+  background: var(--surface);
+}
+
+.decide-outcome-top {
+  margin-bottom: 0.75rem;
+}
+
+.decide-outcome-meaning {
+  margin: 0;
+  font-size: var(--font-size-min);
+  font-weight: 560;
+  line-height: 1.45;
+}
+
+.decide-outcome ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decide-outcome li {
+  position: relative;
+  padding-left: 0.85rem;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  line-height: 1.4;
+}
+
+.decide-outcome li::before {
+  content: "";
+  position: absolute;
+  top: 0.55rem;
+  left: 0;
+  width: 0.28rem;
+  height: 0.28rem;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+}
+
+.decide-section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.decide-section-head h2,
+.decide-pillars h2 {
+  font-size: var(--type-heading-5-size);
+  font-weight: var(--type-heading-5-weight);
+  line-height: var(--type-heading-5-line-height);
+  letter-spacing: var(--type-heading-5-letter-spacing);
+}
+
+.decide-section-lead {
+  margin: 0 0 1.15rem;
+  max-width: 40rem;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  line-height: 1.5;
+}
+
+.decide-flow {
+  margin-bottom: 2.5rem;
+  padding: 1.35rem 1.4rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--card-shell-border));
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.decide-flow-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+
+.decide-flow-track li {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem 0.85rem;
+  border: 1px solid var(--card-shell-border);
+  border-radius: var(--radius-inset);
+  background: color-mix(in srgb, var(--surface) 88%, var(--accent-soft-surface));
+}
+
+.decide-flow-track li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -0.45rem;
+  z-index: 1;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-top: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-right: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.decide-flow-index {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: var(--radius-control);
+  background: var(--accent-soft-surface);
+  color: var(--accent-strong);
+  font-size: var(--font-size-min);
+  font-weight: 800;
+}
+
+.decide-flow-track strong {
+  font-size: var(--font-size-min);
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.decide-flow-track span:last-child {
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  line-height: 1.35;
+}
+
+.decide-rules {
+  margin-bottom: 2.5rem;
+}
+
+.decide-rule-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.decide-rule {
+  padding: 1.35rem 1.4rem;
+  border: 1px solid var(--card-shell-border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.decide-rule h3 {
+  font-size: var(--type-heading-5-size);
+  font-weight: var(--type-heading-5-weight);
+  line-height: var(--type-heading-5-line-height);
+  letter-spacing: var(--type-heading-5-letter-spacing);
+}
+
+.decide-rule > p {
+  margin: 0.55rem 0 1rem;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  line-height: 1.55;
+}
+
+.decide-rule-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.decide-col {
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-inset);
+  border: 1px solid transparent;
+}
+
+.decide-col-valid {
+  border-color: color-mix(in srgb, var(--good) 25%, var(--border));
+  background: color-mix(in srgb, var(--success-soft-surface) 70%, var(--surface));
+}
+
+.decide-col-invalid {
+  border-color: color-mix(in srgb, var(--waiting) 28%, var(--border));
+  background: color-mix(in srgb, var(--waiting-soft-surface) 65%, var(--surface));
+}
+
+.decide-col-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.65rem;
+  font-size: var(--font-size-min);
+  font-weight: 750;
+}
+
+.decide-col-valid .decide-col-label {
+  color: var(--good);
+}
+
+.decide-col-invalid .decide-col-label {
+  color: var(--waiting);
+}
+
+.decide-col ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decide-col li {
+  color: var(--foreground);
+  font-size: var(--font-size-min);
+  line-height: 1.45;
+}
+
+.decide-pillars {
+  margin-bottom: 2.25rem;
+  padding: 1.4rem 1.45rem;
+  border: 1px solid var(--card-shell-border);
+  border-radius: var(--radius-card);
+  background: var(--surface-soft);
+}
+
+.decide-pillar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.decide-pillar-grid p {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  line-height: 1.5;
+}
+
+.decide-footnote-inline {
+  margin: 1.1rem 0 0;
+  color: var(--muted-soft);
+  font-size: var(--font-size-min);
+  line-height: 1.45;
+}
+
+.decide-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.decide-footer p {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  line-height: 1.5;
+}
+
+.decide-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.decide-link {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  padding: 0 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-size: var(--font-size-min);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.decide-link:hover {
+  border-color: var(--accent);
+}
+
+.decide-link-primary {
+  border-color: transparent;
+  background: var(--action-primary);
+  color: var(--action-primary-foreground);
+}
+
+.decide-link-primary:hover {
+  border-color: transparent;
+  filter: brightness(1.04);
+}
+
+@media (max-width: 960px) {
+  .decide-outcomes,
+  .decide-flow-track,
+  .decide-pillar-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .decide-flow-track li:nth-child(2n)::after {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .decide-outcomes,
+  .decide-flow-track,
+  .decide-rule-cols,
+  .decide-pillar-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .decide-flow-track li::after {
+    display: none;
+  }
+}
+}

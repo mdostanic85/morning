@@ -68,7 +68,7 @@ export function ThemeSwitcher() {
 
   return (
     <div
-      className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-surface/75 px-2.5 py-1.5"
+      className="flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-border bg-surface/75 px-2.5 py-1.5"
       title={`Use ${dark ? "light" : "dark"} theme`}
     >
       <SunIcon

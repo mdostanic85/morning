@@ -8,6 +8,15 @@ import { Toast } from "@heroui/react/toast";
 import { Button } from "@heroui/react/button";
 import type { DailyBriefV2 } from "@/domain/dailyBrief";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
+import { Heading } from "@/components/Heading";
+import styles from "./HumanReadableTodayView.module.css";
+
+function css(value: string): string {
+  return value
+    .split(/\s+/)
+    .map((name) => styles[name] ?? name)
+    .join(" ");
+}
 
 type TriageAction = "mine" | "not_mine";
 
@@ -52,7 +61,7 @@ export function BlockedWaitingCard({ item }: { item: DailyBriefV2["blockedWaitin
       });
       if (!res.ok) throw new Error("Task update failed.");
       Toast.toast.success(
-        action === "mine" ? "Added to your queue." : "Removed — marked not yours."
+        action === "mine" ? "Added to your queue." : "Removed and marked not yours."
       );
       router.refresh();
     } catch {
@@ -63,24 +72,24 @@ export function BlockedWaitingCard({ item }: { item: DailyBriefV2["blockedWaitin
   }
 
   return (
-    <div className="brief-secondary-card">
-      <div className="brief-secondary-badges">
+    <div className={css("brief-secondary-card")}>
+      <div className={css("brief-secondary-badges")}>
         <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.Icon} />
         {item.jiraKey ? <AppBadge tone="neutral">{item.jiraKey}</AppBadge> : null}
       </div>
 
       {item.taskId != null ? (
-        <Link href={`/tasks/${item.taskId}`} className="brief-secondary-title-link">
-          <h3 className="brief-secondary-title">{item.title}</h3>
+        <Link href={`/tasks/${item.taskId}`} className={css("brief-secondary-title-link")}>
+          <Heading level={3} visualLevel={5} className={css("brief-secondary-title")}>{item.title}</Heading>
         </Link>
       ) : (
-        <h3 className="brief-secondary-title">{item.title}</h3>
+        <Heading level={3} visualLevel={5} className={css("brief-secondary-title")}>{item.title}</Heading>
       )}
 
-      <p className="brief-secondary-reason">{item.description?.trim() || item.reason}</p>
+      <p className={css("brief-secondary-reason")}>{item.description?.trim() || item.reason}</p>
 
       {item.taskId != null ? (
-        <div className="brief-secondary-actions">
+        <div className={css("brief-secondary-actions")}>
           <Button
             type="button"
             size="sm"

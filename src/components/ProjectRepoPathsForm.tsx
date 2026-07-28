@@ -45,11 +45,11 @@ export function ProjectRepoPathsForm({
       onSubmit={saveRepoPaths}
       className="rounded-xl border border-border bg-surface-soft/50 p-4"
     >
-      <label htmlFor="repo-paths" className="block text-xs font-medium text-foreground">
+      <label htmlFor="repo-paths" className="block text-metadata font-medium text-foreground">
         Local repo paths
       </label>
-      <p className="mt-0.5 text-xs text-muted">
-        One path per line — used to gather git evidence during verification.
+      <p className="mt-0.5 text-metadata text-muted">
+        Add one path per line. Worklight uses these repositories when checking completed work.
       </p>
       <TextArea
         id="repo-paths"
@@ -60,8 +60,8 @@ export function ProjectRepoPathsForm({
         className="mt-2 text-sm"
       />
       <div className="mt-3">
-        <Button type="submit" size="sm" isDisabled={saving}>
-          {saving ? "Saving…" : "Save repo paths"}
+        <Button type="submit" size="sm" className="min-h-11" isDisabled={saving}>
+          {saving ? "Saving..." : "Save repo paths"}
         </Button>
       </div>
     </form>

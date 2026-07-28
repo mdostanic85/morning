@@ -59,7 +59,7 @@ function describeExtraction(response: IngestResponse): IngestMessage {
     if (extraction.tasks === 0 && knowledgeCount === 0) {
       return {
         tone: "warning",
-        text: "Saved, but nothing grounded was found — no tasks or knowledge items extracted.",
+        text: "Saved, but no supported tasks or knowledge items were found.",
       };
     }
     const projectMatch =
@@ -74,7 +74,7 @@ function describeExtraction(response: IngestResponse): IngestMessage {
         : "";
     return {
       tone: "success",
-      text: `Found ${extraction.tasks} task${extraction.tasks === 1 ? "" : "s"} and ${knowledgeCount} knowledge item${knowledgeCount === 1 ? "" : "s"} — added to Today and Knowledge.${projectMatch}${knowledgeWarning}`,
+      text: `Found ${extraction.tasks} task${extraction.tasks === 1 ? "" : "s"} and ${knowledgeCount} knowledge item${knowledgeCount === 1 ? "" : "s"}. Added them to Today and Knowledge.${projectMatch}${knowledgeWarning}`,
     };
   }
   return { tone: "success", text: response.deduped ? "Already saved." : "Saved and extracted." };
@@ -139,14 +139,14 @@ export function IngestForm() {
         className="min-h-16 border border-border bg-background/70 text-sm shadow-none mt-2"
       />
       {errors.content && (
-        <p className="mt-1 text-xs text-danger">{errors.content.message}</p>
+        <p className="mt-1 text-metadata text-danger">{errors.content.message}</p>
       )}
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <Button type="submit" isDisabled={isSubmitting}>
           {isSubmitting ? "Saving and extracting…" : "Save and extract"}
         </Button>
-        <p className="text-xs leading-relaxed text-muted">
-          Stored locally and analyzed for grounded tasks — results go straight into Today.
+        <p className="text-metadata leading-relaxed text-muted">
+          Stored locally and checked for supported tasks. Results go straight into Today.
         </p>
       </div>
       {message ? (
@@ -154,10 +154,10 @@ export function IngestForm() {
           role="status"
           className={
             message.tone === "error"
-              ? "mt-3 text-xs leading-relaxed text-danger"
+              ? "mt-3 text-metadata leading-relaxed text-danger"
               : message.tone === "warning"
-                ? "mt-3 text-xs leading-relaxed text-warm"
-                : "mt-3 text-xs leading-relaxed text-muted"
+                ? "mt-3 text-metadata leading-relaxed text-warm"
+                : "mt-3 text-metadata leading-relaxed text-muted"
           }
         >
           {message.text}

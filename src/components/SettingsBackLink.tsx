@@ -2,8 +2,8 @@ import Link from "next/link";
 
 export function SettingsBackLink({ section }: { section?: string }) {
   return (
-    <p className="text-sm text-muted">
-      <Link href="/settings" className="text-accent hover:underline">
+    <p className="flex min-h-11 items-center text-sm text-muted">
+      <Link href="/settings" className="inline-flex min-h-11 items-center text-accent hover:underline">
         Settings
       </Link>
       {section ? (

@@ -9,9 +9,18 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { AppBadge } from "@/components/AppBadge";
+import { Heading } from "@/components/Heading";
+import styles from "./page.module.css";
+
+function css(value: string): string {
+  return value
+    .split(/\s+/)
+    .map((name) => styles[name] ?? name)
+    .join(" ");
+}
 
 export const metadata = {
-  title: "How we decide — Worklight",
+  title: "How we decide | Worklight",
   description:
     "How Worklight decides what is valid for Today, what becomes Unclear, and what stays hidden.",
 };
@@ -35,7 +44,7 @@ const OUTCOMES = [
     title: "Not yours",
     tone: "neutral" as const,
     icon: EyeOff,
-    meaning: "Hidden from Today — never ranked as your focus.",
+    meaning: "Hidden from Today and never ranked as your focus.",
     examples: ["Someone else is the actor", "Bare name mention only", "Assigned to another person"],
   },
   {
@@ -112,7 +121,7 @@ const RULES = [
   {
     id: "confidence",
     title: "5. Confidence ≠ urgency",
-    body: "Confidence is how sure we are the task was correctly understood from sources — not how urgent it is.",
+    body: "Confidence shows how clearly the sources support our understanding of the task. It does not measure urgency.",
     valid: [
       "High ≥ 70% · Med ≥ 40% · Low < 40%",
       "Low confidence → review / Unclear treatment",
@@ -136,16 +145,16 @@ const FLOW = [
 
 export default function HowWeDecidePage() {
   return (
-    <div className="decide-page">
-      <header className="decide-hero">
-        <p className="decide-eyebrow">Rules of the brief</p>
-        <h1>How Worklight decides what is valid</h1>
-        <p className="decide-lead">
+    <div className={css("decide-page")}>
+      <header className={css("decide-hero")}>
+        <p className={css("decide-eyebrow")}>Rules of the brief</p>
+        <Heading level={1} visualLevel={2}>How Worklight decides what is valid</Heading>
+        <p className={css("decide-lead")}>
           Today is not a dump of everything synced. It is a short list of work that is{" "}
           <strong>yours</strong>, <strong>open</strong>, and <strong>backed by evidence</strong>.
-          Everything else is clarified, hidden, or dropped — on purpose.
+          Everything else is clarified, hidden, or dropped.
         </p>
-        <nav className="decide-jumpnav" aria-label="Jump to section">
+        <nav className={css("decide-jumpnav")} aria-label="Jump to section">
           <a href="#outcomes">Outcomes</a>
           <a href="#pipeline">Pipeline</a>
           <a href="#rules">Rules</a>
@@ -153,12 +162,12 @@ export default function HowWeDecidePage() {
         </nav>
       </header>
 
-      <section id="outcomes" className="decide-outcomes" aria-label="Possible outcomes">
+      <section id="outcomes" className={css("decide-outcomes")} aria-label="Possible outcomes">
         {OUTCOMES.map((outcome) => {
           const Icon = outcome.icon;
           return (
-            <article key={outcome.title} className="decide-outcome">
-              <div className="decide-outcome-top">
+            <article key={outcome.title} className={css("decide-outcome")}>
+              <div className={css("decide-outcome-top")}>
                 <AppBadge
                   tone={outcome.tone}
                   icon={<Icon className="size-3.5" aria-hidden />}
@@ -166,7 +175,7 @@ export default function HowWeDecidePage() {
                   {outcome.title}
                 </AppBadge>
               </div>
-              <p className="decide-outcome-meaning">{outcome.meaning}</p>
+              <p className={css("decide-outcome-meaning")}>{outcome.meaning}</p>
               <ul>
                 {outcome.examples.map((example) => (
                   <li key={example}>{example}</li>
@@ -177,19 +186,19 @@ export default function HowWeDecidePage() {
         })}
       </section>
 
-      <section id="pipeline" className="decide-flow" aria-label="Decision pipeline">
-        <div className="decide-section-head">
+      <section id="pipeline" className={css("decide-flow")} aria-label="Decision pipeline">
+        <div className={css("decide-section-head")}>
           <ShieldCheck className="size-4 text-accent-strong" aria-hidden />
-          <h2>The pipeline</h2>
+          <Heading level={2} visualLevel={5}>The pipeline</Heading>
         </div>
-        <p className="decide-section-lead">
+        <p className={css("decide-section-lead")}>
           Order matters. Ownership and evidence run before ranking. Empty is better than a forced
           guess.
         </p>
-        <ol className="decide-flow-track">
+        <ol className={css("decide-flow-track")}>
           {FLOW.map((step, index) => (
             <li key={step.label}>
-              <span className="decide-flow-index" aria-hidden>
+              <span className={css("decide-flow-index")} aria-hidden>
                 {index + 1}
               </span>
               <strong>{step.label}</strong>
@@ -199,19 +208,19 @@ export default function HowWeDecidePage() {
         </ol>
       </section>
 
-      <section id="rules" className="decide-rules" aria-label="Decision rules">
-        <div className="decide-section-head">
+      <section id="rules" className={css("decide-rules")} aria-label="Decision rules">
+        <div className={css("decide-section-head")}>
           <Scale className="size-4 text-accent-strong" aria-hidden />
-          <h2>Valid vs not</h2>
+          <Heading level={2} visualLevel={5}>Valid vs not</Heading>
         </div>
-        <div className="decide-rule-list">
+        <div className={css("decide-rule-list")}>
           {RULES.map((rule) => (
-            <article key={rule.id} id={rule.id} className="decide-rule">
-              <h3>{rule.title}</h3>
+            <article key={rule.id} id={rule.id} className={css("decide-rule")}>
+              <Heading level={3} visualLevel={5}>{rule.title}</Heading>
               <p>{rule.body}</p>
-              <div className="decide-rule-cols">
-                <div className="decide-col decide-col-valid">
-                  <p className="decide-col-label">
+              <div className={css("decide-rule-cols")}>
+                <div className={css("decide-col decide-col-valid")}>
+                  <p className={css("decide-col-label")}>
                     <CheckCircle2 className="size-3.5" aria-hidden />
                     Counts as valid
                   </p>
@@ -221,8 +230,8 @@ export default function HowWeDecidePage() {
                     ))}
                   </ul>
                 </div>
-                <div className="decide-col decide-col-invalid">
-                  <p className="decide-col-label">
+                <div className={css("decide-col decide-col-invalid")}>
+                  <p className={css("decide-col-label")}>
                     <FileWarning className="size-3.5" aria-hidden />
                     Does not count
                   </p>
@@ -238,37 +247,37 @@ export default function HowWeDecidePage() {
         </div>
       </section>
 
-      <section id="pillars" className="decide-pillars" aria-label="Task pillars">
-        <h2>Every surfaced task must show three pillars</h2>
-        <div className="decide-pillar-grid">
+      <section id="pillars" className={css("decide-pillars")} aria-label="Task pillars">
+        <Heading level={2} visualLevel={5}>Every surfaced task must show three pillars</Heading>
+        <div className={css("decide-pillar-grid")}>
           <div>
             <AppBadge tone="sky">Evidence</AppBadge>
             <p>The quote or link that justifies the task existing.</p>
           </div>
           <div>
             <AppBadge tone="accent">Next action</AppBadge>
-            <p>One concrete step you can do next — not “make progress.”</p>
+            <p>One concrete step you can do next, such as a specific edit or decision.</p>
           </div>
           <div>
             <AppBadge tone="good">Done criteria</AppBadge>
             <p>How you know it is truly finished, checkable from the source.</p>
           </div>
         </div>
-        <p className="decide-footnote-inline">
+        <p className={css("decide-footnote-inline")}>
           Missing any of these → clarify first. Worklight will not invent them to look complete.
         </p>
       </section>
 
-      <footer className="decide-footer">
+      <footer className={css("decide-footer")}>
         <p>
-          Set your name in Settings so ownership filtering works. Then Sync my day — Today only
+          Set your name in Settings so ownership filtering works. Then use Sync my day. Today only
           keeps what these rules allow.
         </p>
-        <div className="decide-footer-actions">
-          <Link href="/settings" className="decide-link">
+        <div className={css("decide-footer-actions")}>
+          <Link href="/settings" className={css("decide-link")}>
             Open Settings
           </Link>
-          <Link href="/" className="decide-link decide-link-primary">
+          <Link href="/" className={css("decide-link decide-link-primary")}>
             Back to Today
           </Link>
         </div>

@@ -111,23 +111,23 @@ export function EvidenceSourceList({
  ) : null}
  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
  {item.sourceTitle ? (
- <span className="text-xs text-muted-soft">{item.sourceTitle}</span>
+ <span className="text-metadata text-muted-soft">{item.sourceTitle}</span>
  ) : null}
  {item.sourceAuthor ? (
- <span className="text-xs text-muted-soft">by {item.sourceAuthor}</span>
+ <span className="text-metadata text-muted-soft">by {item.sourceAuthor}</span>
  ) : null}
  {item.sourceUrl ? (
  <a
  href={item.sourceUrl}
  target="_blank"
  rel="noopener noreferrer"
- className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+ className="inline-flex items-center gap-1 text-metadata text-accent hover:underline"
  >
  Open source
  <ExternalLinkIcon className="size-3" aria-hidden />
  </a>
  ) : (
- <span className="text-xs text-muted-soft">Source link unavailable</span>
+ <span className="text-metadata text-muted-soft">Source link unavailable</span>
  )}
  </div>
  </li>
@@ -153,7 +153,7 @@ export function EvidencePanel({
  if (items.length === 0) {
  return (
  <p className="text-sm font-medium text-danger">
- No evidence recorded — this task should not have been created.
+ No evidence was recorded. Review this task before acting on it.
  </p>
  );
  }
@@ -180,7 +180,7 @@ export function EvidencePanel({
  <div className="flex flex-wrap items-center gap-2">
  {latestItem.sourceType ? <SourceBadge sourceType={latestItem.sourceType} /> : null}
  {latestItem.sourceTitle ? (
- <span className="text-xs text-muted-soft">{latestItem.sourceTitle}</span>
+ <span className="text-metadata text-muted-soft">{latestItem.sourceTitle}</span>
  ) : null}
  </div>
  {latestItem.quote ? (

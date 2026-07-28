@@ -6,6 +6,7 @@ import { Button } from "@heroui/react/button";
 import { Input } from "@heroui/react/input";
 import { Switch } from "@heroui/react/switch";
 import type { CloudLlmProvider, ProviderKeyStatus } from "@/services/settings";
+import { Heading } from "@/components/Heading";
 
 const PROVIDER_LABEL: Record<CloudLlmProvider, string> = {
   openai: "OpenAI",
@@ -20,7 +21,7 @@ const PROVIDER_KEY_URL: Record<CloudLlmProvider, string> = {
 };
 
 const PROVIDER_HINT: Partial<Record<CloudLlmProvider, string>> = {
-  groq: "Primary — GPT-OSS 120B for decisions, 20B for simpler jobs.",
+  groq: "Primary. GPT-OSS 120B handles decisions, and 20B handles simpler jobs.",
   openai: "Embeddings only (knowledge search). Optional text fallback.",
   anthropic: "Optional text fallback after Groq.",
 };
@@ -112,20 +113,20 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h3 className="text-sm font-medium">{PROVIDER_LABEL[status.provider]}</h3>
+            <Heading level={3} visualLevel={6}>{PROVIDER_LABEL[status.provider]}</Heading>
             <a
               href={PROVIDER_KEY_URL[status.provider]}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-accent underline-offset-2 hover:underline"
+              className="text-metadata text-accent underline-offset-2 hover:underline"
             >
               Get key
             </a>
             {PROVIDER_HINT[status.provider] ? (
-              <span className="text-xs text-muted-soft">· {PROVIDER_HINT[status.provider]}</span>
+              <span className="text-metadata text-muted-soft">· {PROVIDER_HINT[status.provider]}</span>
             ) : null}
           </div>
-          <p className="mt-0.5 text-xs text-muted">
+          <p className="mt-0.5 text-metadata text-muted">
             {status.configured
               ? `${status.source === "env" ? "From environment" : "Saved"} · ${status.maskedKey}${
                   status.enabled ? " · Active" : " · Paused"
@@ -188,8 +189,8 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
         </form>
       ) : null}
       {status.source === "env" ? (
-        <p className="mt-2 text-xs leading-relaxed text-muted-soft">
-          Set via environment variable — a saved key only takes effect once it&apos;s unset.
+        <p className="mt-2 text-metadata leading-relaxed text-muted-soft">
+          Set through an environment variable. A saved key only takes effect after that variable is unset.
         </p>
       ) : null}
     </div>

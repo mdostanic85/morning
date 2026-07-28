@@ -310,7 +310,7 @@ function humanizeSyncIssue(raw: string): SyncIssueInput {
  return {
  label: "Queue planning paused",
  detail:
- "Groq daily token limit reached. Your sources still synced — try again later or switch LLM provider in Settings.",
+ "Groq's daily token limit was reached. Your sources still synced. Try again later or switch model provider in Settings.",
  };
  }
 
@@ -406,7 +406,7 @@ function buildCompletionIssues(status: SyncStatusResponse): SyncIssueInput[] {
  );
  for (const entry of failed) {
  syncIssues.push(
- humanizeSyncIssue(`${entry.provider} — ${entry.errorMessage ?? "Connection failed."}`)
+ humanizeSyncIssue(`${entry.provider}: ${entry.errorMessage ?? "Connection failed."}`)
  );
  }
 
@@ -460,7 +460,7 @@ function resultSummaryLine(result: SyncResult): string {
  if (result.created > 0) parts.push(`${result.created} new`);
  if (result.updated > 0) parts.push(`${result.updated} updated`);
  if (parts.length === 0 && result.unchanged > 0) {
- return `Nothing new — ${result.unchanged} item${result.unchanged === 1 ? "" : "s"} already up to date.`;
+ return `Nothing new. ${result.unchanged} item${result.unchanged === 1 ? " is" : "s are"} already up to date.`;
  }
  if (parts.length === 0) return "No source changes this time.";
  return `${parts.join(", ")} across your sources.`;
@@ -733,7 +733,7 @@ function SyncOverlay({
  {headline}
  </p>
  </div>
- <span className="rounded-full bg-accent-soft-surface px-2.5 py-1 font-mono text-sm font-semibold tabular-nums text-accent">
+ <span className="rounded-full bg-accent-soft-surface px-2.5 py-1 font-utility text-sm font-semibold tabular-nums text-accent">
  {Math.round(progress * 100)}%
  </span>
  </div>

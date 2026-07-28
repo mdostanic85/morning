@@ -1,0 +1,125 @@
+/* ──────────────────────────────────────────────────────────────
+   Needs-input attention rail — full-width, above the Bento grid.
+   Amber/warning treatment makes it visually distinct from the
+   focus area so the user never mistakes triage for planned work.
+   ────────────────────────────────────────────────────────────── */
+.ni-rail {
+  margin-bottom: 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--waiting) 30%, var(--card-shell-warning-border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--waiting-soft-surface) 55%, var(--surface));
+  overflow: hidden;
+
+.ni-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.7rem 1rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--foreground);
+}
+
+.ni-trigger:hover {
+  background: color-mix(in srgb, var(--waiting) 6%, transparent);
+}
+
+.ni-trigger-icon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: var(--waiting);
+}
+
+.ni-trigger-copy {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ni-trigger-cta {
+  flex-shrink: 0;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--waiting) 35%, var(--border));
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: var(--font-size-min);
+  font-weight: 700;
+}
+
+.ni-trigger-chevron {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.ni-trigger-chevron--open {
+  transform: rotate(180deg);
+}
+
+.ni-tray {
+  border-top: 1px solid color-mix(in srgb, var(--waiting) 25%, var(--border));
+  padding: 0 1rem;
+}
+
+.ni-row {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.8rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--waiting) 18%, var(--border));
+}
+
+.ni-row:first-child {
+  border-top: none;
+}
+
+.ni-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ni-row-title {
+  display: block;
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.9375rem;
+  font-weight: 640;
+  letter-spacing: -0.012em;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+a.ni-row-title:hover {
+  color: var(--accent-strong);
+}
+
+.ni-row-reason {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.ni-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.3rem;
+}
+}

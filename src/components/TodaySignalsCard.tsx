@@ -1,5 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import type { PersonalMentionSignal } from "@/lib/signals/personalMentions";
+import { Heading } from "@/components/Heading";
 
 interface TodaySignalsCardProps {
   meetings: PersonalMentionSignal[];
@@ -17,7 +18,7 @@ function SignalList({
 }) {
   return (
     <div>
-      <p className="text-xs font-bold uppercase tracking-[0.08em] text-muted-soft">{heading}</p>
+      <p className="text-metadata font-bold uppercase tracking-[0.08em] text-muted-soft">{heading}</p>
       {items.length === 0 ? (
         <p className="mt-2 text-sm text-muted">{empty}</p>
       ) : (
@@ -63,8 +64,8 @@ export function TodaySignalsCard({ meetings, jiraTagged }: TodaySignalsCardProps
   return (
     <section className="app-card flex flex-col gap-5 px-5 py-4">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-medium tracking-tight text-foreground">Also for you</h2>
-        <span className="inline-flex items-center gap-1 text-xs text-muted-soft">
+        <Heading level={2} visualLevel={6} className="text-foreground">Also for you</Heading>
+        <span className="inline-flex items-center gap-1 text-metadata text-muted-soft">
           Mentions
           <ExternalLink className="size-3" aria-hidden />
         </span>

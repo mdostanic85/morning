@@ -18,6 +18,7 @@ import { burstSparklesFromElement } from "@/lib/motion/sparkles";
 import { cn } from "@/lib/utils";
 import { LinkifiedText, type LinkifyOptions } from "./LinkifiedText";
 import { SourceBadge } from "./SourceBadge";
+import { Heading } from "./Heading";
 
 function criterionState(
  criterion: string,
@@ -107,9 +108,9 @@ export function FocusExecution({
  <div>
  <div className="flex flex-wrap items-end justify-between gap-4">
  <div>
- <h2 className="heading-accent font-display text-[26px] font-semibold tracking-[-0.035em]">
+ <Heading level={2} visualLevel={3} className="heading-accent">
  Finish this task
- </h2>
+ </Heading>
  <p className="mt-2.5 text-sm text-muted">
  Work the steps in order, then verify the completion criteria.
  </p>
@@ -128,9 +129,9 @@ export function FocusExecution({
  aria-labelledby="execution-plan-title"
  className="heading-host rounded-[22px] border border-border bg-surface/94 p-6 sm:p-7"
  >
- <h3 id="execution-plan-title" className="heading-accent font-display text-[22px] font-semibold tracking-tight">
+ <Heading level={3} visualLevel={4} id="execution-plan-title" className="heading-accent">
  Work order
- </h3>
+ </Heading>
  <p className="mt-2.5 mb-4 text-sm text-muted">
  The first unfinished step stays visually active.
  </p>
@@ -172,7 +173,7 @@ export function FocusExecution({
  : `Mark step ${index + 1} complete`
  }
  className={cn(
- "chip-spring flex size-8 items-center justify-center rounded-[10px] font-mono text-sm font-bold",
+ "chip-spring flex size-8 items-center justify-center rounded-[10px] font-utility text-sm font-bold",
  isComplete
  ? "bg-good text-success-foreground"
  : isCurrent
@@ -253,9 +254,9 @@ export function FocusExecution({
  className="focus-soft-gradient heading-host scroll-mt-24 rounded-[22px] border border-border-strong p-6 sm:p-7"
  >
  <div className="flex items-baseline justify-between gap-3">
- <h3 id="definition-done-title" className="heading-accent font-display text-[22px] font-semibold tracking-tight">
+ <Heading level={3} visualLevel={4} id="definition-done-title" className="heading-accent">
  Done means
- </h3>
+ </Heading>
  {doneCriteria.length > 0 ? (
  <span className="text-sm text-muted">
  {completedCriteriaCount} of {doneCriteria.length}
@@ -325,7 +326,7 @@ export function FocusExecution({
  </p>
  <p className="mt-0.5 text-sm text-muted">
  {external
- ? "External approval — cannot be checked off manually"
+ ? "External approval. This cannot be checked off manually."
  : state === "matched"
  ? "Matched by latest delivery check"
  : state === "missing"

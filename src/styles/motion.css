@@ -1,0 +1,223 @@
+
+
+@keyframes soft-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+}
+
+@keyframes active-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 7%, transparent);
+  }
+}
+
+@keyframes sync-border-flow {
+  to {
+    background-position:
+      0 0,
+      200% 50%;
+  }
+}
+
+@keyframes sparkle-burst {
+  from {
+    transform: translate(0, 0) scale(0.4);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--sparkle-x, 0), var(--sparkle-y, 0)) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes drawer-section-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@layer components {
+  /* Opt-in button motion: lift on hover, press on active, shine sweep. */
+  .motion-btn {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    transform: translateZ(0);
+    transition:
+      transform var(--motion-fast) var(--ease-spring),
+      box-shadow var(--motion-base) var(--ease-out),
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      color var(--motion-fast) ease,
+      opacity var(--motion-fast) ease;
+  }
+  .motion-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--button-shadow);
+  }
+  .motion-btn:active {
+    transform: translateY(0) scale(0.98);
+  }
+  .motion-btn::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      110deg,
+      transparent 20%,
+      var(--button-shine) 46%,
+      transparent 72%
+    );
+    transform: translateX(-140%);
+    transition: transform 680ms var(--ease-out);
+  }
+  .motion-btn:hover::after {
+    transform: translateX(140%);
+  }
+
+  /* Pulsing AI badge from the reference hero. */
+  .ai-mark {
+    animation: soft-pulse 3.8s ease-in-out infinite;
+    background: linear-gradient(
+      135deg,
+      var(--gradient-magenta),
+      var(--gradient-violet) 28%,
+      var(--gradient-indigo) 52%,
+      var(--gradient-blue) 74%,
+      var(--gradient-cyan)
+    );
+  }
+
+  /* Active plan step: animated soft outline glow. */
+  .active-step-glow {
+    position: absolute;
+    inset: 4px 0;
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+    border-radius: var(--radius-inset);
+    pointer-events: none;
+    animation: active-glow 2.8s ease-in-out infinite;
+  }
+
+  /* Sparkle particle spawned on completion clicks. */
+  .sparkle {
+    position: fixed;
+    z-index: 200;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-pill);
+    pointer-events: none;
+    animation: sparkle-burst 640ms var(--ease-out) forwards;
+  }
+
+  /* Animated growing underline for text links / text buttons. */
+  .link-underline {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-position: 0 100%;
+    background-size: 0 2px;
+    background-repeat: no-repeat;
+    transition:
+      background-size var(--motion-base) var(--ease-out),
+      color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--ease-spring);
+  }
+  .link-underline:hover {
+    background-size: 100% 2px;
+    text-decoration: none;
+  }
+
+  /* Section heading accent bar that grows on section hover. */
+  .heading-accent {
+    position: relative;
+    display: inline-block;
+  }
+  .heading-accent::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -8px;
+    width: 34px;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: linear-gradient(
+      90deg,
+      var(--gradient-magenta),
+      var(--gradient-violet) 28%,
+      var(--gradient-indigo) 52%,
+      var(--gradient-blue) 74%,
+      var(--gradient-cyan)
+    );
+    transform-origin: left;
+    transition: width 420ms var(--ease-out);
+  }
+  .heading-host:hover .heading-accent::after {
+    width: 74px;
+  }
+
+  /* Interactive surface lift (cards, panels). */
+  .panel-lift {
+    transition:
+      transform var(--motion-base) var(--ease-out),
+      box-shadow var(--motion-base) var(--ease-out),
+      border-color var(--motion-base) var(--ease-out),
+      background-color var(--motion-base) var(--ease-out);
+  }
+  .panel-lift:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+    box-shadow: var(--panel-hover-shadow);
+  }
+
+  /* Row glide: rows shift right + tint on hover. */
+  .row-glide {
+    transition:
+      background-color var(--motion-base) ease,
+      padding-left var(--motion-base) var(--ease-out),
+      opacity var(--motion-base) ease,
+      transform var(--motion-base) var(--ease-out);
+  }
+  .row-glide:hover {
+    padding-left: 10px;
+    background: color-mix(in srgb, var(--accent-soft-surface) 55%, transparent);
+  }
+
+  /* Numbered chips that tilt/scale when their row is hovered. */
+  .chip-spring {
+    transition:
+      transform var(--motion-base) var(--ease-spring),
+      background-color var(--motion-base) ease,
+      color var(--motion-base) ease;
+  }
+  .row-glide:hover .chip-spring,
+  .group:hover .chip-spring {
+    transform: scale(1.08) rotate(-3deg);
+  }
+
+  /* Drawer content staggers in from the right when opened. */
+  .drawer-stagger > * {
+    animation: drawer-section-in 0.4s var(--ease-out) both;
+  }
+  .drawer-stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .drawer-stagger > *:nth-child(2) { animation-delay: 60ms; }
+  .drawer-stagger > *:nth-child(3) { animation-delay: 120ms; }
+  .drawer-stagger > *:nth-child(4) { animation-delay: 180ms; }
+  .drawer-stagger > *:nth-child(5) { animation-delay: 240ms; }
+  .drawer-stagger > *:nth-child(6) { animation-delay: 300ms; }
+  .drawer-stagger > *:nth-child(7) { animation-delay: 360ms; }
+}

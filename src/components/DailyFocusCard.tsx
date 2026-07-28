@@ -22,6 +22,7 @@ import { FocusExecution } from "./FocusExecution";
 import { DecisionTrail } from "./DecisionTrail";
 import { BlockersCard, buildBlockerEntries, type BlockerEntry } from "./BlockersCard";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { Heading } from "./Heading";
 import {
  resolveFocusPrimaryCta,
  resolveFocusSecondaryActions,
@@ -123,7 +124,7 @@ function CurrentAction({
 
  return (
     <div className="current-action-gradient group relative z-1 mt-5 grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-border p-5 transition-[transform,border-color,box-shadow] duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-[3px] hover:border-accent hover:shadow-[var(--panel-hover-shadow)] sm:grid-cols-[3.5rem_minmax(0,1fr)_auto]">
- <span className="chip-spring flex size-13 items-center justify-center rounded-[17px] bg-accent font-mono text-[17px] font-bold text-accent-contrast sm:size-14">
+ <span className="chip-spring flex size-13 items-center justify-center rounded-[17px] bg-accent font-utility text-[17px] font-bold text-accent-contrast sm:size-14">
  {String(stepIndex + 1).padStart(2, "0")}
  </span>
  <div className="min-w-0">
@@ -263,10 +264,10 @@ function VerifyQuickPanel({
  if (checks.length === 0) return null;
 
  return (
- <section className="surface-gradient quick-panel panel-lift heading-host rounded-[20px] border border-border p-6">
- <h2 className="heading-accent font-display text-[21px] font-semibold tracking-tight">
+ <section className="surface-gradient quick-panel panel-lift heading-host rounded-[20px] border border-[var(--card-shell-border)] p-6">
+ <Heading level={2} visualLevel={4} className="heading-accent">
  Check before work
- </h2>
+ </Heading>
  <p className="mt-2 mb-4 text-sm text-muted">
  Things the AI should not decide for you.
  </p>
@@ -307,10 +308,10 @@ function WaitingQuickPanel({ blockers }: { blockers: BlockerEntry[] }) {
  if (waiting.length === 0) return null;
 
  return (
- <section className="focus-soft-gradient quick-panel panel-lift heading-host rounded-[20px] border border-border p-6">
- <h2 className="heading-accent font-display text-[21px] font-semibold tracking-tight">
+ <section className="focus-soft-gradient quick-panel panel-lift heading-host rounded-[20px] border border-[var(--card-shell-border)] p-6">
+ <Heading level={2} visualLevel={4} className="heading-accent">
  Waiting on others
- </h2>
+ </Heading>
  <p className="mt-2 mb-4 text-sm text-muted">
  Not your active work, but it affects completion.
  </p>
@@ -348,27 +349,27 @@ function ContextQuickPanel({ item }: { item: DailyFocusData }) {
  const hasTaskActions = item.linkedTaskId != null || item.linkedJiraKey;
 
  return (
- <section className="quick-panel panel-lift rounded-[20px] border border-border bg-surface/96 p-6">
+ <section className="quick-panel panel-lift rounded-[20px] border border-[var(--card-shell-border)] bg-surface/96 p-6">
  <div className="flex flex-wrap gap-2">
  {item.owner ? (
- <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-soft px-3 py-1.5 text-xs text-muted">
+ <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-soft px-3 py-1.5 text-metadata text-muted">
  <UserRoundIcon className="size-3.5" aria-hidden />
  {item.owner}
  </span>
  ) : null}
  {status ? (
- <span className="inline-flex items-center rounded-full bg-sun-soft px-3 py-1.5 text-xs font-semibold text-sun-foreground">
+ <span className="inline-flex items-center rounded-full bg-sun-soft px-3 py-1.5 text-metadata font-semibold text-sun-foreground">
  {status}
  </span>
  ) : null}
  {dueDate ? (
- <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-soft px-3 py-1.5 text-xs text-muted">
+ <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-soft px-3 py-1.5 text-metadata text-muted">
  <CalendarClockIcon className="size-3.5" aria-hidden />
  Due {dueDate}
  </span>
  ) : null}
  {item.projectName ? (
- <span className="inline-flex items-center rounded-full border border-border bg-surface-soft px-3 py-1.5 text-xs text-muted">
+ <span className="inline-flex items-center rounded-full border border-border bg-surface-soft px-3 py-1.5 text-metadata text-muted">
  {item.projectName}
  </span>
  ) : null}
@@ -378,12 +379,12 @@ function ContextQuickPanel({ item }: { item: DailyFocusData }) {
  href={jiraUrl}
  target="_blank"
  rel="noopener noreferrer"
- className="link-underline inline-flex items-center rounded-full border border-border-strong bg-accent/8 px-3 py-1.5 font-mono text-xs font-semibold text-accent-strong"
+ className="link-underline inline-flex items-center rounded-full border border-border-strong bg-accent/8 px-3 py-1.5 font-utility text-metadata font-semibold text-accent-strong"
  >
  {item.linkedJiraKey}
  </a>
  ) : (
- <span className="inline-flex items-center rounded-full border border-border bg-surface-soft px-3 py-1.5 font-mono text-xs text-muted">
+ <span className="inline-flex items-center rounded-full border border-border bg-surface-soft px-3 py-1.5 font-utility text-metadata text-muted">
  {item.linkedJiraKey}
  </span>
  )
@@ -398,7 +399,6 @@ function ContextQuickPanel({ item }: { item: DailyFocusData }) {
  linkedJiraKey={item.linkedJiraKey}
  referenceLinks={item.referenceLinks}
  latestVerificationReport={item.latestVerificationReport ?? null}
- latestSyncReviewReport={item.latestSyncReviewReport ?? null}
  layout="focus"
  showDelete={false}
  focusTaskSeed={{
@@ -548,7 +548,7 @@ export function DailyFocusCard({ item }: { item: DailyFocusData }) {
  />
 
  <div className="relative z-1 flex flex-wrap items-center gap-3">
- <span className="ai-mark inline-flex h-8 min-w-9.5 items-center justify-center rounded-full px-2.5 font-mono text-[14px] font-bold uppercase text-accent-contrast">
+ <span className="ai-mark inline-flex h-8 min-w-9.5 items-center justify-center rounded-full px-2.5 font-utility text-[14px] font-bold uppercase text-accent-contrast">
  AI
  </span>
  <p className="eyebrow text-accent-strong">Do this today</p>
@@ -560,12 +560,12 @@ export function DailyFocusCard({ item }: { item: DailyFocusData }) {
  href={jiraUrl}
  target="_blank"
  rel="noopener noreferrer"
- className="link-underline font-mono text-sm font-bold text-foreground"
+ className="link-underline font-utility text-sm font-bold text-foreground"
  >
  {item.linkedJiraKey}
  </a>
  ) : (
- <span className="font-mono text-sm text-muted">{item.linkedJiraKey}</span>
+ <span className="font-utility text-sm text-muted">{item.linkedJiraKey}</span>
  )}
  </>
  ) : null}
@@ -576,9 +576,9 @@ export function DailyFocusCard({ item }: { item: DailyFocusData }) {
  ) : null}
  </div>
 
- <h3 className="relative z-1 mt-5 max-w-4xl font-display text-4xl font-semibold leading-[1.02] tracking-[-0.05em] sm:text-5xl lg:text-[3.75rem]">
+ <Heading level={2} visualLevel={1} className="relative z-1 mt-5 max-w-4xl">
  {item.title}
- </h3>
+ </Heading>
 
  <div className="relative z-1 mt-5 max-w-3xl text-[17px] leading-[1.65] text-foreground/80">
  <ReasonText text={item.reason} {...linkifyOptions(item)} />
@@ -630,7 +630,7 @@ export function DailyFocusCard({ item }: { item: DailyFocusData }) {
 
  {/* 3. Today summary + blockers */}
  <section className="grid gap-[var(--today-grid-gap)] lg:grid-cols-12">
- <div className="heading-host panel-lift rounded-today-card border border-border bg-surface p-6 sm:p-8 lg:col-span-7">
+ <div className="heading-host panel-lift rounded-today-card border border-[var(--card-shell-border)] bg-surface p-6 sm:p-8 lg:col-span-7">
  <FocusTodaySummary item={item} />
  </div>
  <BlockersCard entries={blockers} />

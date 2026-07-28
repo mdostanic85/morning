@@ -41,8 +41,8 @@ export function ConfidenceBadge({
         className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background"
       >
         <Tooltip.Arrow />
-        How sure the system is that this task was read correctly from the source — not how
-        important it is. Low means review the evidence before acting.
+        How sure Worklight is that it understood this task from its sources. This does not measure
+        importance. Low means you should review the evidence before acting.
       </Tooltip.Content>
     </Tooltip>
   );

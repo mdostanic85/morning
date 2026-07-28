@@ -5,6 +5,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { AppBadge } from "@/components/AppBadge";
 import { Button } from "@heroui/react/button";
+import { Heading } from "@/components/Heading";
 
 export interface GoogleSourceStatus {
   provider: string;
@@ -48,10 +49,10 @@ export function GoogleConnectionPanel({
 
   return (
     <section className="app-card px-4 py-3">
-      <div className="flex min-w-0 items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1 pt-0.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold">Google</h3>
+            <Heading level={2} visualLevel={6}>Google</Heading>
             <AppBadge
               className={cn(
                 allConnected
@@ -69,7 +70,7 @@ export function GoogleConnectionPanel({
           </p>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0">
           {configured ? (
             <a
               href={connectHref}
@@ -83,7 +84,7 @@ export function GoogleConnectionPanel({
             <span
               className="link-btn-primary disabled"
               aria-disabled="true"
-              title="Google OAuth credentials are missing — see details below."
+              title="Google OAuth credentials are missing. See details below."
             >
               Connect Google
             </span>
@@ -92,11 +93,11 @@ export function GoogleConnectionPanel({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
+              className="min-h-11"
               onPress={disconnectAll}
               isDisabled={pending}
             >
-              {pending ? "Disconnecting…" : "Disconnect"}
+              {pending ? "Disconnecting..." : "Disconnect"}
             </Button>
           ) : null}
         </div>
@@ -104,11 +105,11 @@ export function GoogleConnectionPanel({
 
       <div className="mt-3 space-y-1.5 border-t border-border pt-3">
         {visibleSources.map((source) => (
-          <div key={source.provider} className="flex items-center justify-between gap-3">
+          <div key={source.provider} className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <span className="text-sm text-foreground">{source.label}</span>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
               {source.status === "connected" && source.lastSync ? (
-                <span className="text-xs text-muted-soft">
+                <span className="text-metadata text-muted-soft">
                   Last sync {new Date(source.lastSync).toLocaleString()}
                 </span>
               ) : null}
@@ -133,7 +134,7 @@ export function GoogleConnectionPanel({
       </div>
 
       {setupHint ? (
-        <p className="mt-3 rounded-[var(--radius-md)] border border-warm/25 bg-warm/8 px-3 py-2.5 text-xs leading-relaxed text-warm">
+        <p className="mt-3 rounded-[var(--radius-md)] border border-warm/25 bg-warm/8 px-3 py-2.5 text-metadata leading-relaxed text-warm">
           {setupHint}
         </p>
       ) : null}

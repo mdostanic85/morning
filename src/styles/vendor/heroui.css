@@ -1,0 +1,178 @@
+@keyframes sync-mesh-drift {
+  0%,
+  100% {
+    background-position: 0% 0%, 100% 0%, 100% 100%, 0% 100%;
+  }
+  25% {
+    background-position: 40% 25%, 65% 10%, 75% 85%, 15% 70%;
+  }
+  50% {
+    background-position: 65% 55%, 35% 45%, 45% 55%, 55% 40%;
+  }
+  75% {
+    background-position: 20% 70%, 85% 55%, 60% 65%, 35% 25%;
+  }
+}
+
+/* HeroUI 3.2.2 integration boundary. Internal class and data-slot hooks in
+   this file must be reviewed whenever HeroUI is upgraded. */
+@layer overrides {
+  /* Button semantic variables are intentionally mapped to app-owned tokens. */
+  .button--primary {
+    --button-bg: var(--action-primary);
+    --button-bg-hover: var(--action-primary-hover);
+    --button-bg-pressed: var(--action-primary-active);
+    --button-fg: var(--action-primary-foreground);
+  }
+
+  /* HeroUI Tabs 3.2.2 internal classes: align the segmented control with the
+     app radius scale without changing Tabs behavior. */
+  .tabs__list-container {
+    border-radius: var(--radius-inset);
+  }
+  .tabs__tab {
+    border-radius: var(--radius-control);
+    height: 2.25rem;
+    gap: 0.375rem;
+  }
+  .tabs__indicator {
+    border-radius: var(--radius-control);
+    box-shadow: none;
+  }
+  .tabs--secondary > .tabs__list-container {
+    border-radius: 0;
+  }
+  .tabs--secondary .tabs__tab,
+  .tabs--secondary .tabs__indicator {
+    border-radius: 0;
+  }
+
+  /* HeroUI Button 3.2.2 public data-slot: only dimensions and static shape are
+     global. Lift, press, and shine motion are opt-in through .motion-btn. */
+  button[data-slot="button"] {
+    border-radius: var(--radius-control);
+    font-weight: 600;
+  }
+  button[data-slot="button"][data-size="md"] {
+    height: 2.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  button[data-slot="button"][data-size="sm"] {
+    min-height: 2.75rem;
+    height: 2.75rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    font-size: 0.875rem;
+  }
+  button[data-slot="button"][data-size="lg"] {
+    height: 3rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    font-size: 1rem;
+  }
+  /* HeroUI Drawer/Modal 3.2.2 close slots remain compact and motion-free. */
+  [data-slot="sheet-close"],
+  [data-slot="dialog-close"] {
+    border-radius: var(--radius-control);
+    transition:
+      background-color 140ms ease,
+      color 140ms ease;
+  }
+
+  /* SyncMyDayButton is an explicit, component-owned exception that uses a
+     HeroUI Button slot for its animated brand surface. */
+  button[data-slot="button"].sync-day-cta {
+    --button-bg: transparent;
+    --button-bg-hover: transparent;
+    --button-bg-pressed: transparent;
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--sync-button-foreground);
+    box-shadow: 0 14px 32px -18px color-mix(in srgb, var(--sync-grad-2) 52%, transparent);
+  }
+  button[data-slot="button"].sync-day-cta::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    /* Soft mesh: overlapping color blobs that slowly drift instead of a
+       single linear sweep. */
+    background-color: var(--sync-grad-3);
+    background-image:
+      radial-gradient(60% 130% at 18% 22%, var(--sync-grad-1), transparent 62%),
+      radial-gradient(58% 130% at 82% 18%, var(--sync-grad-4), transparent 62%),
+      radial-gradient(70% 140% at 78% 82%, var(--sync-grad-5), transparent 60%),
+      radial-gradient(66% 135% at 22% 84%, var(--sync-grad-2), transparent 62%);
+    background-repeat: no-repeat;
+    background-size: 200% 200%;
+    animation: sync-mesh-drift 9s ease-in-out infinite;
+  }
+  button[data-slot="button"].sync-day-cta:hover,
+  button[data-slot="button"].sync-day-cta[data-hovered] {
+    background: transparent;
+    box-shadow: 0 18px 36px -16px color-mix(in srgb, var(--sync-grad-2) 58%, transparent);
+  }
+  button[data-slot="button"].sync-sweeping {
+    --button-bg: var(--sync-progress-surface);
+    --button-bg-hover: var(--sync-progress-surface);
+    --button-bg-pressed: var(--sync-progress-surface);
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    border-radius: var(--radius-pill);
+    border: 2px solid transparent;
+    background:
+      linear-gradient(var(--sync-progress-surface), var(--sync-progress-surface)) padding-box,
+      linear-gradient(
+          90deg,
+          var(--gradient-magenta),
+          var(--gradient-violet),
+          var(--gradient-indigo),
+          var(--gradient-blue),
+          var(--gradient-cyan),
+          var(--gradient-magenta)
+        )
+        border-box;
+    background-size:
+      100% 100%,
+      200% 100%;
+    color: var(--sync-progress-foreground);
+    opacity: 1;
+    animation: sync-border-flow 1.8s linear infinite;
+    cursor: wait;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    button[data-slot="button"].sync-day-cta::before {
+      animation: none;
+      background-position: 50% 50%;
+    }
+    button[data-slot="button"].sync-sweeping {
+      animation: none;
+      background-position:
+        0 0,
+        50% 50%;
+    }
+  }
+  /* HeroUI Input 3.2.2 — the composer owns the visible focus ring, so the
+     nested library field must not draw a second border or shadow. */
+  [data-chat-composer] :where([data-slot="input"], [data-slot="input"] *) {
+    box-shadow: none !important;
+    outline: none !important;
+    border-color: transparent !important;
+    --field-border: transparent;
+    --focus: transparent;
+  }
+
+  [data-chat-composer] input {
+    box-shadow: none !important;
+    outline: none !important;
+    border: none !important;
+    background: transparent !important;
+  }
+}

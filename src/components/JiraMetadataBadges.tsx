@@ -21,6 +21,23 @@ function formatDueDate(value: string): string {
   });
 }
 
+export function JiraStatusBadge({ status }: { status: string | null }) {
+  if (!status) return null;
+
+  const statusVisual = jiraStatusVisual(status);
+  const StatusIcon = statusVisual.icon;
+
+  return (
+    <AppBadge
+      tone="default"
+      className={cn("font-normal gap-1.5", statusVisual.triggerClassName)}
+      icon={<StatusIcon className="size-3.5 shrink-0" aria-hidden />}
+    >
+      {status}
+    </AppBadge>
+  );
+}
+
 export function JiraMetadataBadges({
   metadata,
   className,
@@ -31,20 +48,9 @@ export function JiraMetadataBadges({
   const hasValues = Object.values(metadata).some(Boolean);
   if (!hasValues) return null;
 
-  const statusVisual = metadata.status ? jiraStatusVisual(metadata.status) : null;
-  const StatusIcon = statusVisual?.icon;
-
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
-      {metadata.status && statusVisual ? (
-        <AppBadge
-          tone="default"
-          className={cn("font-normal gap-1.5", statusVisual.triggerClassName)}
-          icon={StatusIcon ? <StatusIcon className="size-3.5 shrink-0" aria-hidden /> : null}
-        >
-          {metadata.status}
-        </AppBadge>
-      ) : null}
+      <JiraStatusBadge status={metadata.status} />
 
       {metadata.priority ? (
         <AppBadge
