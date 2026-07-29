@@ -1,12 +1,25 @@
 import "server-only";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { DEFAULT_JIRA_JQL } from "@/lib/connectors/jira";
-import { cleanJiraText } from "@/lib/connectors/jiraText";
 import type { ConnectorSourceCandidate } from "@/lib/connectors/types";
 import { callMcpTool, withMcpClient } from "../client";
 import { asArray, asRecord, parseMcpToolPayload } from "../parse";
+import { jiraIssueToCandidate, textFromUnknown } from "./jiraIssueCandidate";
 
 const APP_ORIGIN = process.env.WORKLIGHT_APP_URL?.trim() || "http://localhost:3000";
+
+/** Every field `jiraIssueToCandidate` reads. Keep in sync with the REST transport. */
+const JIRA_ISSUE_FIELDS = [
+  "summary",
+  "description",
+  "status",
+  "priority",
+  "assignee",
+  "reporter",
+  "duedate",
+  "updated",
+  "comment",
+];
 
 export interface JiraProjectSnapshot {
   key: string;
@@ -23,18 +36,6 @@ interface AtlassianResource {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
-}
-
-function textFromUnknown(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) return value.map(textFromUnknown).filter(Boolean).join("\n");
-  const record = asRecord(value);
-  if (!record) return "";
-  if (typeof record.text === "string") return record.text;
-  if (Array.isArray(record.content)) return textFromUnknown(record.content);
-  return JSON.stringify(record, null, 2);
 }
 
 function stripHtml(html: string): string {
@@ -76,70 +77,6 @@ async function getDefaultCloud(client: Client): Promise<AtlassianResource> {
     id: String(first.id ?? first.cloudId ?? ""),
     name: typeof first.name === "string" ? first.name : undefined,
     url: typeof first.url === "string" ? first.url : undefined,
-  };
-}
-
-function jiraIssueToCandidate(
-  issue: Record<string, unknown>,
-  cloud: AtlassianResource
-): ConnectorSourceCandidate | null {
-  const key = String(issue.key ?? issue.issueKey ?? "");
-  if (!key) return null;
-  const fields = asRecord(issue.fields) ?? issue;
-  const summary = String(fields.summary ?? issue.summary ?? "Untitled issue");
-  const status = asRecord(fields.status);
-  const priority = asRecord(fields.priority);
-  const assignee = asRecord(fields.assignee);
-  const reporter = asRecord(fields.reporter);
-  const siteUrl = cloud.url ?? "https://atlassian.net";
-  const url = `${siteUrl}/browse/${key}`;
-  const comments = asArray(asRecord(fields.comment)?.comments)
-    .map(asRecord)
-    .filter((item): item is Record<string, unknown> => !!item);
-
-  return {
-    sourceType: "jira",
-    sourceExternalId: key,
-    title: `${key}: ${summary}`,
-    author: typeof reporter?.displayName === "string" ? reporter.displayName : null,
-    sourceDate:
-      typeof fields.updated === "string"
-        ? fields.updated
-        : new Date().toISOString(),
-    url,
-    body: [
-      `Key: ${key}`,
-      `URL: ${url}`,
-      `Status: ${typeof status?.name === "string" ? status.name : "unknown"}`,
-      `Priority: ${typeof priority?.name === "string" ? priority.name : "unknown"}`,
-      `Assignee: ${typeof assignee?.displayName === "string" ? assignee.displayName : "unknown"}`,
-      `Reporter: ${typeof reporter?.displayName === "string" ? reporter.displayName : "unknown"}`,
-      `Due date: ${typeof fields.duedate === "string" ? fields.duedate : "none"}`,
-      "",
-      "Description:",
-      cleanJiraText(textFromUnknown(fields.description)) || "(empty)",
-      "",
-      "Comments:",
-      comments
-        .map((comment) => {
-          const author = asRecord(comment.author);
-          return `- ${typeof author?.displayName === "string" ? author.displayName : "unknown"} (${typeof comment.created === "string" ? comment.created : "unknown"}): ${textFromUnknown(comment.body)}`;
-        })
-        .join("\n") || "(none)",
-    ].join("\n"),
-    metadata: {
-      cloudId: cloud.id,
-      siteName: cloud.name ?? null,
-      key,
-      status: typeof status?.name === "string" ? status.name : "unknown",
-      statusCategoryKey:
-        typeof asRecord(status?.statusCategory)?.key === "string"
-          ? (asRecord(status?.statusCategory)?.key as string)
-          : null,
-      priority: typeof priority?.name === "string" ? priority.name : null,
-      transport: "mcp",
-      involvement: "assignee",
-    },
   };
 }
 
@@ -209,6 +146,12 @@ export async function fetchJiraIssuesViaMcp(input?: {
       cloudId: cloud.id,
       jql,
       maxResults: input?.maxResults ?? 50,
+      // Must be explicit: the tool's default field set omits `comment` and
+      // `duedate`, so without this every issue imported as
+      // "Comments: (none) / Due date: none" and any link a teammate left in a
+      // comment never entered the app. Mirrors the REST transport's field list.
+      fields: JIRA_ISSUE_FIELDS,
+      responseContentFormat: "markdown",
     });
     const payload = parseToolPayload(raw);
     const record = asRecord(payload);

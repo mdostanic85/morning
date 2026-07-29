@@ -8,6 +8,7 @@ import { getActiveProjects } from "@/services/projects";
 import { extractTasksFromSourceItem } from "@/lib/tasks/extractor";
 import { shouldExtractTasksFromSourceItem } from "@/lib/tasks/dailyFocus";
 import { matchAndAssignSourceItemToProject } from "@/lib/tasks/projectMatcher";
+import { inheritFigmaCommentThreadProject } from "@/lib/figma/commentThreadStore";
 import { extractKnowledgeFromSourceItem } from "@/lib/knowledge/extractor";
 import { indexSourceItem } from "@/lib/knowledge/embeddings";
 import { loadGranolaExtractionContext } from "@/lib/granola/extractionContext";
@@ -147,9 +148,13 @@ export async function importConnectorSources(
           });
       if (!created) throw new Error(`Could not persist source ${candidate.title}.`);
 
-      const projectMatch = created.projectId
-        ? { sourceItem: created, match: null }
-        : await matchAndAssignSourceItemToProject({ sourceItem: created, projects });
+      // A Figma comment inherits its thread's project deterministically before
+      // the LLM matcher is allowed to guess, so one conversation cannot end up
+      // split across projects reply by reply.
+      const threadScoped = await inheritFigmaCommentThreadProject(created);
+      const projectMatch = threadScoped.projectId
+        ? { sourceItem: threadScoped, match: null }
+        : await matchAndAssignSourceItemToProject({ sourceItem: threadScoped, projects });
       const sourceItem = projectMatch.sourceItem;
       const project = sourceItem.projectId
         ? projects.find((candidateProject) => candidateProject.id === sourceItem.projectId)

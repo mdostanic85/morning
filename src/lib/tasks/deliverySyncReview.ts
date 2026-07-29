@@ -6,6 +6,10 @@ import {
   type FigmaFrameEvidence,
 } from "@/lib/connectors/mcp/adapters/figma";
 import { isMcpTransport } from "@/lib/connectors/transport";
+import {
+  figmaCommentMessage,
+  selectFigmaCommentsForFrame,
+} from "@/lib/figma/commentThread";
 import { scanLocalGitBranches, scanLocalGitRepo } from "@/lib/connectors/localGit";
 import { fetchGitHubRepoActivity, parseGitHubWorkContext } from "@/lib/connectors/github";
 import { runLlmJob } from "@/lib/llm/router";
@@ -19,6 +23,7 @@ import {
   extractGitBranch,
   extractJiraKey,
 } from "@/lib/tasks/deliverableContext";
+import { resolveTaskDeliveryLinks } from "@/lib/tasks/deliveryLinks";
 import { getKnowledgeItems } from "@/services/knowledgeItems";
 import { getConnectionByProvider } from "@/services/connections";
 import { getProjectById } from "@/services/projects";
@@ -64,9 +69,36 @@ export async function runDeliverySyncReview(input: {
     referenceLinks: input.referenceLinks,
   });
 
+  // Scans the full body of every cited source, so a frame or PR link that only
+  // exists in a Jira comment is still found (evidence quotes are too short to
+  // carry it).
+  const deliveryLinks = resolveTaskDeliveryLinks({
+    task: {
+      title: task.title,
+      reason: task.reason,
+      nextAction: task.nextAction,
+      doneCriteria: task.doneCriteria,
+      figmaFrameUrl: task.figmaFrameUrl,
+      githubRepo: task.githubRepo,
+    },
+    evidence: task.evidence.map((item) => ({
+      sourceItemId: item.sourceItemId,
+      quote: item.quote,
+      summary: item.summary,
+      url: item.url,
+    })),
+    sources: sourceItems.map((source) => ({
+      id: source.id,
+      title: source.title,
+      body: source.body,
+      url: source.url,
+      sourceDate: source.sourceDate,
+    })),
+  });
+
   const figmaFrameUrl =
     input.figmaFrameUrl?.trim() ||
-    task.figmaFrameUrl?.trim() ||
+    deliveryLinks.figmaFrameUrl ||
     extractFigmaUrl(texts) ||
     null;
 
@@ -76,6 +108,7 @@ export async function runDeliverySyncReview(input: {
   const githubWorkContext = parseGitHubWorkContext(githubConnection?.metadata);
   const githubRepo =
     task.githubRepo?.trim() ||
+    deliveryLinks.githubRepo ||
     project?.githubRepositories[0]?.trim() ||
     githubWorkContext.repository ||
     null;
@@ -92,6 +125,13 @@ export async function runDeliverySyncReview(input: {
     try {
       githubRepoActivity = await fetchGitHubRepoActivity(githubRepo);
       if (!githubBranch && githubRepoActivity.openPullRequests.length > 0) {
+        // A PR someone linked in the ticket beats guessing from the Jira key.
+        const linkedNumber = deliveryLinks.githubPullRequestUrl
+          ? Number(deliveryLinks.githubPullRequestUrl.match(/\/pull\/(\d+)/)?.[1])
+          : NaN;
+        const linkedMatch = Number.isFinite(linkedNumber)
+          ? githubRepoActivity.openPullRequests.find((pr) => pr.number === linkedNumber)
+          : null;
         const jiraMatch = jiraKey
           ? githubRepoActivity.openPullRequests.find(
               (pr) =>
@@ -100,7 +140,10 @@ export async function runDeliverySyncReview(input: {
             )
           : null;
         githubBranch =
-          jiraMatch?.headRef ?? githubRepoActivity.openPullRequests[0]?.headRef ?? githubBranch;
+          linkedMatch?.headRef ??
+          jiraMatch?.headRef ??
+          githubRepoActivity.openPullRequests[0]?.headRef ??
+          githubBranch;
       }
     } catch (err) {
       githubFetchError = err instanceof Error ? err.message : "Could not fetch GitHub activity.";
@@ -141,6 +184,23 @@ export async function runDeliverySyncReview(input: {
       figmaFetchError = err instanceof Error ? err.message : "Could not fetch Figma frame.";
     }
   }
+
+  // Outcomes like "Lucas confirms the updated icons" are answered in the frame's
+  // comment thread, not in the layer tree. Those comments are already imported
+  // as source items, but they only become task evidence when they also produce
+  // an extracted task — a bare "looks good" never does. Read them straight off
+  // the reviewed frame so an approval or a fresh change request is never
+  // invisible to the outcome check.
+  const reviewedFrame = figmaFrameUrl ? parseFigmaUrl(figmaFrameUrl) : null;
+  const figmaCommentThread = reviewedFrame
+    ? selectFigmaCommentsForFrame(sourceItems, reviewedFrame)
+        .map((comment) => ({
+          author: comment.author,
+          postedAt: comment.sourceDate,
+          isReply: Boolean(comment.metadata?.parentId),
+          message: figmaCommentMessage(comment.body) ?? comment.body,
+        }))
+    : [];
 
   const sourceById = new Map(sourceItems.map((source) => [source.id, source]));
   const evidenceSourceIds = new Set(task.evidence.map((item) => item.sourceItemId));
@@ -233,6 +293,7 @@ export async function runDeliverySyncReview(input: {
             fetchError: figmaFetchError ?? undefined,
           }
         : null,
+      figmaCommentThread,
     }),
     schema: deliverySyncReviewOutputSchema,
     imageUrls: figmaEvidence?.screenshotUrl ? [figmaEvidence.screenshotUrl] : undefined,

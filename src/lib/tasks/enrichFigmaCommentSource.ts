@@ -9,26 +9,20 @@
 
 import "server-only";
 import { figmaDesignUrl } from "@/lib/connectors/figmaUrl";
+import {
+  figmaCommentMessageFirstLine,
+  isFigmaCommentSource,
+} from "@/lib/figma/commentThread";
+import {
+  loadFigmaCommentThreadSiblings,
+  resolveFigmaCommentThreadTaskId,
+} from "@/lib/figma/commentThreadStore";
 import type { SourceItem } from "@/domain/sourceItem";
-import { getSourceItemByExternalId } from "@/services/sourceItems";
-import { getTaskIdForSourceItem } from "@/services/evidence";
-
-function extractMessageFromCommentBody(body: string): string | null {
-  // Only the Message line — do not swallow trailing @mentions / blank lines.
-  const match = body.match(/^Message:\s*(.+)$/m);
-  const value = match?.[1]?.trim();
-  return value || null;
-}
 
 export async function enrichFigmaCommentSourceForMerge(
   sourceItem: SourceItem
 ): Promise<SourceItem> {
-  if (
-    sourceItem.sourceType !== "figma" ||
-    sourceItem.metadata?.importedFrom !== "figma_comment"
-  ) {
-    return sourceItem;
-  }
+  if (!isFigmaCommentSource(sourceItem)) return sourceItem;
 
   const parentId =
     typeof sourceItem.metadata?.parentId === "string" && sourceItem.metadata.parentId
@@ -38,23 +32,23 @@ export async function enrichFigmaCommentSourceForMerge(
     typeof sourceItem.metadata?.fileKey === "string" ? sourceItem.metadata.fileKey : null;
   if (!parentId || !fileKey) return sourceItem;
 
-  const parent = await getSourceItemByExternalId({
-    sourceType: "figma",
-    sourceExternalId: `${fileKey}:comment:${parentId}`,
-  });
-  if (!parent) return sourceItem;
+  const siblings = await loadFigmaCommentThreadSiblings(sourceItem);
+  if (siblings.length === 0) return sourceItem;
+
+  const parent =
+    siblings.find((item) => item.metadata?.commentId === parentId) ?? null;
 
   const ownNodeId =
     typeof sourceItem.metadata?.nodeId === "string" && sourceItem.metadata.nodeId
       ? sourceItem.metadata.nodeId
       : null;
   const parentNodeId =
-    typeof parent.metadata?.nodeId === "string" && parent.metadata.nodeId
+    typeof parent?.metadata?.nodeId === "string" && parent.metadata.nodeId
       ? parent.metadata.nodeId
       : null;
   const nodeId = ownNodeId ?? parentNodeId;
 
-  const parentMessage = extractMessageFromCommentBody(parent.body);
+  const parentMessage = parent ? figmaCommentMessageFirstLine(parent.body) : null;
   let body = sourceItem.body;
   if (nodeId && !/^Pinned to node:/m.test(body)) {
     body = body.replace(/^(Reply to:.*)$/m, `$1\nPinned to node: ${nodeId}`);
@@ -69,7 +63,9 @@ export async function enrichFigmaCommentSourceForMerge(
     }
   }
 
-  const parentLinkedTaskId = await getTaskIdForSourceItem(parent.id);
+  // Thread-wide, not parent-only: the thread's task is frequently created from
+  // a mid-thread reply, leaving the root comment itself with no evidence link.
+  const threadLinkedTaskId = await resolveFigmaCommentThreadTaskId(siblings);
 
   return {
     ...sourceItem,
@@ -79,7 +75,7 @@ export async function enrichFigmaCommentSourceForMerge(
       ...sourceItem.metadata,
       nodeId: nodeId ?? sourceItem.metadata?.nodeId ?? null,
       nodeIdInherited: Boolean(!ownNodeId && nodeId),
-      parentLinkedTaskId: parentLinkedTaskId ?? null,
+      parentLinkedTaskId: threadLinkedTaskId ?? null,
     },
   };
 }

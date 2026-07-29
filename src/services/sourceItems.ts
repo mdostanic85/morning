@@ -143,6 +143,29 @@ export async function getSourceItemsForProjectIds(projectIds: number[]): Promise
   return rows.map(toSourceItem);
 }
 
+/**
+ * Every imported Figma comment for one file. Comment rows are keyed
+ * `<fileKey>:comment:<commentId>`, so one prefix match returns the whole
+ * file's threads without loading unrelated sources.
+ */
+export async function getFigmaCommentSourceItems(fileKey: string): Promise<SourceItem[]> {
+  const trimmed = fileKey.trim();
+  if (!trimmed) return [];
+  const rows = await fetchAll(
+    db
+      .select()
+      .from(sourceItemsTable)
+      .where(
+        and(
+          eq(sourceItemsTable.sourceType, "figma"),
+          like(sourceItemsTable.sourceExternalId, `${trimmed}:comment:%`)
+        )
+      )
+      .orderBy(desc(sourceItemsTable.sourceDate))
+  );
+  return rows.map(toSourceItem);
+}
+
 /** Simple substring search over title and body. Good enough until FTS5 lands. */
 export async function searchSourceItems(query: string): Promise<SourceItem[]> {
   const trimmed = query.trim();

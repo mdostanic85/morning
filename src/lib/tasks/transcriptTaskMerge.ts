@@ -423,7 +423,7 @@ export function resolveTranscriptMergeTarget(input: {
 
   // --- Figma comment source: deterministic priority order ---
   // 1. Jira key in comment body (strongest)
-  // 2. Parent-thread task (reply whose root comment is already on a task)
+  // 2. Thread task (reply whose thread already carries a task, root or not)
   // 3. Exact pinned-node URL match against task.figmaFrameUrl
   // 4. Confirmed existingTaskId hint
   // 5. Topic anchor + explicit ownership (same guard as transcripts)

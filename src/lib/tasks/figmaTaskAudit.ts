@@ -10,16 +10,27 @@ import {
 } from "@/lib/llm/prompts/figmaFrameDiscovery";
 import { runLlmJob } from "@/lib/llm/router";
 import { localDateString } from "@/lib/dates";
-import { collectDeliverableTexts, extractFigmaUrl } from "@/lib/tasks/deliverableContext";
+import { selectDeliveryAudits } from "@/lib/tasks/deliveryAuditSelection";
+import {
+  resolveTaskDeliveryLinks,
+  type ResolvedDeliveryLinks,
+} from "@/lib/tasks/deliveryLinks";
 import { runDeliverySyncReview } from "@/lib/tasks/deliverySyncReview";
 import { getConnectionByProvider } from "@/services/connections";
 import { getProjects } from "@/services/projects";
 import { getSourceItems } from "@/services/sourceItems";
-import { getTodayQueue, updateWorkTask, type WorkTaskWithEvidence } from "@/services/workTasks";
+import {
+  getTodayQueue,
+  getWorkTasks,
+  updateWorkTask,
+  type WorkTaskWithEvidence,
+} from "@/services/workTasks";
 import type { ConnectorSourceCandidate } from "@/lib/connectors/types";
 import type { SourceItem } from "@/domain/sourceItem";
 
 const MAX_TASKS_PER_SYNC = 5;
+/** Extra audits per sync for tasks outside today's queue that gained evidence. */
+const MAX_LINKED_AUDITS = 5;
 const MAX_FIGMA_FILES_PER_TASK = 5;
 const MAX_OUTLINE_CHARS = 24_000;
 
@@ -64,24 +75,40 @@ function taskRequirementEvidence(
   });
 }
 
-function explicitFigmaUrl(
+function deliveryLinksForTask(
   task: WorkTaskWithEvidence,
   sourceById: Map<number, SourceItem>
-): string | null {
-  if (task.figmaFrameUrl?.trim()) return task.figmaFrameUrl.trim();
-  const evidence = task.evidence.map((item) => {
-    const source = sourceById.get(item.sourceItemId);
-    return [item.quote ?? item.summary, item.url, source?.url].filter(Boolean).join(" ");
-  });
-  return extractFigmaUrl(
-    collectDeliverableTexts({
+): ResolvedDeliveryLinks {
+  return resolveTaskDeliveryLinks({
+    task: {
       title: task.title,
       reason: task.reason,
       nextAction: task.nextAction,
       doneCriteria: task.doneCriteria,
-      evidenceQuotes: evidence,
-    })
-  );
+      figmaFrameUrl: task.figmaFrameUrl,
+      githubRepo: task.githubRepo,
+    },
+    evidence: task.evidence.map((item) => ({
+      sourceItemId: item.sourceItemId,
+      quote: item.quote,
+      summary: item.summary,
+      url: item.url,
+    })),
+    sources: task.evidence.flatMap((item) => {
+      const source = sourceById.get(item.sourceItemId);
+      return source
+        ? [
+            {
+              id: source.id,
+              title: source.title,
+              body: source.body,
+              url: source.url,
+              sourceDate: source.sourceDate,
+            },
+          ]
+        : [];
+    }),
+  });
 }
 
 function candidateFromStoredSource(source: SourceItem): ConnectorSourceCandidate | null {
@@ -176,9 +203,16 @@ async function auditTask(input: {
   projectFigmaFileKeys: string[];
   useMcp: boolean;
 }): Promise<{ status: "completed" | "skipped" | "failed"; error?: string }> {
-  const explicitUrl = explicitFigmaUrl(input.task, input.sourceById);
+  const links = deliveryLinksForTask(input.task, input.sourceById);
+  const explicitUrl = links.figmaFrameUrl;
   const explicitParsed = explicitUrl ? parseFigmaUrl(explicitUrl) : null;
   let frameUrl = explicitParsed?.nodeId ? explicitUrl : null;
+
+  // A PR or repo found in the ticket/comments is the only GitHub pointer many
+  // design tasks ever get — persist it so the review can read branch activity.
+  if (links.githubRepo && links.githubRepo !== input.task.githubRepo) {
+    await updateWorkTask(input.task.id, { githubRepo: links.githubRepo });
+  }
 
   if (!frameUrl) {
     const evidenceSourceIds = new Set(input.task.evidence.map((item) => item.sourceItemId));
@@ -222,19 +256,59 @@ async function auditTask(input: {
   return { status: "completed" };
 }
 
+/** Newest evidence timestamp on a task, or null when it cites nothing dated. */
+function newestEvidenceDate(task: WorkTaskWithEvidence): string | null {
+  const dated = task.evidence
+    .map((item) => ({ raw: item.sourceDate, time: Date.parse(item.sourceDate) }))
+    .filter((entry) => Number.isFinite(entry.time))
+    .sort((a, b) => b.time - a.time);
+  return dated[0]?.raw ?? null;
+}
+
+function auditsWithFreshDeliveryEvidence(input: {
+  tasks: WorkTaskWithEvidence[];
+  alreadyQueued: Set<number>;
+  sourceById: Map<number, SourceItem>;
+}): WorkTaskWithEvidence[] {
+  const taskById = new Map(input.tasks.map((task) => [task.id, task]));
+  const selected = selectDeliveryAudits(
+    input.tasks.map((task) => ({
+      taskId: task.id,
+      status: task.status,
+      frameUrl: deliveryLinksForTask(task, input.sourceById).figmaFrameUrl,
+      newestEvidenceAt: newestEvidenceDate(task),
+      lastReviewedAt: task.latestSyncReviewReport?.createdAt ?? null,
+    })),
+    { skipTaskIds: input.alreadyQueued, limit: MAX_LINKED_AUDITS }
+  );
+  return selected.flatMap((taskId) => {
+    const task = taskById.get(taskId);
+    return task ? [task] : [];
+  });
+}
+
 export async function runTodayFigmaTaskAudits(): Promise<FigmaTaskAuditBatchResult> {
   const figmaConnection = await getConnectionByProvider("figma");
   if (!figmaConnection || figmaConnection.status !== "connected") {
     return { attempted: 0, completed: 0, skipped: 0, errors: [] };
   }
 
-  const [queue, sourceItems, projects] = await Promise.all([
+  const [queue, allTasks, sourceItems, projects] = await Promise.all([
     getTodayQueue(),
+    getWorkTasks(),
     getSourceItems(),
     getProjects(),
   ]);
-  const tasks = [...queue.now, ...queue.next].slice(0, MAX_TASKS_PER_SYNC);
   const sourceById = new Map(sourceItems.map((source) => [source.id, source]));
+  const queueTasks = [...queue.now, ...queue.next].slice(0, MAX_TASKS_PER_SYNC);
+  const tasks = [
+    ...queueTasks,
+    ...auditsWithFreshDeliveryEvidence({
+      tasks: allTasks,
+      alreadyQueued: new Set(queueTasks.map((task) => task.id)),
+      sourceById,
+    }),
+  ];
   const projectById = new Map(projects.map((project) => [project.id, project]));
 
   const outcomes = await Promise.all(

@@ -69,7 +69,9 @@ export function getPostgresDriverOptions(url: string): postgres.Options<Record<s
   const serverless = isHostedVercelDeploy();
   return {
     max: serverless ? 1 : 10,
-    idle_timeout: serverless ? 20 : undefined,
+    // Idle sockets that outlive a laptop sleep or database restart fail the next
+    // query they serve, so reap them locally too instead of holding them open.
+    idle_timeout: serverless ? 20 : 60,
     connect_timeout: 10,
     ssl: resolvePostgresSsl(url),
     prepare: false,
