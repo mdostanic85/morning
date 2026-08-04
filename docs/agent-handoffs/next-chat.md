@@ -1,79 +1,82 @@
-# Next chat handoff — Add Google Gemini (Phase 2)
+# Next chat handoff — Gemini public LLM path (done)
 
-## Completed work (Phase 1)
+## Completed work
 
-Read-only LLM audit of Worklight/Morning. No code changes.
+### Phase 1 — LLM audit (read-only)
 
-### Inventory
+- **Providers before this change:** Groq (primary text), OpenAI (chat + embeddings), Anthropic (fallback), local OpenAI-compatible. No Google Gemini.
+- **SDKs:** none — thin `fetch` adapters under `src/lib/llm/`.
+- **Central router:** `src/lib/llm/router.ts` (`runLlmJob` / `runEmbeddingJob`).
+- **Keys:** `GROQ_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `LOCAL_LLM_*`, plus `data/secrets.json`. No `.env.example` existed.
+- **Models:** Groq `openai/gpt-oss-120b` / `-20b` / `qwen/qwen3.6-27b`; OpenAI `gpt-4.1` / `gpt-4.1-mini` / `text-embedding-3-small`; Anthropic `claude-3-7-sonnet-latest`.
+- **Architecture:** non-streaming; JSON via Zod + provider JSON schema; telemetry stores hashes and token counts, never prompts; no PUBLIC/PRIVATE split — every job sends personal work content to a cloud model.
+- **Name collision:** "Gemini" in the Gmail/Drive connectors means meeting notes, and "google" means the OAuth connection.
 
-- **Providers:** Groq (primary text), OpenAI (chat + embeddings), Anthropic (fallback), local OpenAI-compatible. **No Google Gemini Generative Language API.**
-- **SDKs:** None. Thin `fetch` adapters under `src/lib/llm/`.
-- **Central router:** `src/lib/llm/router.ts` (`runLlmJob` / `runEmbeddingJob`). Required by architecture rules.
-- **Env keys:** `GROQ_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `LOCAL_LLM_*`. Secrets also in `data/secrets.json`. No `.env.example`.
-- **Models (current):** Groq `openai/gpt-oss-120b` / `openai/gpt-oss-20b` / `qwen/qwen3.6-27b`; OpenAI `gpt-4.1` / `gpt-4.1-mini` / `text-embedding-3-small`; Anthropic `claude-3-7-sonnet-latest`.
-- **Name collision:** “Gemini” in connectors = Google Meet/Drive **meeting notes**, not Google AI.
+### Phase 2 — Gemini implementation
 
-### Architecture notes
-
-- Non-streaming; structured JSON via Zod + provider JSON schema.
-- Telemetry: `llm_telemetry` (hashes + tokens/cost; no raw prompts).
-- No PUBLIC vs PRIVATE provider split today — almost all jobs send personal work content (email, transcripts, Jira, knowledge) to cloud LLMs.
-- Settings: `src/services/settings.ts` — `CLOUD_LLM_PROVIDERS = ["groq","openai","anthropic"]`.
-
-### Recommendation (for Phase 2)
-
-1. Add `src/lib/llm/google.ts` (or `gemini.ts`) as a `ProviderClient` like `anthropic.ts` — REST `generateContent`, no official SDK.
-2. Extend `PROVIDERS` / settings / router; env `GOOGLE_API_KEY`; model `PUBLIC_LLM_MODEL ?? "gemini-3.1-flash-lite"`.
-3. **Do not move** existing jobs (extraction, QA, briefing, Hydra, etc.) to Gemini — they carry PII / personal docs.
-4. Prefer a **new public-only job or clearly marked stub** wired through the router, not a blind primary swap.
-5. Keep Groq/OpenAI/Anthropic paths for private writing; do not add/change Anthropic as part of this task beyond plumbing types if needed.
+- `src/lib/llm/gemini.ts` — REST `generateContent` adapter. System prompt goes to `systemInstruction`, JSON mode via `responseMimeType` (no `responseSchema`, since Zod's JSON Schema carries keywords Gemini rejects), usage read from `usageMetadata`, 429/`RESOURCE_EXHAUSTED` mapped to `rate_limit_daily`. The key travels in the `x-goog-api-key` header instead of `?key=` so it stays out of URLs and logs.
+- Provider id is `gemini` (not `google`) because `google` already means the Gmail/Calendar/Drive OAuth connection. Env var is still `GOOGLE_API_KEY`.
+- `public_research` job: `src/lib/llm/prompts/publicResearch.ts`, service `src/lib/research/publicResearch.ts`, route `POST /api/research/public`. Returns a summary plus key points, each with a verbatim quote, and an `unclear` list.
+- Job is pinned: no fallbacks and no local append (`PROVIDER_PINNED_JOBS` in the router), so it fails with a clear message rather than moving bulk reading onto a paid provider.
+- Gemini appears in no other job's model chain, so it never receives ingested personal content.
+- `.env.example` created (`!.env.example` added to `.gitignore`), README documents the public path and the AI Studio key.
+- Settings "Model keys" tab shows Google Gemini automatically via `CLOUD_LLM_PROVIDERS`.
 
 ## Current repository state
 
-- Branch: `main` @ `2be5db7` (tracks `origin/main`)
-- Unrelated untracked: `docs/org/Ko-je-ko-u-firmi.pdf`
-- No Phase 2 code yet
+- Branch: `feat/gemini-public-llm`, two commits ahead of `main` (`2be5db7`)
+  - `90b6ee6` audit handoff
+  - `d89128a` Gemini implementation
+- Not pushed, no PR opened
+- Unrelated untracked file left alone: `docs/org/Ko-je-ko-u-firmi.pdf`
 
 ## Unresolved verified issues
 
-- None from this audit (docs in `docs/current-app-architecture.md` are partly stale on model IDs — out of scope unless touched)
+- `npm run test:jul20-brief` fails 2 of 8 tests (`claim-aware ranking prefers new UATL-376 assignment…`, `composer builds DailyBriefV2 matching Jul 20 target decisions`). **Pre-existing** — reproduced on `main` with the Gemini work stashed. Untouched here.
+- `llm_telemetry.estimated_cost_usd` is null for `gemini-3.1-flash-lite`, same as the Groq models: `src/services/llmTelemetry.ts` deliberately records null rather than a guessed price.
+- `docs/current-app-architecture.md` still describes the pre-Gemini provider set and older model IDs. It was already stale before this change.
 
-## Relevant files for Phase 2
+## Relevant changed files
 
-- `src/lib/llm/types.ts` — add `"google"` (or `"gemini"`) to `PROVIDERS`
-- `src/lib/llm/anthropic.ts` — pattern to mirror (fetch + `LlmError` + usage)
-- `src/lib/llm/router.ts` — register client + optional public job config
-- `src/services/settings.ts` — `GOOGLE_API_KEY`, cloud provider list, secrets
-- `src/services/llmTelemetry.ts` — optional cost row for Gemini model
-- `README.md` — key from https://aistudio.google.com/apikey
-- Tests: `src/lib/llm/*.test.mts` pattern (mock `fetch`)
+```
+src/lib/llm/gemini.ts                      (new)
+src/lib/llm/gemini.test.mts                (new)
+src/lib/llm/prompts/publicResearch.ts      (new)
+src/lib/research/publicResearch.ts         (new)
+src/app/api/research/public/route.ts       (new)
+src/lib/llm/router.ts                      client, pinned job, MODEL_CONFIG entry
+src/lib/llm/types.ts                       "gemini" provider, "public_research" job
+src/lib/llm/modelCapabilities.ts           gemini reports no vision
+src/services/settings.ts                   GOOGLE_API_KEY, cloud provider list
+src/components/ApiKeyForm.tsx              label, key URL, hint
+.env.example / .gitignore / README.md      env + docs
+package.json                               test:gemini script
+```
 
 ## Test results
 
-- Phase 1 was read-only; no tests run for Gemini yet
+- `npm run test:gemini` — 8/8 pass (mocked `fetch`: systemInstruction mapping, JSON mode, model override, header-not-URL key, multi-part concat + usage, empty response, blocked prompt, quota mapping)
+- `npm test` — all suites pass except the pre-existing `test:jul20-brief` failures noted above
+- `npm run lint` — 0 errors (13 pre-existing warnings elsewhere), CSS check passes
+- `npx tsc --noEmit` — no errors in any changed file
+- End-to-end smoke with a stubbed `fetch`: `[llm] public_research via gemini/gemini-3.1-flash-lite — ok · 420 in / 88 out`, schema validated, telemetry row written
 
-## Exact next task
+## Exact next task (suggested)
 
-Implement Google Gemini Generative Language API as a thin REST provider behind the existing LLM router, for PUBLIC/non-PII workloads only (`gemini-3.1-flash-lite` via `GOOGLE_API_KEY` / optional `PUBLIC_LLM_MODEL`), with env docs, one real public call path or marked stub, and a minimal mocked-fetch unit test.
+Verify against the live API with a real `GOOGLE_API_KEY` from https://aistudio.google.com/apikey, confirm `gemini-3.1-flash-lite` is the intended model ID for the account, then decide whether the public path deserves a UI surface or stays an HTTP-only endpoint.
 
 ## Scope exclusions
 
-- Do **not** add or expand Anthropic/Claude.
-- Do **not** migrate private jobs (task extraction, QA, email/transcript content, knowledge, Hydra) to Gemini.
-- Do **not** unrelated refactors or UI settings sprawl unless required for key storage consistency.
-- Do **not** use Google’s official SDK unless the repo already depends on it (it does not).
+- No Anthropic/Claude work was added, and no existing job changed provider.
+- No UI beyond the Settings key row: the public path has no screen yet.
+- The pre-existing jul20 brief failures and the stale architecture doc were left as found.
+- No Google SDK dependency added.
 
-## Acceptance criteria
+## Acceptance criteria met
 
-1. Phase 1 findings respected (central router; fetch adapter; secrets server-side).
-2. Working Gemini client matching Optra-style REST contract (`systemInstruction`, role map, JSON mime type, usageMetadata).
-3. `.env.example` (create if missing) + README note for AI Studio key.
-4. At least one PUBLIC call path or clearly marked stub through the router.
-5. Minimal unit test mocking `fetch`.
-6. Focused diff only.
-
-## Required input documents
-
-- This handoff
-- User Phase 2 prompt (Gemini REST contract + Optra defaults)
-- Reference shape: Optra `src/lib/ai/google.ts` / `routing.ts` (not in this repo — adapt to `src/lib/llm/`)
+1. Audit written before coding, and its recommendation followed (new adapter behind the existing router, private jobs untouched).
+2. Gemini client matches the required REST contract.
+3. `.env.example` plus README documentation with the AI Studio key link.
+4. A real call path (`POST /api/research/public`), not a stub.
+5. Unit test mocking `fetch`, wired into `npm test`.
+6. Diff limited to Gemini wiring.
