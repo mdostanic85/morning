@@ -61,9 +61,39 @@ package.json                               test:gemini script
 - `npx tsc --noEmit` — no errors in any changed file
 - End-to-end smoke with a stubbed `fetch`: `[llm] public_research via gemini/gemini-3.1-flash-lite — ok · 420 in / 88 out`, schema validated, telemetry row written
 
-## Exact next task (suggested)
+## Exact next task
 
-Verify against the live API with a real `GOOGLE_API_KEY` from https://aistudio.google.com/apikey, confirm `gemini-3.1-flash-lite` is the intended model ID for the account, then decide whether the public path deserves a UI surface or stays an HTTP-only endpoint.
+Decide whether Gemini should take over any job that reads the user's own work content, and if so make it primary with Groq as fallback. This reverses the public-only boundary shipped in `d89128a`, so it needs its own phase.
+
+### Verified model facts (checked 2026-08-04)
+
+| | `openai/gpt-oss-120b` (Groq) | `gemini-3.1-flash-lite` |
+|---|---|---|
+| Input / 1M | $0.15 | $0.25 |
+| Output / 1M | $0.60 | $1.50 |
+| Context | 131,072 total (input + output share it) | 1,048,576 in / 65,536 out |
+| Image + PDF input | no | yes |
+| Free tier used to train Google's products | n/a | **yes** (paid tier: no) |
+
+Sources: https://ai.google.dev/gemini-api/docs/pricing, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite
+
+Consequences: Gemini is **not** the cheaper option per token, and Groq keeps the latency lead, so a blanket primary swap costs more and buys nothing on speed. A free-tier `GOOGLE_API_KEY` means Google trains on the user's transcripts and mail, so billing must be enabled before any personal-content job moves.
+
+### Where Gemini genuinely wins
+
+1. **Vision — `delivery_sync_review`** (today Groq `qwen/qwen3.6-27b`, a thinking model whose hidden reasoning shares the 8192 budget). Gemini takes images and PDFs natively. **Not a config flip**: `src/lib/llm/gemini.ts` is deliberately text-only because the app only holds image URLs, and Gemini needs inline bytes or a Files API URI. `modelCapabilities.ts` must stop reporting no-vision for `gemini` once that lands.
+2. **Long, multilingual reading** — 1M input vs Groq's 131k shared window matters for `task_qa`, `hydra_report`, `priority_planning` with large evidence bundles. Sources here are mixed Serbian/English while universal rule 9 requires authored output in English with verbatim quotes preserved; Google positions Flash-Lite for high-volume translation, where the gpt-oss family is weaker.
+
+### Where Groq should stay primary
+
+`task_reflect`, `daily_memory`, `knowledge_qa` — narrow, cheap passes where latency beats quality.
+
+### Open decisions for the user
+
+- Is billing enabled on the Google key? If not, stop: no personal content may go to the free tier.
+- Which scope: vision only, the long/multilingual reading jobs, or all text jobs?
+- If any personal-content job moves, the public-only claims in `README.md`, `src/lib/llm/gemini.ts`, `src/lib/llm/router.ts` (`PROVIDER_PINNED_JOBS`, the `public_research` comment), `src/lib/research/publicResearch.ts`, and `src/components/ApiKeyForm.tsx` all become wrong and must be rewritten in the same change.
+- Also still open from the previous phase: verify against the live API with a real key, and decide whether the public path deserves a UI surface.
 
 ## Scope exclusions
 
