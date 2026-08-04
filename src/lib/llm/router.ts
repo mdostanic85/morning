@@ -8,6 +8,7 @@ import {
 import { hashLlmInput, recordLlmTelemetry } from "@/services/llmTelemetry";
 import { openaiClient, openaiEmbed } from "./openai";
 import { anthropicClient } from "./anthropic";
+import { geminiClient, resolvePublicLlmModel } from "./gemini";
 import { groqClient } from "./groq";
 import { localClient } from "./local";
 import { TASK_EXTRACTOR_SYSTEM_PROMPT } from "./prompts/taskExtractor";
@@ -25,6 +26,7 @@ import { FOCUS_ACTION_PLAN_SYSTEM_PROMPT } from "./prompts/focusActionPlan";
 import { FIGMA_FRAME_DISCOVERY_SYSTEM_PROMPT } from "./prompts/figmaFrameDiscovery";
 import { DELIVERY_SYNC_REVIEW_SYSTEM_PROMPT } from "./prompts/deliverySyncReview";
 import { HYDRA_REPORT_SYSTEM_PROMPT } from "./prompts/hydraReport";
+import { PUBLIC_RESEARCH_SYSTEM_PROMPT } from "./prompts/publicResearch";
 import {
   imageUrlsForModel,
   orderConfigsForImages,
@@ -231,7 +233,19 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
       { ...ANTHROPIC_FALLBACK, maxTokens: 6144 },
     ],
   },
+  // Gemini appears here and nowhere else: this is the only job whose input is
+  // public material the user pasted on purpose. No fallbacks — if the public
+  // path is off, say so rather than quietly spending a paid provider's budget
+  // on bulk reading.
+  public_research: {
+    provider: "gemini",
+    model: resolvePublicLlmModel(),
+    maxTokens: 4096,
+  },
 };
+
+/** Jobs pinned to their configured provider — no fallbacks, no local endpoint. */
+const PROVIDER_PINNED_JOBS = new Set<JobType>(["public_research"]);
 
 /** Embeddings stay on OpenAI — Groq has no embeddings API. */
 export const EMBEDDING_MODEL_CONFIG: ModelConfig = {
@@ -255,6 +269,7 @@ export const JOB_SYSTEM_PROMPTS: Record<JobType, string> = {
   figma_frame_discovery: FIGMA_FRAME_DISCOVERY_SYSTEM_PROMPT,
   delivery_sync_review: DELIVERY_SYNC_REVIEW_SYSTEM_PROMPT,
   hydra_report: HYDRA_REPORT_SYSTEM_PROMPT,
+  public_research: PUBLIC_RESEARCH_SYSTEM_PROMPT,
 };
 
 function getProviderClient(provider: Provider): ProviderClient {
@@ -265,6 +280,8 @@ function getProviderClient(provider: Provider): ProviderClient {
       return anthropicClient;
     case "groq":
       return groqClient;
+    case "gemini":
+      return geminiClient;
     case "local":
       return localClient;
   }
@@ -274,6 +291,7 @@ const ENV_VAR_HINT: Record<Provider, string> = {
   openai: "OPENAI_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
   groq: "GROQ_API_KEY",
+  gemini: "GOOGLE_API_KEY",
   local: "LOCAL_LLM_BASE_URL and LOCAL_LLM_MODEL",
 };
 
@@ -290,6 +308,8 @@ async function configsForJob(
 
   const chain = flattenModelChain(MODEL_CONFIG[jobType]);
   const configuredCloudChain = chain.filter((config) => active.has(config.provider));
+  if (PROVIDER_PINNED_JOBS.has(jobType)) return configuredCloudChain;
+
   let configs = configuredCloudChain;
   if (active.has("local")) {
     const local = await getLocalLlmConfig();
@@ -531,13 +551,16 @@ export async function runLlmJob<T>(params: RunJobParams<T>): Promise<LlmJobResul
   });
 
   if (configs.length === 0) {
+    const primary = MODEL_CONFIG[jobType];
     return {
       ok: false,
       jobType,
-      provider: MODEL_CONFIG[jobType].provider,
-      model: MODEL_CONFIG[jobType].model,
+      provider: primary.provider,
+      model: primary.model,
       kind: "missing_api_key",
-      error: "No active LLM providers. Turn on at least one provider in Settings.",
+      error: PROVIDER_PINNED_JOBS.has(jobType)
+        ? `This job only runs on ${primary.provider}. Add a key and enable it in Settings, or set ${ENV_VAR_HINT[primary.provider]}.`
+        : "No active LLM providers. Turn on at least one provider in Settings.",
     };
   }
 

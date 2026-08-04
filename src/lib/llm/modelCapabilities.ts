@@ -23,6 +23,10 @@ export function modelSupportsVision(provider: Provider, model: string): boolean 
       if (id.includes("qwen3.6") || id.includes("qwen/qwen3.6")) return true;
       if (id.includes("llama-4")) return true;
       return false;
+    case "gemini":
+      // Gemini models do read images, but only as inline bytes or a Files API
+      // URI — the app only ever has plain URLs, so our adapter is text-only.
+      return false;
     case "local":
       // Local endpoints vary; never assume vision.
       return false;

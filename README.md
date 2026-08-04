@@ -16,8 +16,8 @@ every priority and report statement stays traceable to immutable evidence.
 - **PostgreSQL** through **Drizzle ORM** — local via Docker, hosted via Neon
 - **Inngest** for the background sync pipeline and stale-run recovery
 - A central **LLM router** (`src/lib/llm/router.ts`) in front of OpenAI,
-  Anthropic, Groq, and local OpenAI-compatible models. Nothing calls a provider
-  directly.
+  Anthropic, Groq, Google Gemini, and local OpenAI-compatible models. Nothing
+  calls a provider directly.
 - **Zod** for schema-bound model output and environment validation
 
 ## Requirements
@@ -35,8 +35,8 @@ npm run db:pg:migrate       # apply migrations from drizzle/postgres
 npm run dev                 # Next.js + the Inngest dev server together
 ```
 
-Add `DATABASE_URL` to `.env.local` so the app and Drizzle Studio agree on one
-database:
+Copy `.env.example` to `.env.local` and fill in what you need. `DATABASE_URL` is
+the only required value, and the app and Drizzle Studio must agree on it:
 
 ```
 DATABASE_URL=postgresql://worklight:worklight@127.0.0.1:5433/worklight
@@ -123,6 +123,25 @@ the evidence it came from.
 
 For hosted scheduling, set `CRON_SECRET` and have the platform call the cron
 endpoint every 15 minutes.
+
+## Public research path
+
+Everything the app ingests for you — mail, transcripts, tickets, comments — runs
+on Groq, OpenAI, Anthropic, or a local model. Google Gemini is wired for the
+opposite case: public reference material you paste in yourself, where the point
+is to read a lot of text cheaply.
+
+`POST /api/research/public` takes `{ "text": "...", "question": "..." }` and
+returns a summary plus key points, each carrying the verbatim quote it came
+from. Anything the material does not answer comes back under `unclear` instead
+of being filled in.
+
+The Gemini key is the only key this path uses, and it is pinned: the
+`public_research` job has no fallbacks, so it fails with a clear message rather
+than moving public bulk reading onto a paid provider. Get a key from
+[Google AI Studio](https://aistudio.google.com/apikey), then set `GOOGLE_API_KEY`
+or paste it into Settings. `PUBLIC_LLM_MODEL` overrides the default
+`gemini-3.1-flash-lite`.
 
 ## Data model
 

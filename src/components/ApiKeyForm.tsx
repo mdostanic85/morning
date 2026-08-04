@@ -12,18 +12,21 @@ const PROVIDER_LABEL: Record<CloudLlmProvider, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
   groq: "Groq",
+  gemini: "Google Gemini",
 };
 
 const PROVIDER_KEY_URL: Record<CloudLlmProvider, string> = {
   openai: "https://platform.openai.com/api-keys",
   anthropic: "https://console.anthropic.com/settings/keys",
   groq: "https://console.groq.com/keys",
+  gemini: "https://aistudio.google.com/apikey",
 };
 
 const PROVIDER_HINT: Partial<Record<CloudLlmProvider, string>> = {
   groq: "Primary. GPT-OSS 120B handles decisions, and 20B handles simpler jobs.",
   openai: "Embeddings only (knowledge search). Optional text fallback.",
   anthropic: "Optional text fallback after Groq.",
+  gemini: "Public material you paste in. Never your own sources.",
 };
 
 export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus }) {
