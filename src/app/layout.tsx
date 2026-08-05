@@ -2,11 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import Script from "next/script";
-import { NavBar } from "@/components/NavBar";
-import { WelcomeModal } from "@/components/WelcomeModal";
-import { AskMemoryProvider } from "@/components/AskMemoryWidget";
-import { Toast } from "@heroui/react/toast";
-import { AppFooter } from "@/components/AppFooter";
+import { ClerkProvider } from "@clerk/nextjs";
+import { AppChrome } from "@/components/AppChrome";
 import "./globals.css";
 
 const inter = Inter({
@@ -57,27 +54,29 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <a
-          href="#main-content"
-          className="sr-only fixed left-4 top-4 z-[100] rounded-lg bg-action-primary px-4 py-3 font-medium text-action-primary-foreground focus:not-sr-only"
+        <ClerkProvider
+          signInUrl="/sign-in"
+          afterSignOutUrl="/sign-in"
+          appearance={{
+            variables: {
+              colorPrimary: "#0b2f67",
+              colorBackground: "#ffffff",
+              colorForeground: "#0b2f67",
+              colorMutedForeground: "#627083",
+              borderRadius: "0.75rem",
+            },
+          }}
         >
-          Skip to main content
-        </a>
-        <Suspense fallback={null}>
-          <AskMemoryProvider>
-            <WelcomeModal />
-            <NavBar />
-            <main
-              id="main-content"
-              tabIndex={-1}
-              className="today-main mx-auto w-full max-w-content flex-1 outline-none"
-            >
-              {children}
-            </main>
-            <AppFooter />
-            <Toast.Provider placement="top" />
-          </AskMemoryProvider>
-        </Suspense>
+          <a
+            href="#main-content"
+            className="sr-only fixed left-4 top-4 z-[100] rounded-lg bg-action-primary px-4 py-3 font-medium text-action-primary-foreground focus:not-sr-only"
+          >
+            Skip to main content
+          </a>
+          <Suspense fallback={null}>
+            <AppChrome>{children}</AppChrome>
+          </Suspense>
+        </ClerkProvider>
       </body>
     </html>
   );

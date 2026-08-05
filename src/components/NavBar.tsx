@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { MenuIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { SignOutControl } from "@/components/auth/SignOutControl";
 import { Button } from "@heroui/react/button";
 
 const LINKS = [
@@ -107,6 +108,9 @@ export function NavBar() {
  </nav>
 
  <div className="relative z-10 flex shrink-0 items-center gap-1">
+ <div className="hidden sm:block">
+ <SignOutControl />
+ </div>
  <ThemeSwitcher />
  <Button
  type="button"
@@ -151,6 +155,9 @@ export function NavBar() {
  </Link>
  );
  })}
+ <div className="mt-2 border-t border-border/60 pt-2 sm:hidden">
+ <SignOutControl />
+ </div>
  </div>
  </nav>
  </header>
