@@ -178,6 +178,18 @@ function humanizeAnswerError(raw: string): { message: string; settingsLink: bool
       settingsLink: true,
     };
   }
+  if (
+    /reduce the length of the messages/i.test(raw) ||
+    /context[_ ]?(length|window)|maximum context|too many tokens|prompt is too long|input is too long/i.test(
+      raw
+    )
+  ) {
+    return {
+      message:
+        "There's too much synced context for this question. Focus on a specific task, or ask something narrower.",
+      settingsLink: false,
+    };
+  }
   return { message: rest || "The assistant couldn't answer that. Please try again.", settingsLink: false };
 }
 
@@ -452,7 +464,9 @@ export function TaskChatPanel({
           </Button>
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">{selectedTask.title}</p>
+              <p className="truncate text-sm font-semibold text-foreground">
+                {selectedTask.title}
+              </p>
               <p className="mt-0.5 truncate text-[14px] text-muted-soft">
                 {selectedTask.projectName ?? "No project"}
               </p>
@@ -578,7 +592,10 @@ export function TaskChatPanel({
             isIconOnly
             isDisabled={loadingAnswer || !input.trim()}
             aria-label="Send"
-            className="size-11 shrink-0 bg-action-primary text-action-primary-foreground"
+            className={cn(
+              "chat-send size-11 shrink-0 bg-action-primary text-action-primary-foreground",
+              styles["chat-send"]
+            )}
           >
             <ArrowUpIcon className="size-4" aria-hidden />
           </Button>

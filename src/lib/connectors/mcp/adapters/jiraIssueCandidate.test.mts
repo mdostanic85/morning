@@ -66,6 +66,31 @@ describe("jiraIssueToCandidate", () => {
     assert.match(candidate.body, /Due date: 2026-07-30/);
   });
 
+  it("records assignee changelog evidence in metadata", () => {
+    const candidate = jiraIssueToCandidate(
+      {
+        ...issue,
+        changelog: {
+          histories: [
+            {
+              created: "2026-07-27T13:30:00.000Z",
+              items: [
+                {
+                  field: "assignee",
+                  fromString: "Sofija",
+                  toString: "Milos Dostanic",
+                },
+              ],
+            },
+          ],
+        },
+      },
+      cloud
+    )!;
+    assert.equal(candidate.metadata?.assignmentChangedAt, "2026-07-27T13:30:00.000Z");
+    assert.equal(candidate.metadata?.previousAssignee, "Sofija");
+  });
+
   it("accepts comments hoisted to the issue root", () => {
     const hoisted = {
       key: "BOM-356",

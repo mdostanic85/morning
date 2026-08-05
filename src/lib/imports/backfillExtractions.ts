@@ -34,6 +34,33 @@ export interface BackfillExtractionsResult {
 }
 
 const BACKFILL_BATCH_SIZE = 8;
+/** Concurrent LLM extractions per backfill batch — keeps wall-clock down without stampeding providers. */
+const BACKFILL_CONCURRENCY = 3;
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index]);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    () => worker()
+  );
+  await Promise.all(workers);
+  return results;
+}
 
 async function sourceIdsWithTaskEvidence(): Promise<Set<number>> {
   const rows = await fetchAll<{ sourceItemId: number }>(
@@ -92,21 +119,38 @@ export async function backfillUnextractedSources(input?: {
   const batch = pending.slice(0, BACKFILL_BATCH_SIZE);
   result.sourcesRemaining = Math.max(0, pending.length - batch.length);
 
-  for (const source of batch) {
+  const outcomes = await mapWithConcurrency(batch, BACKFILL_CONCURRENCY, async (source) => {
     try {
       if (input?.syncRunId && (await isSyncRunCancellationRequested(input.syncRunId))) {
-        return { cancelled: true };
+        return { cancelled: true as const };
       }
       const processed = await extractFromSource(source, projects, granolaWorkContext, input?.syncRunId);
-      result.sourcesProcessed += 1;
-      result.tasksExtracted += processed.tasksExtracted;
-      result.knowledgeExtracted += processed.knowledgeExtracted;
-      result.errors.push(...processed.errors);
+      return {
+        cancelled: false as const,
+        sourceTitle: source.title,
+        processed,
+      };
     } catch (err) {
-      if (err instanceof SyncCancelledError) return { cancelled: true };
-      result.errors.push(
-        `${source.title}: ${err instanceof Error ? err.message : "backfill failed"}`
-      );
+      if (err instanceof SyncCancelledError) return { cancelled: true as const };
+      return {
+        cancelled: false as const,
+        sourceTitle: source.title,
+        error: err instanceof Error ? err.message : "backfill failed",
+      };
+    }
+  });
+
+  for (const outcome of outcomes) {
+    if (outcome.cancelled) return { cancelled: true };
+    if ("error" in outcome && outcome.error) {
+      result.errors.push(`${outcome.sourceTitle}: ${outcome.error}`);
+      continue;
+    }
+    if ("processed" in outcome && outcome.processed) {
+      result.sourcesProcessed += 1;
+      result.tasksExtracted += outcome.processed.tasksExtracted;
+      result.knowledgeExtracted += outcome.processed.knowledgeExtracted;
+      result.errors.push(...outcome.processed.errors);
     }
   }
 

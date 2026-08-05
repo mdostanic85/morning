@@ -5,6 +5,7 @@ import { type ReactNode, useState } from "react";
 import { Toast } from "@heroui/react/toast";
 import { cn } from "@/lib/utils";
 import { AppBadge } from "@/components/AppBadge";
+import { AppTooltip } from "@/components/AppTooltip";
 import { Button } from "@heroui/react/button";
 import { Input } from "@heroui/react/input";
 import { Heading } from "@/components/Heading";
@@ -160,13 +161,14 @@ export function ConnectionCard({
           ) : null}
           {showApiConnect && !supportsMcp ? (
             setupHint ? (
-              <span
-                className="link-btn-primary disabled"
-                aria-disabled="true"
-                title="OAuth app credentials are missing. See details below."
+              <AppTooltip
+                content="OAuth app credentials are missing. See details below."
+                isInteractive
               >
-                {connected ? "Reconnect" : "Connect"}
-              </span>
+                <span className="link-btn-primary disabled" aria-disabled="true" tabIndex={0}>
+                  {connected ? "Reconnect" : "Connect"}
+                </span>
+              </AppTooltip>
             ) : (
               <a href={apiConnectHref} className="link-btn-primary motion-btn">
                 {connected ? "Reconnect" : "Connect"}

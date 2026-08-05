@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   extractJiraKeysFromText,
+  extractNamedWorkLabels,
   findOnlyActiveTopicAnchor,
   findTaskByExactTitleMatch,
+  findTaskByNamedWorkLabel,
   isExtractRelevantToTask,
   mergeTaskTitle,
   pickPrimaryExtractedTask,
@@ -96,6 +98,102 @@ describe("transcriptTaskMerge", () => {
     assert.equal(resolution.taskId, 371);
     assert.equal(resolution.mode, "full");
     assert.match(resolution.reason, /jira key UATL-367/i);
+  });
+
+  describe("named work labels (SPEC, BOM-SPEC)", () => {
+    const specTask: MergeCandidateTask = {
+      id: 901,
+      title: "Finish Hydra SPEC review",
+      reason: "The SPEC needs stakeholder sign-off before implementation.",
+      nextAction: "Walk Matt through the remaining SPEC sections.",
+      status: "now",
+      projectId: 1,
+      owner: "Milos Dostanic",
+    };
+
+    it("extracts distinctive labels and skips generic acronyms", () => {
+      assert.deepEqual(extractNamedWorkLabels("Please update the SPEC and check the API"), [
+        "SPEC",
+      ]);
+      assert.deepEqual(extractNamedWorkLabels("Link the BOM-SPEC frame in Figma"), [
+        "BOM-SPEC",
+      ]);
+      assert.deepEqual(extractNamedWorkLabels("UATL-380 is Done"), []);
+    });
+
+    it("finds the unique open task that already carries the label", () => {
+      const match = findTaskByNamedWorkLabel(
+        [specTask, otherLater],
+        "Matt: Milos, please finish the SPEC before Friday"
+      );
+      assert.equal(match?.task.id, specTask.id);
+      assert.equal(match?.label, "SPEC");
+    });
+
+    it("merges a transcript SPEC mention onto the existing SPEC task", () => {
+      const resolution = resolveTranscriptMergeTarget({
+        source: {
+          sourceType: "granola",
+          title: "Hydra Daily",
+          body: "Matt: Milos, please finish the SPEC before Friday and share it with Lucas.",
+        },
+        extracted: {
+          title: "Finish SPEC before Friday",
+          reason: "Matt asked Milos to finish the SPEC.",
+          nextAction: "Complete remaining SPEC sections and share with Lucas.",
+          status: "actionable",
+          existingTaskId: null,
+          owner: "Milos",
+        },
+        existingTasks: [specTask, otherLater, uatl380Banner],
+        myName: MILOS,
+      });
+      assert.equal(resolution.taskId, specTask.id);
+      assert.equal(resolution.mode, "full");
+      assert.match(resolution.reason, /named work label SPEC/i);
+    });
+
+    it("does not merge when multiple open tasks share the same label", () => {
+      const otherSpec: MergeCandidateTask = {
+        ...specTask,
+        id: 902,
+        title: "Rewrite onboarding SPEC",
+      };
+      const resolution = resolveTranscriptMergeTarget({
+        source: {
+          sourceType: "granola",
+          title: "Hydra Daily",
+          body: "Please update the SPEC today.",
+        },
+        extracted: {
+          title: "Update the SPEC",
+          reason: "SPEC needs an update.",
+          nextAction: "Edit the SPEC document.",
+          status: "actionable",
+          existingTaskId: null,
+          owner: "Milos",
+        },
+        existingTasks: [specTask, otherSpec],
+        myName: MILOS,
+      });
+      assert.equal(resolution.taskId, null);
+    });
+
+    it("treats a shared named work label as relevance proof", () => {
+      const result = isExtractRelevantToTask({
+        extract: {
+          title: "Finish SPEC before Friday",
+          reason: "Matt asked for the SPEC",
+          nextAction: "Complete the SPEC",
+          owner: null,
+        },
+        sourceText: "Please finish the SPEC before Friday",
+        target: specTask,
+        myName: MILOS,
+      });
+      assert.equal(result.relevant, true);
+      assert.match(result.reason, /named work label SPEC/i);
+    });
   });
 
   it("forces merge when source names the full Jira key", () => {

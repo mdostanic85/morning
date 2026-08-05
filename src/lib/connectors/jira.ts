@@ -5,6 +5,7 @@ import { cleanJiraText } from "@/lib/connectors/jiraText";
 import type { ConnectorSourceCandidate } from "./types";
 import type { ShouldCancelSync } from "@/lib/imports/syncCancellation";
 import { buildJiraUpdatedClause } from "@/lib/imports/providerCursorUtils";
+import { assignmentEvidenceFromJiraChangelog } from "./jiraAssignmentEvidence";
 
 const JIRA_PAGE_SIZE = 50;
 
@@ -56,8 +57,19 @@ interface JiraIssue {
     assignee?: { displayName?: string; emailAddress?: string };
     reporter?: { displayName?: string; emailAddress?: string };
     duedate?: string | null;
+    created?: string;
     updated?: string;
     comment?: { comments?: { author?: { displayName?: string }; body?: unknown; created?: string }[] };
+  };
+  changelog?: {
+    histories?: {
+      created?: string;
+      items?: {
+        field?: string;
+        fromString?: string | null;
+        toString?: string | null;
+      }[];
+    }[];
   };
 }
 
@@ -180,6 +192,7 @@ export async function fetchAssignedJiraIssues(input?: {
           jql,
           startAt,
           maxResults: Math.min(JIRA_PAGE_SIZE, maxResults - issues.length),
+          expand: ["changelog"],
           fields: [
             "summary",
             "description",
@@ -188,6 +201,7 @@ export async function fetchAssignedJiraIssues(input?: {
             "assignee",
             "reporter",
             "duedate",
+            "created",
             "updated",
             "comment",
           ],
@@ -212,6 +226,10 @@ export async function fetchAssignedJiraIssues(input?: {
     const commentUpdatedAts = comments
       .map((comment) => comment.created)
       .filter((value): value is string => Boolean(value));
+    const assignmentEvidence = assignmentEvidenceFromJiraChangelog(
+      issue.changelog,
+      issue.fields.assignee?.displayName
+    );
     return {
       sourceType: "jira",
       sourceExternalId: issue.key,
@@ -249,7 +267,11 @@ export async function fetchAssignedJiraIssues(input?: {
         assignee: issue.fields.assignee?.displayName ?? null,
         reporter: issue.fields.reporter?.displayName ?? null,
         dueDate: issue.fields.duedate ?? null,
+        // `created` is what separates a genuinely new assignment from a
+        // comment that merely bumped `updated` on work already owned.
+        created: issue.fields.created ?? null,
         updated: issue.fields.updated ?? null,
+        ...(assignmentEvidence ?? {}),
         commentUpdatedAts,
         involvement: "assignee",
       },

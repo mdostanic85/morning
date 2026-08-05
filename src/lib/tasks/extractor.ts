@@ -39,7 +39,16 @@ import {
   type MergeCandidateTask,
 } from "@/lib/tasks/transcriptTaskMerge";
 import { enrichFigmaCommentSourceForMerge } from "@/lib/tasks/enrichFigmaCommentSource";
-import { myOwnerFilter, personMatchesFilter, classifyTaskOwnership, NON_PERSON_ACTORS } from "@/lib/filters/ownerFilter";
+import {
+  myOwnerFilter,
+  personMatchesFilter,
+  classifyTaskOwnership,
+  parseJiraAssigneeFromText,
+  NON_PERSON_ACTORS,
+  type TaskOwnershipClass,
+} from "@/lib/filters/ownerFilter";
+import { quoteAppearsInSource } from "@/lib/tasks/evidenceVerification";
+import { normalizePersonName } from "@/lib/tasks/personIdentity";
 import { isQuoteRelevantToTask, taskDomainText } from "@/lib/tasks/evidenceRelevance";
 import { computeTaskConfidence } from "@/lib/tasks/taskConfidence";
 import { getApplicableIngestionRules } from "@/services/ingestionRules";
@@ -114,6 +123,137 @@ async function resolvePersonIdForOwner(
   } catch {
     return { personId: null, verified: false };
   }
+}
+
+/**
+ * Ownership signals the model is allowed to claim. Each must be backed by a
+ * quote that really appears in the source — the model may interpret the
+ * source, but it may not invent the sentence it is interpreting.
+ */
+const SOURCE_OWNERSHIP_SIGNALS: ReadonlySet<string> = new Set([
+  "jira_assignee",
+  "addressed_to_user",
+  "user_commitment",
+  "stakeholder_instruction",
+]);
+
+/**
+ * The model read the source and concluded the work is the user's. Accept that
+ * only when it cites a verbatim source line and names the user in the slot the
+ * signal depends on (who was addressed, or who made the commitment).
+ */
+function llmOwnershipClaimProvesMine(
+  claim: ExtractedTask["ownershipEvidence"],
+  sourceBody: string,
+  currentUserName: string
+): boolean {
+  if (!claim || !SOURCE_OWNERSHIP_SIGNALS.has(claim.signal)) return false;
+  if (!quoteAppearsInSource(claim.quote, sourceBody)) return false;
+
+  const selected = myOwnerFilter(currentUserName);
+  if (!selected) return false;
+
+  const claimant =
+    claim.signal === "user_commitment" ? claim.addressedBy : claim.addressedTo;
+  if (!claimant?.trim()) return false;
+  return personMatchesFilter(claimant, selected, currentUserName);
+}
+
+/**
+ * Decide ownership for one extracted group from source-backed signals only,
+ * and resolve the owner to persist.
+ *
+ * Runs before the merge branches so merged and newly created tasks pass the
+ * same gate. When the source proves the work is the user's but named no owner,
+ * the user is stamped as owner so the decision is durable rather than
+ * re-derived from LLM prose on every read.
+ */
+function resolveOwnershipFromSource(input: {
+  extracted: ExtractedTask;
+  sourceItem: SourceItem;
+  quotes: string[];
+  currentUserName: string | null;
+}): {
+  ownership: TaskOwnershipClass;
+  owner: string | null;
+  verifiedQuotes: string[];
+} {
+  const { extracted, sourceItem, quotes, currentUserName } = input;
+  // Only quotes that actually occur in the source may carry ownership weight.
+  const verifiedQuotes = quotes.filter((quote) =>
+    quoteAppearsInSource(quote, sourceItem.body)
+  );
+
+  if (currentUserName === null) {
+    return { ownership: "unclear", owner: extracted.owner, verifiedQuotes };
+  }
+
+  const jiraAssignee =
+    sourceItem.sourceType === "jira" ? parseJiraAssigneeFromText(sourceItem.body) : null;
+
+  const ownership = classifyTaskOwnership(
+    {
+      owner: extracted.owner,
+      title: extracted.title,
+      reason: extracted.reason,
+      nextAction: extracted.nextAction,
+      jiraAssignee,
+      evidenceQuotes: verifiedQuotes,
+    },
+    currentUserName
+  );
+
+  if (ownership === "other") {
+    return { ownership, owner: extracted.owner, verifiedQuotes };
+  }
+
+  const provenMine =
+    ownership === "mine" ||
+    llmOwnershipClaimProvesMine(
+      extracted.ownershipEvidence,
+      sourceItem.body,
+      currentUserName
+    );
+
+  if (!provenMine) {
+    return { ownership: "unclear", owner: extracted.owner, verifiedQuotes };
+  }
+  // Keep the source's own wording when it named the owner.
+  return {
+    ownership: "mine",
+    owner: extracted.owner ?? currentUserName,
+    verifiedQuotes,
+  };
+}
+
+/**
+ * A merge must never silently replace the owner with a different person.
+ * An incoming owner may fill an empty slot or restate the same person; a
+ * different name leaves the existing owner untouched.
+ */
+function resolveMergedOwner(
+  existingOwner: string | null,
+  incomingOwner: string | null,
+  currentUserName: string | null
+): string | null {
+  const incoming = incomingOwner?.trim() ?? "";
+  if (!incoming) return existingOwner;
+
+  const existing = existingOwner?.trim() ?? "";
+  if (!existing) {
+    if (currentUserName === null) return incoming;
+    const selected = myOwnerFilter(currentUserName);
+    return selected && personMatchesFilter(incoming, selected, currentUserName)
+      ? incoming
+      : null;
+  }
+
+  const samePerson = personMatchesFilter(
+    incoming,
+    new Set([normalizePersonName(existing)]),
+    null
+  );
+  return samePerson ? existing : existingOwner;
 }
 
 function uniqueQuotes(items: { quote: string }[]): { quote: string }[] {
@@ -360,6 +500,18 @@ export async function extractTasksFromSourceItem(
       url: sourceItem.url ?? undefined,
     }));
 
+    // Ownership is decided once, before the merge branches below return early —
+    // otherwise a merged task never passes the gate and can even overwrite the
+    // owner with someone else's name.
+    const ownershipProof = resolveOwnershipFromSource({
+      extracted: primary,
+      sourceItem,
+      quotes: evidenceQuotes.map((item) => item.quote),
+      currentUserName: currentUserName ?? null,
+    });
+    if (ownershipProof.ownership === "other") continue;
+    const resolvedOwner = ownershipProof.owner;
+
     if (group.targetId != null) {
       const existing = existingTasks.find((task) => task.id === group.targetId) ?? null;
       if (!existing) continue;
@@ -413,7 +565,11 @@ export async function extractTasksFromSourceItem(
         existingSources,
       });
 
-      const mergedOwner = primary.owner ?? existing.owner;
+      const mergedOwner = resolveMergedOwner(
+        existing.owner,
+        resolvedOwner,
+        currentUserName ?? null
+      );
       const mergedPersonResolution = await resolvePersonIdForOwner(mergedOwner);
       const mergedConfidence = incomingIsLatest
         ? computeTaskConfidence({
@@ -422,6 +578,7 @@ export async function extractTasksFromSourceItem(
             title: primary.title,
             reason,
             nextAction: primary.nextAction,
+            evidenceQuotes: ownershipProof.verifiedQuotes,
             currentUserName,
             primarySource: sourceItem,
             hasProject: (existing.projectId ?? sourceItem.projectId) != null,
@@ -493,40 +650,16 @@ export async function extractTasksFromSourceItem(
       continue;
     }
 
-    // Drop tasks the LLM attributed to someone else — either via owner field
-    // or via clear third-person attribution in the extracted text.
-    if (currentUserName !== null) {
-      const ownership = classifyTaskOwnership(
-        {
-          owner: primary.owner,
-          title: primary.title,
-          reason: primary.reason,
-          nextAction: primary.nextAction,
-        },
-        currentUserName
-      );
-      if (ownership === "other") continue;
-      if (
-        primary.owner !== null &&
-        !personMatchesFilter(
-          primary.owner,
-          myOwnerFilter(currentUserName) ?? new Set(),
-          currentUserName
-        )
-      ) {
-        continue;
-      }
-    }
-
     // WL-05: decomposed, deterministic confidence — the LLM only supplies
     // `extractionConfidence`; everything else is derived from real signals.
-    const personResolution = await resolvePersonIdForOwner(primary.owner);
+    const personResolution = await resolvePersonIdForOwner(resolvedOwner);
     const newTaskConfidence = computeTaskConfidence({
-      ownerName: primary.owner,
+      ownerName: resolvedOwner,
       extractionConfidence: primary.confidence,
       title: primary.title,
       reason,
       nextAction: primary.nextAction,
+      evidenceQuotes: ownershipProof.verifiedQuotes,
       currentUserName,
       primarySource: sourceItem,
       hasProject: sourceItem.projectId != null,
@@ -549,7 +682,7 @@ export async function extractTasksFromSourceItem(
         confidence: newTaskConfidence.finalConfidence,
         confidenceComponents: newTaskConfidence.components,
         dueDate: primary.dueDate,
-        owner: primary.owner,
+        owner: resolvedOwner,
         waitingOn: primary.waitingOn,
       },
       evidenceInput.map((item) => ({

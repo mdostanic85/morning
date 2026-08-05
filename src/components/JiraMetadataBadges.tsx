@@ -2,6 +2,7 @@ import { CalendarIcon, FlagIcon, UserIcon } from "lucide-react";
 import type { JiraInlineMetadata } from "@/lib/connectors/jiraText";
 import { jiraStatusVisual } from "@/lib/connectors/jiraStatusVisual";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
+import { AppTooltip } from "@/components/AppTooltip";
 import { cn } from "@/lib/utils";
 
 function priorityTone(priority: string): AppBadgeTone {
@@ -28,13 +29,15 @@ export function JiraStatusBadge({ status }: { status: string | null }) {
   const StatusIcon = statusVisual.icon;
 
   return (
-    <AppBadge
-      tone="default"
-      className={cn("font-normal gap-1.5", statusVisual.triggerClassName)}
-      icon={<StatusIcon className="size-3.5 shrink-0" aria-hidden />}
-    >
-      {status}
-    </AppBadge>
+    <AppTooltip content="Read live from Jira. Worklight never changes it for you.">
+      <AppBadge
+        tone="default"
+        className={cn("font-normal gap-1.5", statusVisual.triggerClassName)}
+        icon={<StatusIcon className="size-3.5 shrink-0" aria-hidden />}
+      >
+        {status}
+      </AppBadge>
+    </AppTooltip>
   );
 }
 

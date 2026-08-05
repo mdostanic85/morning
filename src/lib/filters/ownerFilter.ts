@@ -5,6 +5,7 @@ import type { WorkTaskWithEvidence } from "@/services/workTasks";
 import type { StoredTodayBriefing } from "@/lib/llm/prompts/todayBriefing";
 import { parseJiraBodyFields } from "@/lib/connectors/jiraText";
 import { normalizePersonName, extractDisplayName } from "@/lib/tasks/personIdentity";
+import { matchesStakeholder } from "@/lib/tasks/highAuthorityPeople";
 
 export { extractDisplayName };
 
@@ -143,6 +144,12 @@ export type TaskOwnershipSignals = {
   /** Jira assignee when the task is backed by a Jira issue. */
   jiraAssignee?: string | null;
   ownershipDecision?: OwnershipDecision | null;
+  /**
+   * Verbatim quotes taken from the source itself. This is the only free text
+   * allowed to prove ownership — `title`/`reason`/`nextAction` are written by
+   * the LLM, so a paraphrase like "Milos needs to…" is not evidence.
+   */
+  evidenceQuotes?: readonly (string | null | undefined)[] | null;
 };
 
 /**
@@ -178,22 +185,37 @@ export function namedForeignActor(
   return null;
 }
 
-function firstPersonCommitment(text: string): boolean {
+export function firstPersonCommitment(text: string): boolean {
   return /\b(i(?:'ll| will| am going to| need to)|my action|for me to)\b/i.test(text);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Regex fragment matching the user's first name, optionally followed by the surname. */
+function myNamePattern(myName: string): string | null {
+  const me = normalizePerson(myName);
+  if (!me) return null;
+  const firstName = me.split(/\s+/)[0] ?? "";
+  if (firstName.length < 3) return null;
+  const surname = me.slice(firstName.length).trim();
+  return surname
+    ? `${escapeRegex(firstName)}(?:\\s+${escapeRegex(surname)})?`
+    : escapeRegex(firstName);
 }
 
 /**
  * True only when the user is named as the actor — not merely mentioned
  * (e.g. "according to Milos design" must not count as ownership).
+ *
+ * Only meaningful on verbatim source text. Never call it on LLM-authored
+ * fields: the model writing "Milos must confirm…" is not an ownership signal.
  */
 export function namedMeAsActor(text: string, myName: string): boolean {
-  const me = normalizePerson(myName);
-  if (!me || !text.trim()) return false;
-  const firstName = me.split(/\s+/)[0];
-  if (firstName.length < 3) return false;
+  const nameAlt = myNamePattern(myName);
+  if (!nameAlt || !text.trim()) return false;
 
-  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const nameAlt = `${escape(firstName)}(?:\\s+${escape(me.slice(firstName.length).trim())})?`;
   const patterns = [
     new RegExp(`\\b${nameAlt}\\s+(?:to|will|should|needs?\\s+to|must)\\b`, "i"),
     new RegExp(
@@ -204,11 +226,136 @@ export function namedMeAsActor(text: string, myName: string): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }
 
+/** "assigned to Milos", "Owner: Milos" — an explicit assignment written in the source. */
+export function assignsWorkToMe(text: string, myName: string): boolean {
+  const nameAlt = myNamePattern(myName);
+  if (!nameAlt || !text.trim()) return false;
+  return new RegExp(
+    `\\b(?:assigned to|owner[:\\s]+|action(?:\\s+item)?\\s+for)\\s*${nameAlt}\\b`,
+    "i"
+  ).test(text);
+}
+
+/**
+ * Someone speaking to the user: "Milos, can you…", "@Milos please…", "Hey Milos".
+ */
+export function addressesMe(text: string, myName: string): boolean {
+  const nameAlt = myNamePattern(myName);
+  if (!nameAlt || !text.trim()) return false;
+  const patterns = [
+    new RegExp(`@${nameAlt}\\b`, "i"),
+    new RegExp(
+      `\\b${nameAlt}\\b[,:]?\\s+(?:can|could|will|would|do)\\s+you\\b`,
+      "i"
+    ),
+    new RegExp(`\\b${nameAlt}\\b\\s*[,:]\\s*(?:please|pls)\\b`, "i"),
+    new RegExp(`\\b(?:hey|hi|hello)\\s+${nameAlt}\\b`, "i"),
+  ];
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+/**
+ * The user's own speaker turn stating what he will do — e.g.
+ * "Milos: I will finish the remaining Canvas screens."
+ *
+ * The commitment must be attributed to the user's turn. Bare first-person text
+ * ("I'll send it") proves nothing, because the speaker may be anyone.
+ */
+export function myOwnCommitmentTurn(text: string, myName: string): boolean {
+  const nameAlt = myNamePattern(myName);
+  if (!nameAlt || !text.trim()) return false;
+  const turn = new RegExp(`^[\\s>*-]*${nameAlt}\\s*[:\\-—–]\\s*(.+)$`, "im");
+  const match = text.match(turn);
+  return match ? firstPersonCommitment(match[1] ?? "") : false;
+}
+
+/**
+ * Matt Pettit (PM) or Lucas Saeed (Design Lead) telling the user what they
+ * expect, or handing him new information.
+ */
+export function stakeholderDirectedAtMe(text: string, myName: string): boolean {
+  if (!text.trim() || !matchesStakeholder(text)) return false;
+  if (addressesMe(text, myName) || assignsWorkToMe(text, myName)) return true;
+
+  const speakerTurn = text.match(
+    /^[\s>*-]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[:\-—–]\s*(.+)$/m
+  );
+  if (!speakerTurn) return false;
+
+  const speaker = speakerTurn[1] ?? "";
+  const said = speakerTurn[2] ?? "";
+  if (!matchesStakeholder(speaker, undefined, { authorField: true })) return false;
+  // A stakeholder naming a different actor is an instruction to that person.
+  if (namedForeignActor(said, myName)) return false;
+
+  if (namedMeAsActor(said, myName)) return true;
+  // Expectation or handover aimed at "you" inside the stakeholder's own turn.
+  return /\b(?:please|can you|could you|i need you to|i want you to|you (?:should|need to|must|can)|heads up|fyi|for your awareness)\b/i.test(
+    said
+  );
+}
+
+/**
+ * Another person's speaker turn committing to the work — "Sofija: I'll send
+ * the credentials". The same sentence without the speaker prefix proves
+ * nothing, which is exactly why first-person text alone is never trusted.
+ */
+export function foreignCommitmentTurn(text: string, myName: string | null): boolean {
+  if (!text.trim()) return false;
+  const turn = text.match(
+    /^[\s>*-]*([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]+)?)\s*[:\-—–]\s*(.+)$/m
+  );
+  if (!turn) return false;
+
+  const speaker = turn[1] ?? "";
+  if (NON_PERSON_ACTORS.has(speaker.split(/\s+/)[0]?.toLowerCase() ?? "")) return false;
+  if (myName) {
+    const selected = myOwnerFilter(myName);
+    if (selected && personMatchesFilter(speaker, selected, myName)) return false;
+  }
+  return firstPersonCommitment(turn[2] ?? "");
+}
+
+function usableQuotes(
+  quotes: TaskOwnershipSignals["evidenceQuotes"]
+): string[] {
+  if (!quotes?.length) return [];
+  return quotes
+    .map((quote) => (typeof quote === "string" ? quote.trim() : ""))
+    .filter((quote) => quote.length > 0);
+}
+
+/**
+ * Source-backed proof that the work is the user's. Accepts only verbatim
+ * source quotes — see `TaskOwnershipSignals.evidenceQuotes`.
+ */
+export function evidenceProvesMine(
+  quotes: readonly (string | null | undefined)[] | null | undefined,
+  myName: string | null
+): boolean {
+  if (!myName?.trim()) return false;
+  return usableQuotes(quotes).some(
+    (quote) =>
+      addressesMe(quote, myName) ||
+      myOwnCommitmentTurn(quote, myName) ||
+      stakeholderDirectedAtMe(quote, myName) ||
+      assignsWorkToMe(quote, myName)
+  );
+}
+
 /**
  * Classify whether a task belongs on the user's brief.
- * - mine: explicit owner/assignee match, or first-person / my-name-as-actor signal
- * - other: explicit other owner/assignee, or text attributes the action to someone else
- * - unclear: no owner and no reliable signal (never force into ranked priorities)
+ *
+ * A task is "mine" only when a real source signal says so:
+ *   1. the resolved `owner` field, or the Jira assignee;
+ *   2. a source quote addressed to the user;
+ *   3. the user's own speaker turn committing to the work;
+ *   4. a Matt Pettit / Lucas Saeed instruction or handover directed at the user;
+ *   5. explicit assignment wording inside a source quote.
+ *
+ * `title` / `reason` / `nextAction` are LLM-authored, so they can only ever
+ * disown a task (naming a different actor) — never claim it. Everything
+ * unproven stays "unclear" rather than being forced onto the user.
  */
 export function classifyTaskOwnership(
   task: TaskOwnershipSignals,
@@ -234,15 +381,26 @@ export function classifyTaskOwnership(
     return personMatchesFilter(task.jiraAssignee, selected, myName) ? "mine" : "other";
   }
 
-  const blob = [task.title, task.reason, task.nextAction].filter(Boolean).join("\n");
-  const foreign = namedForeignActor(blob, myName);
-  if (foreign) return "other";
+  const quotes = usableQuotes(task.evidenceQuotes);
+  const llmProse = [task.title, task.reason, task.nextAction].filter(Boolean).join("\n");
 
-  if (firstPersonCommitment(blob)) return "mine";
-  if (namedMeAsActor(blob, myName)) return "mine";
+  // Positive source proof wins: a quote may name a third party and still be
+  // addressed to the user ("Milos, can you chase Sofija for the credentials").
+  if (evidenceProvesMine(quotes, myName)) return "mine";
 
-  // A bare mention of the user's name (e.g. "according to Milos design") is
-  // not ownership. Leave unattributed work as unclear — never force it.
+  // Attribution to a named third party disowns the task, from either text.
+  if (namedForeignActor(llmProse, myName)) return "other";
+  if (
+    quotes.some(
+      (quote) =>
+        namedForeignActor(quote, myName) || foreignCommitmentTurn(quote, myName)
+    )
+  ) {
+    return "other";
+  }
+
+  // No owner, no assignee, no source quote proving this is the user's work.
+  // "Milos needs to…" written by the model is not evidence — stay unclear.
   return "unclear";
 }
 

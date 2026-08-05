@@ -547,10 +547,9 @@ function ProgressRow({
         {(active || failed) && detail ? (
           <p
             className={cn(
-              "mt-0.5 truncate text-sm leading-snug",
+              "mt-0.5 text-sm leading-snug",
               failed ? "text-danger/90" : "text-muted"
             )}
-            title={detail}
           >
             {detail}
           </p>

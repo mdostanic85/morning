@@ -2,6 +2,9 @@ import "server-only";
 import { runLlmJob } from "@/lib/llm/router";
 import {
   buildTaskQaUserPrompt,
+  TASK_CHAT_MAX_KNOWLEDGE,
+  TASK_CHAT_MAX_SOURCE_BODY_CHARS,
+  TASK_CHAT_MAX_SOURCES,
   taskQaOutputSchema,
   type TaskQaContextSource,
   type TaskQaInput,
@@ -23,8 +26,9 @@ import {
 import { textMentionsPerson } from "@/lib/granola/personalKnowledge";
 import { isTranscriptSource } from "@/lib/tasks/sourceAuthority";
 
-const MAX_CONTEXT_SOURCES = 60;
-const MAX_SOURCE_BODY_LENGTH = 24_000;
+const MAX_CONTEXT_SOURCES = TASK_CHAT_MAX_SOURCES;
+const MAX_SOURCE_BODY_LENGTH = TASK_CHAT_MAX_SOURCE_BODY_CHARS;
+const MAX_CONTEXT_KNOWLEDGE = TASK_CHAT_MAX_KNOWLEDGE;
 const TASK_CHAT_STATUS_ORDER: Record<WorkTaskStatus, number> = {
   now: 0,
   next: 1,
@@ -399,7 +403,7 @@ export async function answerGeneralWorkQuestion(question: string): Promise<TaskQ
           )) ||
         (myEmail && item.sourceAuthor?.toLowerCase().includes(myEmail))
     )
-    .slice(0, 100)
+    .slice(0, MAX_CONTEXT_KNOWLEDGE)
     .map((item) => ({
       id: `knowledge-${item.id}`,
       type: item.type,
@@ -493,7 +497,7 @@ export async function answerTaskQuestion(
         (item.projectId != null && relevantProjectIds.has(item.projectId)) ||
         (item.sourceItemId != null && relevantSourceIds.has(item.sourceItemId))
     )
-    .slice(0, 100)
+    .slice(0, MAX_CONTEXT_KNOWLEDGE)
     .map((item) => ({
       id: `knowledge-${item.id}`,
       type: item.type,

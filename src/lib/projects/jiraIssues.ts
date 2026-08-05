@@ -33,6 +33,7 @@ export async function fetchJiraIssuesForProject(
         dueDate: parsed.dueDate,
         url: issue.url ?? null,
         updatedAt: issue.sourceDate,
+        createdAt: typeof issue.metadata?.created === "string" ? issue.metadata.created : null,
         excerpt: jiraBodyExcerpt(issue.body),
       };
     });

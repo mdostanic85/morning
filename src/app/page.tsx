@@ -13,9 +13,8 @@ import {
   classifyTaskOwnership,
   filterQueueByOwners,
   myOwnerFilter,
-  taskEligibleForBriefPriority,
 } from "@/lib/filters/ownerFilter";
-import { filterTasksForTodayView } from "@/lib/tasks/taskVisibility";
+import { partitionTasksByOwnership } from "@/lib/tasks/taskVisibility";
 import {
   latestSignalDate,
   needsInputItemIsRelevant,
@@ -85,6 +84,7 @@ export default async function TodayPage() {
                 title: task.title,
                 reason: task.reason,
                 nextAction: task.nextAction,
+                evidenceQuotes: task.evidence.map((item) => item.quote),
               },
               myName
             );
@@ -139,22 +139,12 @@ export default async function TodayPage() {
         CONNECTED_PROVIDER_LABEL[providerRun.provider as ConnectionProvider] ?? providerRun.provider
     );
 
-  // Never drop valid tasks because priorityScore was copied into confidence.
-  // Brief cards only use work that is clearly owned — never pad with unclear/
-  // someone-else's meeting items.
-  const allOpenTasks = filterTasksForTodayView(
+  // Main list carries only work a real source proves is the user's. Unowned
+  // work is partitioned out so it never pads the brief — and is not shown on
+  // Today (claim/dismiss happens from the task page if needed).
+  const { mine: allOpenTasks } = partitionTasksByOwnership(
     OPEN_QUEUE_STATUSES.flatMap((status) => queue[status]),
     myName
-  ).filter((task) =>
-    taskEligibleForBriefPriority(
-      {
-        owner: task.owner,
-        title: task.title,
-        reason: task.reason,
-        nextAction: task.nextAction,
-      },
-      myName
-    )
   );
   // Live queue wins over a cached briefing. Briefing only enriches the same
   // task — otherwise a stale focusItems[0] can hide the real top priority.

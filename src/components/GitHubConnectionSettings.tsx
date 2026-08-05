@@ -7,7 +7,7 @@ import { Button } from "@heroui/react/button";
 import { Input } from "@heroui/react/input";
 import { Select } from "@heroui/react/select";
 import { ListBox } from "@heroui/react/list-box";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface GitHubRepositoryOption {
@@ -254,16 +254,15 @@ export function GitHubConnectionSettings({
  setRepository(fromKey(key));
  setBranch("");
  }}
- className="w-full"
+ fullWidth
+ variant="secondary"
  aria-label="GitHub repository"
  >
- <Select.Trigger className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-border bg-background/70 px-3 text-sm shadow-none">
- <Select.Value className="flex flex-1 text-left">
+ <Select.Trigger className="h-(--control-height)">
+ <Select.Value>
  {(state) => (state.isPlaceholder ? "Select repository" : state.defaultChildren)}
  </Select.Value>
- <Select.Indicator className="text-muted">
- <ChevronDownIcon className="size-4" />
- </Select.Indicator>
+ <Select.Indicator />
  </Select.Trigger>
  <Select.Popover
  placement="bottom start"
@@ -309,11 +308,12 @@ export function GitHubConnectionSettings({
  selectedKey={toKey(branch)}
  onSelectionChange={(key) => setBranch(fromKey(key))}
  isDisabled={!repository || loadingBranches}
- className="w-full"
+ fullWidth
+ variant="secondary"
  aria-label="GitHub branch"
  >
- <Select.Trigger className="flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-border bg-background/70 px-3 text-sm shadow-none">
- <Select.Value className="flex flex-1 text-left">
+ <Select.Trigger className="h-(--control-height)">
+ <Select.Value>
  {(state) =>
  state.isPlaceholder
  ? loadingBranches
@@ -322,9 +322,7 @@ export function GitHubConnectionSettings({
  : state.defaultChildren
  }
  </Select.Value>
- <Select.Indicator className="text-muted">
- <ChevronDownIcon className="size-4" />
- </Select.Indicator>
+ <Select.Indicator />
  </Select.Trigger>
  <Select.Popover
  placement="bottom start"

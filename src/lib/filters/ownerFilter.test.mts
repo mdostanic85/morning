@@ -120,7 +120,8 @@ describe("classifyTaskOwnership", () => {
     );
   });
 
-  it("marks first-person commitments as mine", () => {
+  it("ignores a first-person commitment that only exists in LLM prose", () => {
+    // "I will …" in a paraphrase proves nothing: the speaker may be anyone.
     assert.equal(
       classifyTaskOwnership(
         {
@@ -128,6 +129,74 @@ describe("classifyTaskOwnership", () => {
           title: "Finish remaining Content File Manager screens",
           reason: "I will finish the remaining screens today",
           nextAction: "Ship the last canvas screens",
+        },
+        "Milos Dostanic"
+      ),
+      "unclear"
+    );
+  });
+
+  it("marks the user's own speaker turn as mine", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "Finish remaining Content File Manager screens",
+          reason: "Canvas conversion was the main priority.",
+          nextAction: "Ship the last canvas screens",
+          evidenceQuotes: [
+            "Milos: I will finish the remaining Canvas screens for UATL-367.",
+          ],
+        },
+        "Milos Dostanic"
+      ),
+      "mine"
+    );
+  });
+
+  it("does not treat someone else's first-person turn as the user's commitment", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "Send CPQ Discord credentials",
+          reason: "Credentials are needed for testing.",
+          nextAction: "Wait for the credentials",
+          evidenceQuotes: ["Sofija: I'll send the Discord credentials today."],
+        },
+        "Milos Dostanic"
+      ),
+      "other"
+    );
+  });
+
+  it("marks a transcript turn addressed to the user as mine", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "Confirm header prominence scope",
+          reason: "Scope for the header change is still open.",
+          nextAction: "Confirm the scope",
+          evidenceQuotes: ["Milos, can you confirm the header scope before Friday?"],
+        },
+        "Milos Dostanic"
+      ),
+      "mine"
+    );
+  });
+
+  it("marks a stakeholder instruction directed at the user as mine", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "Draft part search banner concepts",
+          reason: "Banner concepts were requested in the daily.",
+          nextAction: "Draft the concepts",
+          evidenceQuotes: [
+            "Matt Pettit: Milos, please draft concept images for each module.",
+          ],
         },
         "Milos Dostanic"
       ),
@@ -188,7 +257,7 @@ describe("classifyTaskOwnership", () => {
     );
   });
 
-  it("treats Milos-as-actor phrasing as mine", () => {
+  it("does not let the model's own 'Milos to …' phrasing claim the task", () => {
     assert.equal(
       classifyTaskOwnership(
         {
@@ -197,6 +266,76 @@ describe("classifyTaskOwnership", () => {
           reason: "Milos to confirm the exact scope for UATL-376",
           nextAction: "Confirm scope with James",
         },
+        "Milos Dostanic"
+      ),
+      "unclear"
+    );
+  });
+
+  it("accepts the same assignment wording when it comes from the source", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "Confirm header prominence scope",
+          reason: "Scope for UATL-376 is still open.",
+          nextAction: "Confirm scope with James",
+          evidenceQuotes: ["Action item for Milos: confirm the exact scope for UATL-376."],
+        },
+        "Milos Dostanic"
+      ),
+      "mine"
+    );
+  });
+});
+
+describe("LLM prose never proves ownership (tasks 552 / 535)", () => {
+  it("task 552: 'Milos needs to determine' with an explicit unclear note stays unclear", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "Answer the pricing question",
+          reason:
+            "Milos needs to determine the answer. (Unclear: It's not clear whether Milos is responsible for answering or if another team member should handle the question)",
+          nextAction: "Answer the question",
+        },
+        "Milos Dostanic"
+      ),
+      "unclear"
+    );
+  });
+
+  it("task 535: 'Milos must confirm' with no assigned owner stays unclear", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "Confirm PRD implementation scope",
+          reason: "Milos must confirm if he is to implement the PRD section.",
+          nextAction: "Confirm the scope",
+        },
+        "Milos Dostanic"
+      ),
+      "unclear"
+    );
+    assert.equal(
+      taskEligibleForBriefPriority(
+        {
+          owner: null,
+          title: "Confirm PRD implementation scope",
+          reason: "Milos must confirm if he is to implement the PRD section.",
+        },
+        "Milos Dostanic"
+      ),
+      false
+    );
+  });
+
+  it("keeps Jira assignee authoritative even when prose is silent", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        { owner: null, title: "UATL-376", jiraAssignee: "Milos Dostanic" },
         "Milos Dostanic"
       ),
       "mine"

@@ -112,19 +112,18 @@ export function JiraStatusDropdown({
  const visual = jiraStatusVisual(loading ? null : jiraStatus);
  const size = buttonSize ?? (embedded ? "sm" : "default");
  const isBusy = loading || pendingMove || disabled;
- const triggerBaseClass =
- size === "sm"
- ? "inline-flex items-center justify-center gap-2 rounded-full font-semibold border border-border bg-background/70 text-sm h-9 px-3"
- : "inline-flex items-center justify-center gap-2 rounded-full font-semibold border border-border bg-background/70 text-sm h-11 px-4";
 
  return (
  <>
  <Dropdown>
- <Dropdown.Trigger
+ <Button
+ type="button"
+ variant="outline"
+ size={size === "sm" ? "sm" : "lg"}
+ fullWidth
  isDisabled={isBusy}
  className={cn(
- triggerBaseClass,
- "w-full justify-between gap-2",
+ "justify-between",
  visual.triggerClassName,
  className
  )}
@@ -141,7 +140,7 @@ export function JiraStatusDropdown({
  <span className="truncate">{loading ? "Loading…" : visual.label}</span>
  </span>
  <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" aria-hidden />
- </Dropdown.Trigger>
+ </Button>
 
  <Dropdown.Popover
  placement="bottom start"

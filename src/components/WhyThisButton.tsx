@@ -75,7 +75,7 @@ function EvidenceCard({
           </span>
         ) : null}
         {item.sourceType ? <SourceBadge sourceType={item.sourceType} /> : null}
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+        <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
           {item.sourceTitle}
         </span>
       </div>

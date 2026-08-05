@@ -10,6 +10,7 @@
 
 import { cleanJiraText } from "@/lib/connectors/jiraText";
 import type { ConnectorSourceCandidate } from "@/lib/connectors/types";
+import { assignmentEvidenceFromJiraChangelog } from "@/lib/connectors/jiraAssignmentEvidence";
 
 // Local rather than imported from `../parse`, which is server-only: this module
 // must stay importable from a plain unit test.
@@ -53,6 +54,12 @@ export function jiraIssueToCandidate(
   const priority = asRecord(fields.priority);
   const assignee = asRecord(fields.assignee);
   const reporter = asRecord(fields.reporter);
+  const currentAssignee =
+    typeof assignee?.displayName === "string" ? assignee.displayName : null;
+  const assignmentEvidence = assignmentEvidenceFromJiraChangelog(
+    issue.changelog,
+    currentAssignee
+  );
   const siteUrl = cloud.url ?? "https://atlassian.net";
   const url = `${siteUrl}/browse/${key}`;
   // Some tools return comments under `fields.comment.comments`, others hoist
@@ -80,7 +87,7 @@ export function jiraIssueToCandidate(
       `URL: ${url}`,
       `Status: ${typeof status?.name === "string" ? status.name : "unknown"}`,
       `Priority: ${typeof priority?.name === "string" ? priority.name : "unknown"}`,
-      `Assignee: ${typeof assignee?.displayName === "string" ? assignee.displayName : "unknown"}`,
+      `Assignee: ${currentAssignee ?? "unknown"}`,
       `Reporter: ${typeof reporter?.displayName === "string" ? reporter.displayName : "unknown"}`,
       `Due date: ${typeof fields.duedate === "string" ? fields.duedate : "none"}`,
       "",
@@ -111,6 +118,12 @@ export function jiraIssueToCandidate(
           ? (asRecord(status?.statusCategory)?.key as string)
           : null,
       priority: typeof priority?.name === "string" ? priority.name : null,
+      assignee: currentAssignee,
+      // `created` is what separates a genuinely new assignment from a comment
+      // that merely bumped `updated` on work already owned.
+      created: typeof fields.created === "string" ? fields.created : null,
+      updated: typeof fields.updated === "string" ? fields.updated : null,
+      ...(assignmentEvidence ?? {}),
       transport: "mcp",
       involvement: "assignee",
     },

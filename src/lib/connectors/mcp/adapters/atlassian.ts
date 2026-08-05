@@ -17,6 +17,7 @@ const JIRA_ISSUE_FIELDS = [
   "assignee",
   "reporter",
   "duedate",
+  "created",
   "updated",
   "comment",
 ];
@@ -36,6 +37,17 @@ interface AtlassianResource {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function needsRecentAssignmentHistory(issue: Record<string, unknown>, nowMs = Date.now()): boolean {
+  const fields = asRecord(issue.fields) ?? issue;
+  if (!asRecord(fields.assignee)) return false;
+  const updated = typeof fields.updated === "string" ? Date.parse(fields.updated) : Number.NaN;
+  if (!Number.isFinite(updated) || nowMs - updated < 0 || nowMs - updated > 72 * 60 * 60 * 1000) {
+    return false;
+  }
+  const created = typeof fields.created === "string" ? Date.parse(fields.created) : Number.NaN;
+  return !Number.isFinite(created) || nowMs - created > 72 * 60 * 60 * 1000;
 }
 
 function stripHtml(html: string): string {
@@ -159,7 +171,32 @@ export async function fetchJiraIssuesViaMcp(input?: {
       .map(asRecord)
       .filter((item): item is Record<string, unknown> => !!item);
 
-    return issues
+    const issuesWithAssignmentHistory = await Promise.all(
+      issues.map(async (issue) => {
+        if (!needsRecentAssignmentHistory(issue)) return issue;
+        const key = String(issue.key ?? issue.issueKey ?? "");
+        if (!key) return issue;
+        try {
+          const detailRaw = await callMcpTool(client, "getJiraIssue", {
+            cloudId: cloud.id,
+            issueIdOrKey: key,
+            fields: JIRA_ISSUE_FIELDS,
+            expand: "changelog",
+            updateHistory: false,
+            responseContentFormat: "markdown",
+          });
+          const detailPayload = parseToolPayload(detailRaw);
+          const detailRecord = asRecord(detailPayload);
+          return asRecord(detailRecord?.issue) ?? detailRecord ?? issue;
+        } catch {
+          // A missing expansion must not fail the read-only Jira sync. The
+          // persisted first-seen fallback can still detect later handovers.
+          return issue;
+        }
+      })
+    );
+
+    return issuesWithAssignmentHistory
       .map((issue) => jiraIssueToCandidate(issue, cloud))
       .filter((item): item is ConnectorSourceCandidate => item != null);
   });

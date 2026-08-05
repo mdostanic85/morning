@@ -339,13 +339,19 @@ export function sourceAuthorityScoreBoost(
     url?: string | null;
     metadata?: Record<string, unknown> | null;
   }[],
-  options?: { prdPageUrls?: string[]; attendance?: AttendanceContext }
+  options?: {
+    prdPageUrls?: string[];
+    attendance?: AttendanceContext;
+    /** Injectable clock for stable scenario fixtures; defaults to Date.now(). */
+    nowMs?: number;
+  }
 ): { score: number; notes: string[]; forceInclude: boolean } {
   if (sources.length === 0) return { score: 0, notes: [], forceInclude: false };
 
   let score = 0;
   const notes: string[] = [];
   const prdPageUrls = options?.prdPageUrls ?? [];
+  const nowMs = options?.nowMs ?? Date.now();
   let forceInclude = false;
 
   const transcripts = sources.filter((source) => isTranscriptSource(source));
@@ -355,7 +361,11 @@ export function sourceAuthorityScoreBoost(
 
     if (options?.attendance) {
       const attendedRecently = transcripts.some((source) =>
-        isRecentAttendedTranscript(source, options.attendance as AttendanceContext)
+        isRecentAttendedTranscript(
+          source,
+          options.attendance as AttendanceContext,
+          nowMs
+        )
       );
       if (attendedRecently) {
         score += ATTENDED_TRANSCRIPT_COMMITMENT_BOOST;
@@ -377,7 +387,7 @@ export function sourceAuthorityScoreBoost(
 
     const newestTranscript = Math.max(...transcripts.map(sourceTime));
     if (newestTranscript > 0) {
-      const ageHours = (Date.now() - newestTranscript) / (1000 * 60 * 60);
+      const ageHours = (nowMs - newestTranscript) / (1000 * 60 * 60);
       if (ageHours <= 48) {
         score += 140;
         notes.push("Fresh transcript in last 48h");

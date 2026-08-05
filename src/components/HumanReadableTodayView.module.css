@@ -361,6 +361,15 @@
   line-height: 1.58;
 }
 
+/* Shown only when the action is not backed by the evidence beside it. */
+.brief-pillar-action p.brief-action-warning {
+  margin-top: 0.55rem;
+  color: var(--danger);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
 .brief-pillar ul {
   display: grid;
   gap: 0.55rem;

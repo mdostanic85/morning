@@ -54,7 +54,7 @@ const GROQ_FAST = "openai/gpt-oss-20b";
 const GROQ_VISION = "qwen/qwen3.6-27b";
 const OPENAI_MINI = "gpt-4.1-mini";
 const OPENAI_FULL = "gpt-4.1";
-const ANTHROPIC_SONNET = "claude-3-7-sonnet-latest";
+const ANTHROPIC_SONNET = "claude-sonnet-4-5";
 
 const GROQ_FAST_FALLBACK: ModelConfig = {
   provider: "groq",
@@ -99,9 +99,15 @@ const HEAVY_TEXT_FALLBACKS: ModelConfig[] = [
 ];
 
 /**
- * Groq-first for text jobs (GPT-OSS 120B → 20B), then other clouds only when active.
- * Inactive providers are never attempted — if only Groq is on, all text jobs stay on Groq.
- * OpenAI is also used for embeddings only when enabled. Jira projects sync from MCP.
+ * Hybrid routing. Groq (GPT-OSS 120B → 20B) is the cheap default for
+ * high-volume jobs, while the decision- and quality-sensitive jobs
+ * (priority_planning, focus_action_plan, hydra_report, task_qa,
+ * delivery_sync_review) run on Claude Sonnet primary with Groq as the first
+ * fallback — so if Anthropic is off/unavailable, they stay fully on Groq.
+ * today_briefing is Groq-primary because Today renders deterministic
+ * DailyBriefV2; the LLM briefing is supplementary only.
+ * Inactive providers are never attempted. OpenAI is also used for embeddings
+ * only when enabled. Jira projects sync from MCP.
  */
 export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
   task_extraction: {
@@ -151,26 +157,36 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
       { ...OPENAI_MINI_FALLBACK, maxTokens: 2048 },
     ],
   },
+  // Sonnet primary (large evidence bundle, mixed SR/EN); Groq keeps it running
+  // if Anthropic is off or fails.
   task_qa: {
-    provider: "groq",
-    model: GROQ_ACCURATE,
+    provider: "anthropic",
+    model: ANTHROPIC_SONNET,
     maxTokens: 4096,
     fallbacks: [
+      { ...GROQ_ACCURATE_FALLBACK },
       { ...GROQ_FAST_FALLBACK },
       OPENAI_MINI_FALLBACK,
     ],
   },
   priority_planning: {
-    provider: "groq",
-    model: GROQ_ACCURATE,
+    provider: "anthropic",
+    model: ANTHROPIC_SONNET,
     maxTokens: 4096,
-    fallbacks: HEAVY_TEXT_FALLBACKS,
+    fallbacks: [{ ...GROQ_ACCURATE_FALLBACK }, ...HEAVY_TEXT_FALLBACKS],
   },
+  // Today page renders deterministic DailyBriefV2; this job only fills the
+  // supplementary summary/highlights file. Groq first keeps finalize fast;
+  // Sonnet remains the first fallback when Groq is off or fails.
   today_briefing: {
     provider: "groq",
     model: GROQ_ACCURATE,
     maxTokens: 4096,
-    fallbacks: HEAVY_TEXT_FALLBACKS,
+    fallbacks: [
+      { ...ANTHROPIC_FALLBACK, maxTokens: 4096 },
+      { ...GROQ_FAST_FALLBACK, maxTokens: 4096 },
+      OPENAI_FULL_FALLBACK,
+    ],
   },
   daily_memory: {
     provider: "groq",
@@ -192,10 +208,10 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
     ],
   },
   focus_action_plan: {
-    provider: "groq",
-    model: GROQ_ACCURATE,
+    provider: "anthropic",
+    model: ANTHROPIC_SONNET,
     maxTokens: 4096,
-    fallbacks: HEAVY_TEXT_FALLBACKS,
+    fallbacks: [{ ...GROQ_ACCURATE_FALLBACK }, ...HEAVY_TEXT_FALLBACKS],
   },
   figma_frame_discovery: {
     provider: "openai",
@@ -207,30 +223,31 @@ export const MODEL_CONFIG: Record<JobType, ModelConfig> = {
       { ...GROQ_FAST_FALLBACK, maxTokens: 2048 },
     ],
   },
-  // Figma audits attach a screenshot. Prefer a vision model first; text-only
-  // fallbacks still run because the router strips images for them (metadata +
-  // design context remain in the prompt).
+  // Figma audits attach a screenshot. Sonnet reads the image straight from its
+  // URL (buildAnthropicUserContent), so it leads; Groq's Qwen vision model is
+  // the first fallback, then text-only configs still run because the router
+  // strips images for them (metadata + design context remain in the prompt).
   delivery_sync_review: {
-    provider: "groq",
-    model: GROQ_VISION,
-    // Qwen is a thinking model: hidden reasoning tokens still count against the
-    // budget, so leave headroom for the reasoning pass plus the full report.
+    provider: "anthropic",
+    model: ANTHROPIC_SONNET,
     maxTokens: 8192,
     fallbacks: [
+      // Qwen is a thinking model: hidden reasoning tokens still count against
+      // the budget, so keep the 8192 headroom for the reasoning pass.
+      { provider: "groq", model: GROQ_VISION, maxTokens: 8192 },
       { provider: "groq", model: GROQ_ACCURATE, maxTokens: 4096 },
       { ...GROQ_FAST_FALLBACK, maxTokens: 4096 },
       { provider: "openai", model: OPENAI_FULL, maxTokens: 3072 },
-      { provider: "anthropic", model: ANTHROPIC_SONNET, maxTokens: 4096 },
     ],
   },
   hydra_report: {
-    provider: "groq",
-    model: GROQ_ACCURATE,
+    provider: "anthropic",
+    model: ANTHROPIC_SONNET,
     maxTokens: 6144,
     fallbacks: [
+      { ...GROQ_ACCURATE_FALLBACK, maxTokens: 6144 },
       { ...GROQ_FAST_FALLBACK, maxTokens: 6144 },
       OPENAI_MINI_FALLBACK,
-      { ...ANTHROPIC_FALLBACK, maxTokens: 6144 },
     ],
   },
   // Gemini appears here and nowhere else: this is the only job whose input is

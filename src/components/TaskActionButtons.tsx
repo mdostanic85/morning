@@ -171,18 +171,20 @@ export function TaskActionButtons({
 
   const statusMenu = hasTask ? (
     <Dropdown>
-      <Dropdown.Trigger
+      <Button
+        type="button"
+        variant="outline"
+        size={buttonSize}
+        fullWidth={isFocusLayout}
         isDisabled={isLoading}
         className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-full border border-border bg-background/70 font-semibold text-sm",
-          buttonSize === "sm" ? "h-11 px-3" : "h-11 px-4",
+          "h-(--control-height) justify-between md:h-(--control-height)",
           embeddedBtnClass,
-          isFocusLayout && "h-12 w-full text-[15px]"
         )}
       >
-        Update status
+        <span>Update status</span>
         <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" aria-hidden />
-      </Dropdown.Trigger>
+      </Button>
       <Dropdown.Popover
         placement="bottom start"
         offset={6}

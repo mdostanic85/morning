@@ -103,6 +103,159 @@ export function extractJiraKeysFromText(text: string): string[] {
 }
 
 /**
+ * Short project nicknames spoken without a Jira key — e.g. "SPEC", "BOM-SPEC".
+ * Used to pack meeting mentions into the existing open task for that work
+ * instead of spawning a parallel fragment.
+ */
+const GENERIC_NAMED_WORK_LABELS = new Set([
+  "API",
+  "UI",
+  "UX",
+  "PDF",
+  "URL",
+  "HTML",
+  "CSS",
+  "JSON",
+  "HTTP",
+  "HTTPS",
+  "SQL",
+  "AWS",
+  "GCP",
+  "SDK",
+  "CLI",
+  "WIP",
+  "MVP",
+  "KPI",
+  "OKR",
+  "TODO",
+  "FAQ",
+  "CEO",
+  "CTO",
+  "PM",
+  "QA",
+  "CI",
+  "CD",
+  "LLM",
+  "AI",
+  "PR",
+  "PRD",
+  "ASC",
+  "BOM",
+  "CSV",
+  "XML",
+  "PNG",
+  "JPG",
+  "SVG",
+  "FIG",
+  "DEV",
+  "PROD",
+  "STG",
+  "UAT",
+  "UUID",
+  "UTC",
+  "GMT",
+  "EST",
+  "PST",
+  "SYNC",
+  "DAILY",
+  "NOTES",
+  "DESIGN",
+  "REVIEW",
+  "UPDATE",
+  "CREATE",
+  "FINISH",
+  "SHIP",
+  "FIX",
+  "HELP",
+  "NEXT",
+  "STEP",
+  "STEPS",
+  "TEAM",
+  "USER",
+  "USERS",
+  "FILE",
+  "FILES",
+  "PAGE",
+  "PAGES",
+  "LINK",
+  "LINKS",
+  "TASK",
+  "TASKS",
+  "ITEM",
+  "ITEMS",
+  "WORK",
+  "DATA",
+  "TEST",
+  "TESTS",
+  "FIGMA",
+  "JIRA",
+  "GITHUB",
+  "DISCORD",
+  "GOOGLE",
+  "MEET",
+  "ZOOM",
+  "SLACK",
+]);
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isJiraLikeKey(label: string): boolean {
+  return /^[A-Z][A-Z0-9]+-\d+$/.test(label);
+}
+
+/**
+ * Extract distinctive named work labels from free text (ALL-CAPS nicknames
+ * and hyphenated forms like BOM-SPEC). Only tokens that are already
+ * capitalized in the source count — uppercasing the whole body would turn
+ * every English word into a false label. Filters out Jira keys and generic
+ * acronyms that appear across unrelated work.
+ */
+export function extractNamedWorkLabels(text: string): string[] {
+  const matches =
+    text.match(/\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+){1,3}\b|\b[A-Z]{3,12}\b/g) ?? [];
+  return [
+    ...new Set(
+      matches
+        .map((label) => label.toUpperCase())
+        .filter(
+          (label) =>
+            !isJiraLikeKey(label) &&
+            !GENERIC_NAMED_WORK_LABELS.has(label) &&
+            // Single-segment labels need enough length to be distinctive
+            // (SPEC, CANVAS); hyphenated forms like BOM-SPEC are fine shorter.
+            (label.includes("-") || label.length >= 4)
+        )
+    ),
+  ];
+}
+
+function taskMentionsNamedLabel(task: MergeCandidateTask, label: string): boolean {
+  const haystack = `${task.title}\n${task.reason}\n${task.nextAction}`.toUpperCase();
+  return new RegExp(`\\b${escapeRegExp(label)}\\b`).test(haystack);
+}
+
+/**
+ * When a transcript names a short work label (e.g. SPEC) that uniquely
+ * identifies one open task, that task is the merge target — same strength
+ * as a Jira key match for packing spoken updates onto existing work.
+ */
+export function findTaskByNamedWorkLabel(
+  tasks: MergeCandidateTask[],
+  sourceText: string
+): { task: MergeCandidateTask; label: string } | null {
+  const labels = extractNamedWorkLabels(sourceText);
+  for (const label of labels) {
+    const matches = tasks.filter((task) => taskMentionsNamedLabel(task, label));
+    if (matches.length === 1) {
+      return { task: matches[0], label };
+    }
+  }
+  return null;
+}
+
+/**
  * Map spoken "ticket 367" mentions onto open tasks like UATL-367 when the
  * numeric suffix uniquely identifies one open task.
  */
@@ -228,7 +381,7 @@ export function findTaskByExactTitleMatch(
   );
 }
 
-function significantTokens(text: string): Set<string> {
+export function significantTokens(text: string): Set<string> {
   const tokens = (text.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []).filter(
     (token) => !STOP_WORDS.has(token) && !/^\d+$/.test(token)
   );
@@ -287,6 +440,25 @@ export function isExtractRelevantToTask(input: {
   if (targetKey) {
     if (extractJiraKeysFromText(sourceText).includes(targetKey)) {
       return { relevant: true, reason: `shares Jira key ${targetKey}` };
+    }
+  }
+
+  const sourceLabels = extractNamedWorkLabels(sourceText);
+  for (const label of sourceLabels) {
+    if (
+      taskMentionsNamedLabel(
+        {
+          id: 0,
+          title: target.title,
+          reason: target.reason,
+          nextAction: target.nextAction,
+          status: "later",
+          projectId: null,
+        },
+        label
+      )
+    ) {
+      return { relevant: true, reason: `shares named work label ${label}` };
     }
   }
 
@@ -444,6 +616,15 @@ export function resolveTranscriptMergeTarget(input: {
       }
     }
 
+    const named = findTaskByNamedWorkLabel(existingTasks, sourceText);
+    if (named) {
+      return {
+        taskId: named.task.id,
+        mode: "full",
+        reason: `figma comment named work label ${named.label}`,
+      };
+    }
+
     const threadTaskId =
       typeof source.metadata?.parentLinkedTaskId === "number"
         ? source.metadata.parentLinkedTaskId
@@ -573,6 +754,17 @@ export function resolveTranscriptMergeTarget(input: {
       taskId: match.id,
       mode: "full",
       reason: `jira key ${key}`,
+    };
+  }
+
+  // Named work labels (SPEC, BOM-SPEC, …) — pack spoken updates onto the
+  // unique open task that already carries that nickname, even with no Jira key.
+  const named = findTaskByNamedWorkLabel(existingTasks, sourceText);
+  if (named) {
+    return {
+      taskId: named.task.id,
+      mode: "full",
+      reason: `named work label ${named.label}`,
     };
   }
 

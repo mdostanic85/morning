@@ -67,10 +67,7 @@ export function ThemeSwitcher() {
   }
 
   return (
-    <div
-      className="flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-border bg-surface/75 px-2.5 py-1.5"
-      title={`Use ${dark ? "light" : "dark"} theme`}
-    >
+    <div className="flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-border bg-surface/75 px-2.5 py-1.5">
       <SunIcon
         className={cn("size-3.5", dark ? "text-muted-soft" : "text-sun-foreground")}
         aria-hidden

@@ -1,9 +1,12 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { evidence as evidenceTable } from "@/db/tables";
+import {
+  evidence as evidenceTable,
+  taskCriterionEvidence as taskCriterionEvidenceTable,
+} from "@/db/tables";
 import { isPostgresDatabase } from "@/db/dialect";
-import { fetchAll, fetchReturning, execute, withTransaction, syncRun, syncAll } from "@/db/query";
+import { fetchAll, fetchReturning, withTransaction, syncRun, syncAll } from "@/db/query";
 import type { Evidence, NewEvidence } from "@/domain/evidence";
 
 export function toEvidence(row: typeof evidenceTable.$inferSelect): Evidence {
@@ -53,12 +56,23 @@ export async function getTaskIdForSourceItem(sourceItemId: number): Promise<numb
 }
 
 export async function deleteEvidence(id: number): Promise<void> {
-  await execute(db.delete(evidenceTable).where(eq(evidenceTable.id, id)));
+  await deleteEvidenceByIds([id]);
 }
 
+/**
+ * `task_criterion_evidence.evidence_id` references `evidence.id` with no
+ * ON DELETE CASCADE, so its links must be removed first — otherwise Postgres
+ * rejects the delete (23503) and takes the whole queue rebuild down with it.
+ * A link pointing at removed evidence is dangling by definition.
+ */
 export async function deleteEvidenceByIds(ids: number[]): Promise<number> {
   if (ids.length === 0) return 0;
-  await execute(db.delete(evidenceTable).where(inArray(evidenceTable.id, ids)));
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(taskCriterionEvidenceTable)
+      .where(inArray(taskCriterionEvidenceTable.evidenceId, ids));
+    await tx.delete(evidenceTable).where(inArray(evidenceTable.id, ids));
+  });
   return ids.length;
 }
 
@@ -67,11 +81,23 @@ export async function replaceEvidenceForTaskSource(
   sourceItemId: number,
   items: Omit<NewEvidence, "taskId" | "sourceItemId">[]
 ): Promise<Evidence[]> {
+  const scope = and(
+    eq(evidenceTable.taskId, taskId),
+    eq(evidenceTable.sourceItemId, sourceItemId)
+  );
+
   if (isPostgresDatabase()) {
     return db.transaction(async (tx) => {
-      await tx
-        .delete(evidenceTable)
-        .where(and(eq(evidenceTable.taskId, taskId), eq(evidenceTable.sourceItemId, sourceItemId)));
+      const replaced = await tx.select({ id: evidenceTable.id }).from(evidenceTable).where(scope);
+      if (replaced.length > 0) {
+        await tx.delete(taskCriterionEvidenceTable).where(
+          inArray(
+            taskCriterionEvidenceTable.evidenceId,
+            replaced.map((row) => row.id)
+          )
+        );
+      }
+      await tx.delete(evidenceTable).where(scope);
 
       const rows = await Promise.all(
         items.map((item) =>
@@ -93,10 +119,18 @@ export async function replaceEvidenceForTaskSource(
   }
 
   return withTransaction((tx) => {
-    syncRun(
-      tx.delete(evidenceTable)
-      .where(and(eq(evidenceTable.taskId, taskId), eq(evidenceTable.sourceItemId, sourceItemId)))
-    );
+    const replaced = syncAll(tx.select({ id: evidenceTable.id }).from(evidenceTable).where(scope));
+    if (replaced.length > 0) {
+      syncRun(
+        tx.delete(taskCriterionEvidenceTable).where(
+          inArray(
+            taskCriterionEvidenceTable.evidenceId,
+            replaced.map((row) => row.id)
+          )
+        )
+      );
+    }
+    syncRun(tx.delete(evidenceTable).where(scope));
 
     return items.map((item) => {
       const [row] = syncAll(

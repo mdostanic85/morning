@@ -1,5 +1,6 @@
 import type { SourceType } from "@/domain/sourceItem";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
+import { AppTooltip } from "@/components/AppTooltip";
 
 const SOURCE_TYPE_LABEL: Record<SourceType, string> = {
   manual_transcript: "Transcript",
@@ -43,12 +44,16 @@ const SOURCE_TYPE_TONE: Record<SourceType, AppBadgeTone> = {
   git: "mint",
 };
 
+export function sourceTypeDescription(sourceType: SourceType): string {
+  return SOURCE_TYPE_DESCRIPTION[sourceType] ?? `Source: ${sourceType}`;
+}
+
 export function SourceBadge({ sourceType }: { sourceType: SourceType }) {
   return (
-    <span title={SOURCE_TYPE_DESCRIPTION[sourceType] ?? `Source: ${sourceType}`}>
+    <AppTooltip content={sourceTypeDescription(sourceType)}>
       <AppBadge tone={SOURCE_TYPE_TONE[sourceType] ?? "neutral"} className="font-normal">
         {SOURCE_TYPE_LABEL[sourceType] ?? sourceType}
       </AppBadge>
-    </span>
+    </AppTooltip>
   );
 }

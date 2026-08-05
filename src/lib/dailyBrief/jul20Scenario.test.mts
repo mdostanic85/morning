@@ -5,6 +5,7 @@ import type { SourceItem } from "../../domain/sourceItem.ts";
 import {
   JUL20_EXPECTED_BRIEF,
   JUL20_MY_NAME,
+  JUL20_NOW_MS,
   JUL20_TODAY,
   jul20JiraPending,
   jul20SourceById,
@@ -76,7 +77,8 @@ describe("jul20 daily brief scenario", () => {
       JUL20_TODAY,
       asSourceItems(),
       jul20JiraPending,
-      { myName: JUL20_MY_NAME }
+      { myName: JUL20_MY_NAME },
+      JUL20_NOW_MS
     );
 
     assert.ok(ranked.length >= 2);
@@ -104,6 +106,7 @@ describe("jul20 daily brief scenario", () => {
       meetings: [{ title: "Hydra Daily" }],
       attendance: { myName: JUL20_MY_NAME },
       myName: JUL20_MY_NAME,
+      nowMs: JUL20_NOW_MS,
     });
 
     assert.equal(brief.todayFirst.jiraKey, "UATL-376");
@@ -150,6 +153,7 @@ describe("jul20 daily brief scenario", () => {
       meetings: [{ title: "Hydra Daily" }],
       attendance: { myName: JUL20_MY_NAME },
       myName: JUL20_MY_NAME,
+      nowMs: JUL20_NOW_MS,
     });
 
     assert.notEqual(brief.todayFirst.taskId, foreign.id, "must not promote Sofija's task");

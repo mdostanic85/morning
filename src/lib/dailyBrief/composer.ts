@@ -12,7 +12,7 @@ import {
   issueKeyFromCanonicalKey,
   isJiraDoneMetadata,
 } from "@/lib/tasks/canonicalKey";
-import { claimAwareScoreAdjustment, isFreshOpenJiraUpdate, isNewJiraAssignment } from "@/lib/tasks/claimAwareRanking";
+import { isNewJiraAssignment } from "@/lib/tasks/claimAwareRanking";
 import { rankWorkTasks, type WorkTaskForRanking } from "@/lib/tasks/priorityRank";
 import type { AttendanceContext } from "@/lib/tasks/sourceAuthority";
 import { buildCoverageWarnings, buildMeetingPrep } from "@/lib/dailyBrief/coverage";
@@ -51,6 +51,8 @@ export type ComposeDailyBriefInput = {
   attendance?: AttendanceContext;
   previousBrief?: PreviousBriefMemory | null;
   myName?: string | null;
+  /** Injectable clock for stable scenario fixtures; defaults to Date.now(). */
+  nowMs?: number;
 };
 
 function inputHash(payload: unknown): string {
@@ -190,89 +192,73 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
     )
   );
 
-  let ranked = rankWorkTasks(
+  // Single source of truth for ordering. rankWorkTasks already applies the
+  // claim-aware adjustment (new assignment vs Done vs transcript) exactly once
+  // inside rankWorkTask, then sorts and normalizes. Re-applying it here would
+  // double-count NEW_ASSIGNMENT_BOOST / FRESH_OPEN_UPDATE_BOOST / the Done
+  // penalty on the primary task only (forensic audit WLA-07). Pass myName
+  // through attendance so the adjustment sees the user even when the caller
+  // only supplied `myName`.
+  const rankingAttendance: AttendanceContext | undefined = input.attendance
+    ? { ...input.attendance, myName: input.attendance.myName ?? myName }
+    : myName
+      ? { myName }
+      : undefined;
+  const nowMs = input.nowMs ?? Date.now();
+  const ranked = rankWorkTasks(
     ownedForPriority,
     input.today,
     sourceById as Map<number, SourceItem>,
     input.jiraPending,
-    input.attendance
+    rankingAttendance,
+    nowMs
   );
 
-  // Apply claim-aware adjustments (new assignment vs Done vs transcript).
-  ranked = ranked
-    .map((entry) => {
-      const task = activeTasks.find((item) => item.id === entry.taskId);
-      const key = entry.jiraKey?.toUpperCase() ?? null;
-      const pending = key ? jiraByKey.get(key) : undefined;
-      const jiraSource = key
-        ? input.sources.find(
-            (source) =>
-              source.sourceType === "jira" && source.sourceExternalId?.toUpperCase() === key
-          )
-        : undefined;
-      const jiraStatus =
-        pending?.status ??
-        (typeof jiraSource?.metadata?.status === "string"
-          ? jiraSource.metadata.status
-          : null);
-      const newAssignment = isNewJiraAssignment({
-        jiraUpdatedAt: pending?.updatedAt ?? jiraSource?.sourceDate ?? null,
-        today: input.today,
-        assignee:
-          pending?.assignee ??
-          (typeof jiraSource?.metadata?.assignee === "string"
-            ? jiraSource.metadata.assignee
-            : null),
-        myName: input.myName ?? input.attendance?.myName ?? null,
-        taskOwner: task?.owner ?? null,
-      });
-      const adjustment = claimAwareScoreAdjustment({
-        forceInclude: entry.forceInclude,
-        jiraStatus,
-        newAssignment,
-        freshOpenUpdate: isFreshOpenJiraUpdate({
-          jiraUpdatedAt: pending?.updatedAt ?? jiraSource?.sourceDate ?? null,
-          jiraStatus,
-        }),
-      });
-      return {
-        ...entry,
-        score: entry.score + adjustment.scoreDelta,
-        forceInclude: adjustment.forceInclude,
-        explanation: [...entry.explanation, ...adjustment.notes],
-      };
-    })
-    .sort((a, b) => b.score - a.score);
-
-  const maxScore = ranked[0]?.score ?? 1;
-  ranked = ranked.map((entry) => ({
-    ...entry,
-    normalizedScore: maxScore > 0 ? entry.score / maxScore : 0,
-  }));
-
   const taskById = new Map(ownedForPriority.map((task) => [task.id, task]));
-  const top = ranked.slice(0, 3);
-  const primaryRanked = top[0];
+  // WLA-01: primary is the first ranked task that clears the promotion floor,
+  // not merely the highest-ranked survivor. Rank order ≠ sufficiency.
+  const primaryRanked = ranked.find((entry) => entry.clearsPromotionFloor) ?? null;
   const primaryTask = primaryRanked ? taskById.get(primaryRanked.taskId) : null;
+  const topForAfter = ranked
+    .filter((entry) => entry.taskId !== primaryRanked?.taskId)
+    .slice(0, 2);
 
   // UATL-376 with missing CON-220 → unclear/clarify-first
   let todayFirst: DailyWorkItem;
   const coverageFromPrimary: { code: string; message: string }[] = [];
 
   if (!primaryTask) {
-    todayFirst = {
-      title: "No open owned work",
-      reason: "No active tasks remained after Done reconciliation and ownership filters.",
-      nextAction: "Sync sources or add a manual task with evidence.",
-      doneCriteria: ["At least one owned task with evidence is available."],
-      evidenceIds: [],
-      sourceLinks: [],
-      canonicalKey: null,
-      jiraKey: null,
-      taskId: null,
-      kind: "unknown",
-      statusHint: "unclear",
-    };
+    const hadOwnedCandidates = ownedForPriority.length > 0;
+    todayFirst = hadOwnedCandidates
+      ? {
+          title: "Nothing clearly demands attention first",
+          reason:
+            "Open work exists, but none clears the evidence and urgency bar for today's primary focus.",
+          nextAction: "Review the open queue, or sync sources for a fresher signal.",
+          doneCriteria: [
+            "A task with fresh evidence, an open assignment, a due date, or your explicit pin is available.",
+          ],
+          evidenceIds: [],
+          sourceLinks: [],
+          canonicalKey: null,
+          jiraKey: null,
+          taskId: null,
+          kind: "unknown",
+          statusHint: "unclear",
+        }
+      : {
+          title: "No open owned work",
+          reason: "No active tasks remained after Done reconciliation and ownership filters.",
+          nextAction: "Sync sources or add a manual task with evidence.",
+          doneCriteria: ["At least one owned task with evidence is available."],
+          evidenceIds: [],
+          sourceLinks: [],
+          canonicalKey: null,
+          jiraKey: null,
+          taskId: null,
+          kind: "unknown",
+          statusHint: "unclear",
+        };
   } else {
     const jiraKey = composerJiraKey(primaryTask);
     const jiraSource = jiraKey
@@ -319,8 +305,7 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
     todayFirst = toWorkItem(primaryTask, input.sources, kind, statusHint);
   }
 
-  const afterThat = top
-    .slice(1)
+  const afterThat = topForAfter
     .map((entry) => {
       const task = taskById.get(entry.taskId);
       if (!task) return null;
@@ -354,6 +339,7 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
           reason: task.reason,
           nextAction: task.nextAction,
           jiraAssignee: jiraAssigneeForTask(task),
+          evidenceQuotes: task.evidence.map((item) => item.quote),
         },
         myName
       );
@@ -402,6 +388,7 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
                 reason: task.reason,
                 nextAction: task.nextAction,
                 jiraAssignee: jiraAssigneeForTask(task),
+                evidenceQuotes: task.evidence.map((item) => item.quote),
               },
               myName
             ) === "unclear"
@@ -419,6 +406,10 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
       today: input.today,
       assignee: issue.assignee,
       myName: input.myName ?? input.attendance?.myName ?? null,
+      issueCreatedAt: issue.createdAt,
+      assignmentChangedAt: issue.assignmentChangedAt,
+      previousAssignee: issue.previousAssignee,
+      nowMs,
     })
   );
   const dayChange =
