@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/hydra",
-      "schedule": "*/15 * * * 1-5"
+      "schedule": "0 6 * * 1-5"
     }
   ]
 }
