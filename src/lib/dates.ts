@@ -12,7 +12,7 @@ export function localDateString(date: Date = new Date()): string {
 
 export function dayGreeting(date: Date = new Date()): string {
   const hour = date.getHours();
-  if (hour < 12) return "Good morning";
+  if (hour < 12) return "Hello";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }

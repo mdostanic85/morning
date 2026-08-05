@@ -604,7 +604,7 @@ DB connection kreira direktorijum/fajl ako nedostaje, ali ne pokreće migracije.
 |---|---|---|---|
 | workspaces | Name i timezone za Hydra instance | Parent report_tasks i audit_logs | ensureHydraSetup kreira prvi; Schedule/Hydra čita |
 | report_tasks | Report template, versions, config JSON, delivery settings, active | Opcioni workspace/project; parent schedules/cursors/runs | ensure setup kreira; config endpoint menja; orchestrator čita |
-| task_schedules | Morning/evening, cron/hour/minute/timezone/enabled/lastRunAt | Obavezni report_task | ensure setup kreira; Schedule menja; cron scheduler čita; lastRunAt se trenutno ne ažurira |
+| task_schedules | Start-of-day / end-of-day, cron/hour/minute/timezone/enabled/lastRunAt | Obavezni report_task | ensure setup kreira; Schedule menja; cron scheduler čita; lastRunAt se trenutno ne ažurira |
 | sync_cursors | Provider cursor i lastSuccessfulSyncAt po tasku | Obavezni report_task | Hydra upsertuje timestamp; connectori ga ne koriste kao input |
 | source_documents | Provider/external/version/content hash za canonical source | Obavezni source_item | Hydra normalizacija upsertuje; koristi se za verziju/dedupe |
 | report_runs | Lifecycle, type/date/idempotency, source health, warnings/timings/config/model/error | Obavezni report_task; parent evidence/report/relations | Manual/cron kreira; orchestrator menja; Reports/UI čita |

@@ -1,6 +1,6 @@
 # Worklight — Daily Work Operator
 
-A local-first app for one person that answers a single question each morning:
+A local-first app for one person that answers a single question each day:
 what to do first, why it matters, the next concrete action, and how you'll know
 it's truly done.
 
@@ -99,8 +99,8 @@ planner.
 
 ## Hydra report operator
 
-Hydra is the second, report-oriented pipeline. It creates a morning report at
-09:30 and an evening report at 19:15 on weekdays in `Europe/Belgrade`. Schedules
+Hydra is the second, report-oriented pipeline. It creates a start-of-day report at
+09:30 and an end-of-day report at 19:15 on weekdays in `Europe/Belgrade`. Schedules
 can be enabled, disabled, or rescheduled from the Schedule page, and **Run now**
 starts the same pipeline manually.
 
@@ -113,7 +113,7 @@ the evidence it came from.
 
 - `POST /api/day/sync` — start a sync run
 - `GET /api/day/sync/:id` — poll a run; `POST /api/day/sync/:id/cancel` stops it
-- `POST /api/reports/run` — enqueue a manual morning or evening report run
+- `POST /api/reports/run` — enqueue a manual start-of-day or end-of-day report run
 - `GET /api/reports/run/:id` — poll run state and retrieve its report
 - `POST /api/reports/run/:id/execute` — execute an enqueued run
 - `GET/PATCH /api/hydra/config` — report configuration and source priority

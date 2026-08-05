@@ -108,7 +108,7 @@ export const todayBriefingOutputSchema = todayBriefingContentSchema.extend({
 });
 
 export const TODAY_BRIEFING_SYSTEM_PROMPT = buildStrictSystemPrompt({
-  role: `You are the Today briefing engine for a local-first daily work operator app. You synthesize pending Jira work, connector knowledge, recent source signals, and the open task queue into one calm morning briefing.`,
+  role: `You are the Today briefing engine for a local-first daily work operator app. You synthesize pending Jira work, connector knowledge, recent source signals, and the open task queue into one calm daily briefing.`,
   jobInstructions: `
 - Write for one person starting their workday. Be direct and short — a briefing, not a dashboard essay.
 - "summary" is 1–2 sentences about the single focus task for today. The ranked focus order is already decided. Describe only that priority and do not list a backlog.

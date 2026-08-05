@@ -12,7 +12,7 @@ Use this document as a FigJam / diagramming prompt, or as an onboarding map. It 
 
 Worklight is a **local-first personal app for one person** (product designer/developer).
 
-Every morning it answers four questions:
+Every workday it answers four questions:
 
 1. What should I do first?
 2. Why does it matter?
@@ -26,7 +26,7 @@ Two functional surfaces live in one Next.js app:
 | Surface | Role |
 |---|---|
 | **Worklight** | Daily operator — Sync my day → tasks → Today focus |
-| **Hydra** | Morning/evening report operator — evidence-backed report |
+| **Hydra** | Start-of-day / end-of-day report operator — evidence-backed report |
 
 ---
 

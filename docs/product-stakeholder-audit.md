@@ -1,4 +1,4 @@
-# Product & Stakeholder Audit — Worklight / Morning
+# Product & Stakeholder Audit — Worklight
 
 **Audit date:** July 23, 2026
 **Method:** Code-first. Every major conclusion is labeled:
@@ -12,7 +12,7 @@ The codebase is the source of truth. Where documentation contradicts running cod
 
 ## Executive Summary
 
-Worklight is a local-first personal work operator for a single product designer or developer. Every morning it answers one question: *what should I do first, why does it matter, what is the exact next step, and how will I know it is truly done?*
+Worklight is a local-first personal work operator for a single product designer or developer. Each workday it answers one question: *what should I do first, why does it matter, what is the exact next step, and how will I know it is truly done?*
 
 The application connects read-only to Gmail, Calendar, Jira, Confluence, Granola, GitHub, Figma, Discord, and Google Drive (Gemini notes). It stores raw signals in a local PostgreSQL database, uses a central LLM router to extract tasks and knowledge, applies deterministic scoring rules, and produces a daily briefing with one primary focus and up to two next-up items. A separate subsystem called Hydra generates structured evidence reports on a weekday schedule or on demand.
 
@@ -78,7 +78,7 @@ Without the tool, the user must manually check every tool, mentally prioritize, 
 
 Worklight removes the daily triage cost by doing it automatically: connecting to the tools the operator already uses (read-only), extracting what is actually theirs and actionable, ranking those items deterministically by urgency signals, and presenting exactly one focus with concrete execution guidance. AI enriches the output but never overrides the deterministic evidence layer, and every claim must trace to a source quote or be discarded.
 
-The parallel Hydra subsystem generates structured operational reports (eight sections, evidence-backed, scheduled or on-demand) for a deeper end-of-day or morning review. These run separately from the daily sync but share the same connector infrastructure.
+The parallel Hydra subsystem generates structured operational reports (eight sections, evidence-backed, scheduled or on-demand) for a deeper end-of-day or start-of-day review. These run separately from the daily sync but share the same connector infrastructure.
 
 ---
 
@@ -487,7 +487,7 @@ The hidden tax is cognitive: mentally merging multiple systems before any work. 
 Worklight is a personal daily briefing operator. It connects read-only to the tools already in use, extracts only what is genuinely the operator's responsibility with evidence from the actual source, ranks deterministically by verifiable signals, and presents one focus at a time. Every task carries three mandatory fields: the source quote, the concrete next action, and a checkable done criterion. Items that do not meet the standard are surfaced as ambiguous rather than silently promoted.
 
 ### How it works
-Connect sources once in Settings. Each morning "Sync my day" runs in the background: incremental fetch, AI extraction with evidence verification, deterministic ranking, and a written daily brief. Today shows one focus, up to two next-up items, and an attention rail for ownership resolution. The operator acts and state persists.
+Connect sources once in Settings. Each workday "Sync my day" runs in the background: incremental fetch, AI extraction with evidence verification, deterministic ranking, and a written daily brief. Today shows one focus, up to two next-up items, and an attention rail for ownership resolution. The operator acts and state persists.
 
 ### Why it is valuable
 Priority is no longer an opinion. Evidence is attached automatically. Done criteria are written at task creation time from the actual source. Ambiguity is surfaced rather than hidden. Every claim can be verified against a source.

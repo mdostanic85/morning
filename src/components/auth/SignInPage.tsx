@@ -56,7 +56,7 @@ export function SignInPage() {
 
         <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-center gap-8">
           <div className="max-w-2xl">
-            <p className="eyebrow text-white/55">Your morning, already sorted</p>
+            <p className="eyebrow text-white/55">Your day, already sorted</p>
             <h1 className="mt-3 text-balance font-display text-[2.8rem] font-semibold leading-[0.98] tracking-[-0.055em] xl:text-[3.65rem]">
               Know your next move before the day gets noisy.
             </h1>

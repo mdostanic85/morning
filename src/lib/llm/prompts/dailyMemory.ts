@@ -51,7 +51,7 @@ export const DAILY_MEMORY_SYSTEM_PROMPT = buildStrictSystemPrompt({
 - "completed" should include tasks explicitly marked done, verification reports that support completion, or work the user explicitly states they finished today.
 - "stillOpen" should include unresolved open tasks worth remembering.
 - "waitingOn" should include tasks that are blocked on another person/system.
-- "firstTomorrow" should be one concrete task title the user can act on tomorrow morning. Prefer a high-priority open/next task. Never pick a waiting/blocked task — if the top item is blocked, pick the next actionable one. If nothing is clear, return null.
+- "firstTomorrow" should be one concrete task title the user can act on at the start of the next workday. Prefer a high-priority open/next task. Never pick a waiting/blocked task — if the top item is blocked, pick the next actionable one. If nothing is clear, return null.
 - "risks" should capture loose ends, unclear ownership, failed/cannot-verify reports, or risky git work-in-progress.
 - Keep every list short and useful. This is a personal memory, not a dashboard.
 `,
