@@ -1,55 +1,73 @@
-# Next chat handoff — Auth UI (email + Google)
+# Next chat handoff — Floating expanded navigation review
 
 ## Completed work
 
-- Login page now follows a Going-style auth card (Mobbin): Google, OR,
-  email/password, Continue, Sign up / Sign in toggle.
-- Added `AuthForm` with Clerk Core 3 custom flows (`useSignIn` / `useSignUp`),
-  email verification step after sign-up, clearer Google errors, absolute OAuth
-  redirect URLs.
-- Sign out remains in NavBar (desktop + mobile).
-- `.env.example` updated: enable Email + Password; Google optional.
+- Replaced the centered topbar with a floating expanded desktop sidebar,
+  combining the detached panel treatment from Mobbin's Biosites reference
+  with the expanded hierarchy and explicit sign-out treatment from Superlist.
+- Desktop: labeled links for Today, Projects, and Knowledge; persistent lower
+  section for How we decide, Settings, Theme, and Sign out.
+- Mobile: minimal top strip (logo + theme), bottom tabs for the three primary
+  destinations plus More.
+- More opens a Browse sheet with How we decide, Settings, and Sign out.
+- Settings hub prefixes still mark Settings active (`/settings`, `/schedule`,
+  `/reports`, `/audit`, `/sources`).
+- AppChrome lays out rail + content column; mobile content clears the bottom
+  tab bar.
 
 ## Current repository state
 
-- Branch: verify with `git status` (likely `feat/gemini-public-llm`).
-- Uncommitted auth UI + Clerk wiring.
+- Branch: `feat/gemini-public-llm`, tracking
+  `origin/feat/gemini-public-llm`.
+- Uncommitted changes in `src/components/NavBar.tsx`,
+  `src/components/AppChrome.tsx`, `src/styles/primitives.css`,
+  `src/components/auth/SignOutControl.tsx` (earlier), and this handoff.
 
 ## Unresolved verified issues
 
-- Clerk Dashboard must enable **Email address + Password** for create/login.
-- Google Social connection must be enabled for "Continue with Google".
-- Browser E2E not verified in this chat.
+- Visual review still needed in the browser (desktop floating sidebar +
+  mobile tabs/More).
 
 ## Relevant changed files
 
-- `src/components/auth/AuthForm.tsx` (new)
-- `src/components/auth/SignInPage.tsx`
-- `src/components/auth/GoogleSignInButton.tsx` (removed; replaced by AuthForm)
-- `.env.example`
+- `src/components/NavBar.tsx`
+- `src/components/AppChrome.tsx`
+- `src/styles/primitives.css`
+- `docs/agent-handoffs/next-chat.md`
 
 ## Test results
 
-- `npm run test:auth-routes` — 4 passed
-- `npm run build` — success
+- `npx eslint src/components/NavBar.tsx src/components/AppChrome.tsx` passed.
+- `npm run check:css` passed.
+- `npx tsc --noEmit` remains blocked by pre-existing test-file errors
+  (`TS5097` imports and outdated test fixtures); no edited file has IDE lint
+  errors.
 
 ## Exact next task
 
-In Clerk Dashboard enable Email/Password (and Google if desired), then verify
-sign-up, sign-in, Google, and sign-out in the browser.
+Visually review floating expanded navigation in the running app (desktop and mobile
+widths), then apply only review-driven polish — no IA changes unless the user
+rejects the concept.
 
 ## Scope exclusions
 
-- No other social providers.
-- No task/connector/Hydra changes.
+- Do not redesign page bodies, footer, or auth.
+- Do not change routes, connectors, task model, or LLM behavior.
+- Do not add project-management, team, social, or analytics features.
 
 ## Acceptance criteria
 
-1. User can create an account with email + password.
-2. User can sign in with email + password.
-3. Google works when enabled; otherwise shows a clear error.
-4. Sign out returns to `/sign-in`.
+1. Desktop uses a floating expanded sidebar; primary destinations are not
+   topbar pills.
+2. Mobile uses bottom tabs with a More Browse sheet for secondary destinations.
+3. Today remains the home / dominant daily view.
+4. Every previous nav destination remains reachable.
+5. Settings hub routes still highlight Settings.
+6. Sign out is always visible in the desktop sidebar and in the mobile More
+   sheet.
 
 ## Required input documents
 
-- Clerk Dashboard access.
+- `src/components/NavBar.tsx`
+- `src/components/AppChrome.tsx`
+- `docs/agent-handoffs/next-chat.md`

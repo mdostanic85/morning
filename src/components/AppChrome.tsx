@@ -28,15 +28,19 @@ export function AppChrome({ children }: { children: ReactNode }) {
   return (
     <AskMemoryProvider>
       <WelcomeModal />
-      <NavBar />
-      <main
-        id="main-content"
-        tabIndex={-1}
-        className="today-main mx-auto w-full max-w-content flex-1 outline-none"
-      >
-        {children}
-      </main>
-      <AppFooter />
+      <div className="flex min-h-full flex-1 flex-col md:flex-row">
+        <NavBar />
+        <div className="flex min-w-0 flex-1 flex-col pb-[calc(3.75rem+env(safe-area-inset-bottom))] md:pb-0">
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="today-main mx-auto w-full max-w-content flex-1 outline-none"
+          >
+            {children}
+          </main>
+          <AppFooter />
+        </div>
+      </div>
       <Toast.Provider placement="top" />
     </AskMemoryProvider>
   );

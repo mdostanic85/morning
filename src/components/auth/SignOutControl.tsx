@@ -1,18 +1,18 @@
 "use client";
 
 import { SignOutButton } from "@clerk/nextjs";
-import { Button } from "@heroui/react/button";
+import { LogOutIcon } from "lucide-react";
 
 export function SignOutControl() {
   return (
     <SignOutButton redirectUrl="/sign-in">
-      <Button
+      <button
         type="button"
-        variant="ghost"
-        className="min-h-11 px-3 text-[14px] font-medium text-muted hover:text-foreground"
+        className="flex min-h-11 w-full items-center justify-start gap-3 rounded-xl px-3 text-sm font-medium text-muted transition-colors hover:bg-surface/70 hover:text-foreground"
       >
+        <LogOutIcon className="size-5 shrink-0" aria-hidden />
         Sign out
-      </Button>
+      </button>
     </SignOutButton>
   );
 }
