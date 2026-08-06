@@ -281,6 +281,15 @@ export const connections = pgTable("connections", {
   ...createdAndUpdatedAt,
 });
 
+// Connector tokens, one encrypted row per provider. Kept out of `connections`
+// so the table the UI reads can never accidentally carry a credential.
+export const connectionSecrets = pgTable("connection_secrets", {
+  id: serial("id").primaryKey(),
+  provider: text("provider").notNull().unique(),
+  ciphertext: text("ciphertext").notNull(),
+  ...createdAndUpdatedAt,
+});
+
 export const dailyMemories = pgTable("daily_memories", {
   id: serial("id").primaryKey(),
   date: text("date").notNull(),

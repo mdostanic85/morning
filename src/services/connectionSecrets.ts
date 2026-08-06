@@ -1,6 +1,16 @@
 import "server-only";
-import fs from "node:fs";
-import path from "node:path";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { connectionSecrets as connectionSecretsTable } from "@/db/tables";
+import { execute, fetchOne } from "@/db/query";
+import { decryptSecret, encryptSecret } from "@/lib/crypto/secretBox";
+
+// Connector credentials live in PostgreSQL, encrypted with
+// SECRETS_ENCRYPTION_KEY. They used to sit in data/connection-secrets.json,
+// which silently loses every token on a hosted deploy: the filesystem is
+// read-only and each invocation starts from the deployment image. Run
+// `npm run db:migrate:connection-secrets` once to carry an existing local file
+// over.
 
 export interface ConnectionSecret {
   accessToken?: string;
@@ -11,37 +21,37 @@ export interface ConnectionSecret {
   botToken?: string;
 }
 
-type ConnectionSecretFile = Record<string, ConnectionSecret>;
-
-const secretsPath = path.join(process.cwd(), "data", "connection-secrets.json");
-
-function readSecretsFile(): ConnectionSecretFile {
-  if (!fs.existsSync(secretsPath)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(secretsPath, "utf-8")) as ConnectionSecretFile;
-  } catch {
-    return {};
-  }
-}
-
-function writeSecretsFile(secrets: ConnectionSecretFile) {
-  const dir = path.dirname(secretsPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(secretsPath, JSON.stringify(secrets, null, 2), { mode: 0o600 });
-}
-
 export async function getConnectionSecret(provider: string): Promise<ConnectionSecret | null> {
-  return readSecretsFile()[provider] ?? null;
+  const row = await fetchOne(
+    db
+      .select()
+      .from(connectionSecretsTable)
+      .where(eq(connectionSecretsTable.provider, provider))
+  );
+  if (!row) return null;
+
+  return JSON.parse(decryptSecret(row.ciphertext)) as ConnectionSecret;
 }
 
 export async function saveConnectionSecret(provider: string, secret: ConnectionSecret) {
-  const secrets = readSecretsFile();
-  secrets[provider] = { ...(secrets[provider] ?? {}), ...secret };
-  writeSecretsFile(secrets);
+  // Callers patch individual fields — a token refresh sends only the new access
+  // token and expiry, and must not drop the refresh token stored alongside it.
+  const merged = { ...((await getConnectionSecret(provider)) ?? {}), ...secret };
+  const ciphertext = encryptSecret(JSON.stringify(merged));
+
+  await execute(
+    db
+      .insert(connectionSecretsTable)
+      .values({ provider, ciphertext })
+      .onConflictDoUpdate({
+        target: connectionSecretsTable.provider,
+        set: { ciphertext, updatedAt: new Date().toISOString() },
+      })
+  );
 }
 
 export async function clearConnectionSecret(provider: string) {
-  const secrets = readSecretsFile();
-  delete secrets[provider];
-  writeSecretsFile(secrets);
+  await execute(
+    db.delete(connectionSecretsTable).where(eq(connectionSecretsTable.provider, provider))
+  );
 }

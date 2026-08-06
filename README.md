@@ -176,6 +176,8 @@ Schema lives in `src/db/schema.ts`; each table has a matching CRUD module in
 - `npm run db:generate` — new migration after editing `src/db/schema.ts`
 - `npm run db:migrate` — apply pending migrations against `DATABASE_URL`
 - `npm run db:pg:migrate` — start Docker PostgreSQL and migrate it
+- `npm run db:migrate:connection-secrets` — one-time move of
+  `data/connection-secrets.json` into the encrypted `connection_secrets` table
 - `npm run db:studio` — browse the database in Drizzle Studio
 - `npm run docker:pg:up` / `docker:pg:down` — local PostgreSQL lifecycle
 
@@ -183,9 +185,10 @@ Schema lives in `src/db/schema.ts`; each table has a matching CRUD module in
 
 - Connectors are read-only. Any write to an external system requires an explicit
   confirmation for that specific action, in the moment it happens.
-- API keys are saved to `data/secrets.json` and `data/connection-secrets.json`
-  (both gitignored) and are never returned to the browser except as a masked
-  preview.
+- Connector tokens are stored in the `connection_secrets` table, encrypted with
+  `SECRETS_ENCRYPTION_KEY` (AES-256-GCM). LLM API keys are still saved to
+  `data/secrets.json` (gitignored). Neither is ever returned to the browser
+  except as a masked preview.
 - Google Calendar needs its own read-only connection so its OAuth grant stays
   scoped separately from Gmail.
 - The AI-facing rules the app is built against live in `.cursor/rules/`, and a
