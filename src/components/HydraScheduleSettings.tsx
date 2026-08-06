@@ -17,6 +17,10 @@ interface ScheduleData {
   enabled: boolean;
 }
 
+function scheduleLabel(type: ScheduleData["type"]) {
+  return type === "morning" ? "Start of day" : "End of day";
+}
+
 function asTime(schedule: ScheduleData) {
   return `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}`;
 }
@@ -40,7 +44,7 @@ export function HydraScheduleSettings({ initialSchedules }: { initialSchedules: 
         }),
       });
       if (!response.ok) throw new Error("Schedule could not be saved.");
-      Toast.toast.success(`${schedule.type === "morning" ? "Morning" : "Evening"} schedule saved`);
+      Toast.toast.success(`${scheduleLabel(schedule.type)} schedule saved`);
       router.refresh();
     } catch (error) {
       Toast.toast.danger(error instanceof Error ? error.message : "Schedule could not be saved.");
@@ -58,12 +62,12 @@ export function HydraScheduleSettings({ initialSchedules }: { initialSchedules: 
       {schedules.map((schedule) => (
         <section key={schedule.id} className="app-card p-5 sm:p-6">
           <div className="flex items-center justify-between gap-3">
-            <div><p className="eyebrow">Weekdays</p><Heading level={2} visualLevel={4} className="mt-1 capitalize">{schedule.type} report</Heading></div>
+            <div><p className="eyebrow">Weekdays</p><Heading level={2} visualLevel={4} className="mt-1">{scheduleLabel(schedule.type)} report</Heading></div>
             <Switch
               size="sm"
               isSelected={schedule.enabled}
               onChange={(enabled) => update(schedule.id, { enabled })}
-              aria-label={`${schedule.type} schedule enabled`}
+              aria-label={`${scheduleLabel(schedule.type)} schedule enabled`}
             >
               <Switch.Content>
                 <Switch.Control>

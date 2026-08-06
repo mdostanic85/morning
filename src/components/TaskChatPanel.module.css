@@ -11,15 +11,27 @@
     opacity: 1;
   }
 }
+
 .chat-typing-dot {
   width: 6px;
   height: 6px;
   border-radius: var(--radius-pill);
   background: var(--accent);
   animation: chat-typing-bounce 1.1s ease-in-out infinite;
+}
+
 .chat-composer:focus-within {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Circular send control — HeroUI's global button radius is overridden in
+   heroui.css via the stable `.chat-send` class; this keeps size local. */
+.chat-send {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -27,5 +39,4 @@
     animation: none;
     opacity: 0.6;
   }
-}
 }

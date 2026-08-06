@@ -604,7 +604,7 @@ DB connection kreira direktorijum/fajl ako nedostaje, ali ne pokreće migracije.
 |---|---|---|---|
 | workspaces | Name i timezone za Hydra instance | Parent report_tasks i audit_logs | ensureHydraSetup kreira prvi; Schedule/Hydra čita |
 | report_tasks | Report template, versions, config JSON, delivery settings, active | Opcioni workspace/project; parent schedules/cursors/runs | ensure setup kreira; config endpoint menja; orchestrator čita |
-| task_schedules | Morning/evening, cron/hour/minute/timezone/enabled/lastRunAt | Obavezni report_task | ensure setup kreira; Schedule menja; cron scheduler čita; lastRunAt se trenutno ne ažurira |
+| task_schedules | Start-of-day / end-of-day, cron/hour/minute/timezone/enabled/lastRunAt | Obavezni report_task | ensure setup kreira; Schedule menja; cron scheduler čita; lastRunAt se trenutno ne ažurira |
 | sync_cursors | Provider cursor i lastSuccessfulSyncAt po tasku | Obavezni report_task | Hydra upsertuje timestamp; connectori ga ne koriste kao input |
 | source_documents | Provider/external/version/content hash za canonical source | Obavezni source_item | Hydra normalizacija upsertuje; koristi se za verziju/dedupe |
 | report_runs | Lifecycle, type/date/idempotency, source health, warnings/timings/config/model/error | Obavezni report_task; parent evidence/report/relations | Manual/cron kreira; orchestrator menja; Reports/UI čita |
@@ -663,7 +663,7 @@ erDiagram
 | Kategorija | Primeri | Trajnost |
 |---|---|---|
 | SQLite persistent data | Projects, source body, tasks, evidence, knowledge, profile, connections metadata, memories, kompletan Hydra model | Trajno dok postoji data/worklight.db |
-| Lokalni JSON | connection-secrets, secrets, llm-settings, oauth-states, mcp-oauth, today briefing, queue summary | Trajno na datom filesystemu |
+| Lokalni JSON | secrets, llm-settings, oauth-states, mcp-oauth, today briefing, queue summary | Trajno na datom filesystemu |
 | Browser session | Welcome modal seen | Do kraja browser session-a |
 | React in-memory | Chat, tabovi, dialog, progress, toast state | Do refresh-a/unmount-a |
 | Hardcoded data | Source katalog, Hydra defaults, score weights, limiti | U source kodu |
@@ -675,7 +675,7 @@ Sirovi email, note, ticket, page, PR, message i Figma tekst može biti sačuvan 
 
 ## 10. External integrations
 
-Connector registry je u [src/lib/connectors/registry.ts](../src/lib/connectors/registry.ts). Direct OAuth tokeni i secret-i se čuvaju u data/connection-secrets.json, mode 0600; MCP tokeni i PKCE/discovery podaci u data/mcp-oauth/*.json. connections tabela sadrži status, auth type, scopes i metadata, ne sirove tokene.
+Connector registry je u [src/lib/connectors/registry.ts](../src/lib/connectors/registry.ts). Direct OAuth tokeni i secret-i se čuvaju u connection_secrets tabeli, šifrovani AES-256-GCM ključem iz SECRETS_ENCRYPTION_KEY; MCP tokeni i PKCE/discovery podaci i dalje u data/mcp-oauth/*.json. connections tabela sadrži status, auth type, scopes i metadata, ne sirove tokene.
 
 ### Integracije
 

@@ -120,7 +120,7 @@ Overall: ~95% of the design considered nailed on first pass.
 
 ---
 
-## Priority checklist (Worklight / Morning)
+## Priority checklist (Worklight)
 
 Actionable items clearly attributed to **Lucas on Granola**, ordered by impact on Today:
 

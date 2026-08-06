@@ -243,7 +243,7 @@ function overlayStepLine(
  const failed = providerItems.filter((item) => item.status === "failed").length;
  const total = providerItems.length;
  if (total === 0) return "Preparing source checks…";
- if (finalizeStatus === "running") return "Building your queue and morning briefing…";
+ if (finalizeStatus === "running") return "Building your queue and daily briefing…";
  const activeSource = providerItems.find((item) => item.status === "running");
  if (activeSource) return `Checking ${activeSource.label}`;
  return `${settled} of ${total} checked${failed > 0 ? ` · ${failed} need attention` : ""}`;
@@ -547,10 +547,9 @@ function ProgressRow({
         {(active || failed) && detail ? (
           <p
             className={cn(
-              "mt-0.5 truncate text-sm leading-snug",
+              "mt-0.5 text-sm leading-snug",
               failed ? "text-danger/90" : "text-muted"
             )}
-            title={detail}
           >
             {detail}
           </p>

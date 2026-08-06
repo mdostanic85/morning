@@ -18,7 +18,25 @@ export type TaskForVisibility = {
   reason?: string;
   nextAction?: string;
   jiraAssignee?: string | null;
+  /** Verbatim source quotes — the only free text allowed to prove ownership. */
+  evidence?: readonly { quote: string | null }[];
 };
+
+/**
+ * Ownership inputs for one task. Evidence quotes come from the source, so they
+ * may prove ownership; title/reason/nextAction are LLM-authored and may not.
+ */
+function ownershipSignalsFor(task: TaskForVisibility) {
+  return {
+    owner: task.owner,
+    title: task.title,
+    reason: task.reason,
+    nextAction: task.nextAction,
+    jiraAssignee: task.jiraAssignee,
+    ownershipDecision: task.ownershipDecision,
+    evidenceQuotes: task.evidence?.map((item) => item.quote),
+  };
+}
 
 export type VisibilityReason =
   | "owned"
@@ -56,17 +74,7 @@ export function decideTaskVisibility(
 
   const ownership = isConfirmedOwnership(task)
     ? "mine"
-    : classifyTaskOwnership(
-    {
-      owner: task.owner,
-      title: task.title,
-      reason: task.reason,
-      nextAction: task.nextAction,
-      jiraAssignee: task.jiraAssignee,
-      ownershipDecision: task.ownershipDecision,
-    },
-    myName
-  );
+    : classifyTaskOwnership(ownershipSignalsFor(task), myName);
 
   if (ownership === "other") {
     return {
@@ -130,23 +138,44 @@ export function filterTasksForTodayView<T extends TaskForVisibility>(
   return tasks.filter((task) => decideTaskVisibility(task, myName).visible);
 }
 
+export type TodayOwnershipPartition<T> = {
+  /** Work a real source signal proves is the user's — the main Today list. */
+  mine: T[];
+  /** Visible elsewhere, but nothing proves who owns it — excluded from Today. */
+  noOwner: T[];
+};
+
+/**
+ * Split visible Today work by whether ownership is actually proven.
+ *
+ * Unowned tasks are never silently mixed into the main list. They stay out of
+ * the Today brief until ownership is resolved (claim / mark not mine).
+ */
+export function partitionTasksByOwnership<T extends TaskForVisibility>(
+  tasks: T[],
+  myName: string | null
+): TodayOwnershipPartition<T> {
+  const mine: T[] = [];
+  const noOwner: T[] = [];
+
+  for (const task of tasks) {
+    if (!decideTaskVisibility(task, myName).visible) continue;
+    const ownership = isConfirmedOwnership(task)
+      ? "mine"
+      : classifyTaskOwnership(ownershipSignalsFor(task), myName);
+    if (ownership === "mine") mine.push(task);
+    else noOwner.push(task);
+  }
+
+  return { mine, noOwner };
+}
+
 /** Ranked brief slots (todayFirst / afterThat) — only work clearly owned by the user. */
 export function filterTasksForBriefPriority<T extends TaskForVisibility>(
   tasks: T[],
   myName: string | null
 ): T[] {
   return tasks.filter(
-    (task) =>
-      classifyTaskOwnership(
-        {
-          owner: task.owner,
-          title: task.title,
-          reason: task.reason,
-          nextAction: task.nextAction,
-          jiraAssignee: task.jiraAssignee,
-          ownershipDecision: task.ownershipDecision,
-        },
-        myName
-      ) === "mine"
+    (task) => classifyTaskOwnership(ownershipSignalsFor(task), myName) === "mine"
   );
 }

@@ -10,7 +10,7 @@ import path from "node:path";
 // Resolution order (also relied on by the LLM router): environment variable
 // first, then the local secrets file saved from the Settings page.
 
-export const CLOUD_LLM_PROVIDERS = ["groq", "openai", "anthropic"] as const;
+export const CLOUD_LLM_PROVIDERS = ["groq", "openai", "anthropic", "gemini"] as const;
 export type CloudLlmProvider = (typeof CLOUD_LLM_PROVIDERS)[number];
 export const LLM_PROVIDERS = [...CLOUD_LLM_PROVIDERS, "local"] as const;
 export type LlmProvider = (typeof LLM_PROVIDERS)[number];
@@ -19,6 +19,10 @@ const ENV_VAR_NAME: Record<LlmProvider, string> = {
   openai: "OPENAI_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
   groq: "GROQ_API_KEY",
+  // "google" already means the Gmail/Calendar/Drive OAuth connection in this
+  // app, so the LLM provider is keyed as `gemini` — the env var still follows
+  // Google's own naming.
+  gemini: "GOOGLE_API_KEY",
   local: "LOCAL_LLM_API_KEY",
 };
 

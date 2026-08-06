@@ -20,6 +20,8 @@ import type { SourceType } from "@/domain/sourceItem";
 import type { WorkTaskStatus } from "@/domain/workTask";
 import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
+import { AppTooltip } from "@/components/AppTooltip";
+import { sourceTypeDescription } from "@/components/SourceBadge";
 import { JiraStatusBadge } from "@/components/JiraMetadataBadges";
 import { Heading } from "@/components/Heading";
 import { SyncMyDayButton } from "@/components/SyncMyDayButton";
@@ -31,6 +33,7 @@ import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { sourceTypeLabel } from "@/lib/tasks/taskSupportingSources";
 import { dedupeBlockedWaiting } from "@/lib/dailyBrief/blockedWaitingDedupe";
 import { humanizeReason } from "@/lib/tasks/humanizeReason";
+import { assessFocusCoherence, type FocusCoherenceGap } from "@/lib/tasks/focusCoherence";
 import { taskEligibleForBriefPriority } from "@/lib/filters/ownerFilter";
 import { cn } from "@/lib/utils";
 import styles from "./HumanReadableTodayView.module.css";
@@ -88,6 +91,27 @@ function firstName(profileName: string | null): string | null {
   return profileName?.trim().split(/\s+/)[0] || null;
 }
 
+/** Shown under the next action itself, where the user is about to act on it. */
+const ACTION_GAP_COPY: Record<FocusCoherenceGap, string> = {
+  ungrounded: "Nothing in the evidence below backs this action. Open the source and confirm it before acting.",
+  "off-topic":
+    "This action describes different work than the title and done criteria above. Confirm what this task is before acting.",
+};
+
+/** The same finding, condensed for the status badge tooltip. */
+const ACTION_GAP_BADGE_HINT: Record<FocusCoherenceGap, string> = {
+  ungrounded: "The next action is not backed by this card's evidence. Confirm it before starting.",
+  "off-topic": "The next action does not match the title and done criteria. Confirm it before starting.",
+};
+
+function firstFilled(...values: (string | null | undefined)[]): string | null {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
 function todayLabel(date = new Date()): string {
   return date.toLocaleDateString(undefined, {
     weekday: "long",
@@ -130,8 +154,16 @@ function jiraKey(entry: AttentionEntry): string | null {
 function statusBadge(
   entry: AttentionEntry,
   brief: DailyBriefV2 | null,
-  index: number
-): { label: string; tone: AppBadgeTone; icon: typeof Clock3 } {
+  index: number,
+  /** Set when the card's own next action could not be verified. */
+  actionGap: FocusCoherenceGap | null = null
+): {
+  label: string;
+  /** Only set when the label alone leaves the user guessing. */
+  description: string | null;
+  tone: AppBadgeTone;
+  icon: typeof Clock3;
+} {
   const item = entry.item;
   const task = entry.task;
   const key = jiraKey(entry);
@@ -143,24 +175,67 @@ function statusBadge(
   const copy = `${item?.reason ?? task?.reason ?? ""} ${item?.nextAction ?? task?.nextAction ?? ""}`;
 
   if (blocked || task?.waitingOn) {
-    return { label: "Blocked", tone: "danger", icon: LockKeyhole };
+    return {
+      label: "Blocked",
+      description: "Cannot start until the dependency or person named in the task responds.",
+      tone: "danger",
+      icon: LockKeyhole,
+    };
   }
   if (item?.statusHint === "unclear" || task?.status === "unclear") {
-    return { label: "Clarify first", tone: "warning", icon: AlertTriangle };
+    return {
+      label: "Clarify first",
+      description: "Ownership or the requirement is unclear. Resolve that before starting.",
+      tone: "warning",
+      icon: AlertTriangle,
+    };
+  }
+  if (actionGap) {
+    return {
+      label: "Clarify first",
+      description: ACTION_GAP_BADGE_HINT[actionGap],
+      tone: "warning",
+      icon: AlertTriangle,
+    };
   }
   if (/\b(confirm|confirmation|sign[- ]?off|approval|review from)\b/i.test(copy)) {
-    return { label: "Waiting for confirmation", tone: "warning", icon: Clock3 };
+    return {
+      label: "Waiting for confirmation",
+      description: null,
+      tone: "warning",
+      icon: Clock3,
+    };
   }
   if (task?.status === "waiting" || item?.statusHint === "waiting") {
-    return { label: "Waiting", tone: "warning", icon: Clock3 };
+    return {
+      label: "Waiting",
+      description: "Paused until something outside your control changes.",
+      tone: "warning",
+      icon: Clock3,
+    };
   }
   if (index === 0) {
-    return { label: "First today", tone: "accent", icon: CheckCircle2 };
+    return {
+      label: "First today",
+      description: "Worklight's recommendation from your synced sources, not a deadline.",
+      tone: "accent",
+      icon: CheckCircle2,
+    };
   }
   if (task?.status === "now") {
-    return { label: "In progress", tone: "good", icon: CheckCircle2 };
+    return {
+      label: "In progress",
+      description: null,
+      tone: "good",
+      icon: CheckCircle2,
+    };
   }
-  return { label: "To do", tone: "neutral", icon: CircleDashed };
+  return {
+    label: "To do",
+    description: null,
+    tone: "neutral",
+    icon: CircleDashed,
+  };
 }
 
 function resolveAttention(
@@ -168,13 +243,17 @@ function resolveAttention(
   dailyBrief: DailyBriefV2 | null,
   myName: string | null
 ): AttentionEntry[] {
-  const isMine = (task: Pick<HumanReadableTask, "owner" | "title" | "reason" | "nextAction">) =>
+  const isMine = (
+    task: Pick<HumanReadableTask, "owner" | "title" | "reason" | "nextAction"> &
+      Partial<Pick<HumanReadableTask, "evidence">>
+  ) =>
     taskEligibleForBriefPriority(
       {
         owner: task.owner,
         title: task.title,
         reason: task.reason,
         nextAction: task.nextAction,
+        evidenceQuotes: task.evidence?.map((item) => item.quote),
       },
       myName
     );
@@ -187,16 +266,21 @@ function resolveAttention(
   }
 
   const resolved: AttentionEntry[] = [];
-  for (const item of [dailyBrief.todayFirst, ...dailyBrief.afterThat]) {
-    // Composer placeholder when nothing is owned — do not render as a priority.
-    if (
-      item.taskId == null &&
-      item.jiraKey == null &&
-      /^no open owned work$/i.test(item.title.trim())
-    ) {
-      continue;
-    }
+  const todayFirst = dailyBrief.todayFirst;
+  const todayFirstIsPlaceholder =
+    todayFirst.taskId == null &&
+    todayFirst.jiraKey == null &&
+    /^(no open owned work|nothing clearly demands attention first)$/i.test(
+      todayFirst.title.trim()
+    );
 
+  // No qualifying primary (WLA-01 floor or empty owned set). Do not promote
+  // afterThat into the focus card — open work stays in the queue list.
+  const briefSlots = todayFirstIsPlaceholder
+    ? []
+    : [dailyBrief.todayFirst, ...dailyBrief.afterThat];
+
+  for (const item of briefSlots) {
     const task =
       (item.taskId != null
         ? ownedTasks.find((candidate) => candidate.id === item.taskId)
@@ -235,18 +319,24 @@ function resolveAttention(
 
 function StatusBadge({
   label,
+  description,
   tone,
   Icon,
 }: {
   label: string;
+  description: string | null;
   tone: AppBadgeTone;
   Icon: typeof Clock3;
 }) {
-  return (
+  const badge = (
     <AppBadge tone={tone} icon={<Icon className="size-3.5" aria-hidden />}>
       {label}
     </AppBadge>
   );
+
+  if (!description) return badge;
+
+  return <AppTooltip content={description}>{badge}</AppTooltip>;
 }
 
 const SOURCE_ICON: Partial<Record<SourceType, typeof Clock3>> = {
@@ -267,23 +357,24 @@ const SOURCE_ICON: Partial<Record<SourceType, typeof Clock3>> = {
 function SourceBadge({ sourceType }: { sourceType: SourceType }) {
   const Icon = SOURCE_ICON[sourceType] ?? FileText;
   return (
-    <AppBadge tone="default" icon={<Icon className="size-3.5" aria-hidden />}>
-      {sourceTypeLabel(sourceType)}
-    </AppBadge>
+    <AppTooltip content={sourceTypeDescription(sourceType)}>
+      <AppBadge tone="default" icon={<Icon className="size-3.5" aria-hidden />}>
+        {sourceTypeLabel(sourceType)}
+      </AppBadge>
+    </AppTooltip>
   );
 }
 
 function EvidenceRow({
   entry,
+  evidence,
   confidence,
 }: {
   entry: AttentionEntry;
+  /** Chosen by `assessFocusCoherence` so it matches the action shown above. */
+  evidence: HumanReadableTask["evidence"][number] | null;
   confidence: number | null | undefined;
 }) {
-  const evidenceList = entry.task?.evidence ?? [];
-  // Prefer the evidence that carries a verbatim quote — that is the line that
-  // actually confirms what to do, not just the first attached source.
-  const evidence = evidenceList.find((item) => item.quote?.trim()) ?? evidenceList[0] ?? null;
   const sourceLink = entry.item?.sourceLinks[0] ?? null;
   const label = evidence?.sourceTitle ?? sourceLink?.label ?? null;
   const url = evidence?.url ?? sourceLink?.url ?? null;
@@ -332,19 +423,28 @@ function EvidenceRow({
 /** The single most important task — the only one that should visually dominate the page. */
 function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV2 | null }) {
   const index = 0;
-  const title = entry.item?.title ?? entry.task?.title ?? "Unresolved work";
-  const reason = humanizeReason(entry.item?.reason ?? entry.task?.reason, title);
+  // Every pillar reads from the live task first. Evidence only ever comes from
+  // the task, and the brief is a snapshot composed in parallel with the action
+  // planner — mixing the two let the card pair a sync-old action with fresh
+  // evidence. The brief item stays the fallback for unlinked brief text.
+  const title = firstFilled(entry.task?.title, entry.item?.title) ?? "Unresolved work";
+  const reason = humanizeReason(firstFilled(entry.task?.reason, entry.item?.reason), title);
   const nextAction =
-    entry.item?.nextAction ??
-    entry.task?.nextAction ??
+    firstFilled(entry.task?.nextAction, entry.item?.nextAction) ??
     "Clarify the requirement and record the supporting source.";
   const doneCriteria =
-    entry.item?.doneCriteria.length
-      ? entry.item.doneCriteria
-      : entry.task?.doneCriteria.length
-        ? entry.task.doneCriteria
+    entry.task?.doneCriteria.length
+      ? entry.task.doneCriteria
+      : entry.item?.doneCriteria.length
+        ? entry.item.doneCriteria
         : ["The requirement and completion check are recorded with evidence."];
-  const badge = statusBadge(entry, brief, index);
+  const coherence = assessFocusCoherence({
+    nextAction,
+    title,
+    doneCriteria,
+    evidence: entry.task?.evidence ?? [],
+  });
+  const badge = statusBadge(entry, brief, index, coherence.gap);
   const updated = relativeTime(evidenceDate(entry.task));
   const key = jiraKey(entry);
   const href = entry.task ? `/tasks/${entry.task.id}` : null;
@@ -355,7 +455,12 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
     <article className={css("brief-focus-card brief-focus-primary")}>
       <div className={css("brief-focus-topline")}>
         <div className={css("brief-badge-row")}>
-          <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
+          <StatusBadge
+            label={badge.label}
+            description={badge.description}
+            tone={badge.tone}
+            Icon={badge.icon}
+          />
           <JiraStatusBadge status={entry.task?.jiraStatus ?? null} />
           {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
           {updated ? <span className={css("brief-updated")}>{updated}</span> : null}
@@ -375,8 +480,13 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
 
       <div className={css("brief-pillars")}>
         <div className={css("brief-pillar brief-pillar-action")}>
-          <h3 className={css("brief-pillar-label")}>Next action</h3>
+          <h3 className={css("brief-pillar-label")}>
+            {coherence.gap ? "Next action — unverified" : "Next action"}
+          </h3>
           <p className={css("brief-action-copy")}>{nextAction}</p>
+          {coherence.gap ? (
+            <p className={css("brief-action-warning")}>{ACTION_GAP_COPY[coherence.gap]}</p>
+          ) : null}
         </div>
 
         <div className={css("brief-pillar brief-pillar-done")}>
@@ -388,7 +498,11 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
           </ul>
         </div>
 
-        <EvidenceRow entry={entry} confidence={entry.task?.confidence} />
+        <EvidenceRow
+          entry={entry}
+          evidence={coherence.evidence}
+          confidence={entry.task?.confidence}
+        />
       </div>
 
       <div className={css("brief-focus-footer")}>
@@ -441,9 +555,14 @@ function NextUpRow({
       )}
     >
       <div className={css("brief-nextup-row-badges")}>
-        <StatusBadge label={badge.label} tone={badge.tone} Icon={badge.icon} />
+        <StatusBadge
+          label={badge.label}
+          description={badge.description}
+          tone={badge.tone}
+          Icon={badge.icon}
+        />
         <JiraStatusBadge status={entry.task?.jiraStatus ?? null} />
-        {confidence != null ? <ConfidenceBadge level={confidence} withTooltip={false} /> : null}
+        {confidence != null ? <ConfidenceBadge level={confidence} /> : null}
         {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
       </div>
       <div className={css("brief-nextup-body")}>
@@ -455,7 +574,7 @@ function NextUpRow({
               {title}
             </Link>
           ) : (
-            title
+            <span>{title}</span>
           )}
         </h3>
         <p className={css("brief-nextup-action")}>{nextAction}</p>

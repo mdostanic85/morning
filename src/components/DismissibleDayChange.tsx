@@ -49,7 +49,6 @@ export function DismissibleDayChange({
         className={css("brief-change-dismiss")}
         type="button"
         aria-label={dismissLabel}
-        title="Dismiss"
         onClick={() => setDismissed(true)}
       >
         <XIcon aria-hidden />

@@ -158,6 +158,7 @@ describe("claimAwareRanking", () => {
         today: "2026-07-20",
         assignee: "Milos Dostanic",
         myName: "Milos Dostanic",
+        issueCreatedAt: "2026-07-20T12:55:00.000Z",
         nowMs,
       }),
       true
@@ -169,6 +170,7 @@ describe("claimAwareRanking", () => {
         today: "2026-07-21",
         assignee: "Milos Dostanic",
         myName: "Milos Dostanic",
+        issueCreatedAt: "2026-07-20T12:55:00.000Z",
         nowMs: Date.parse("2026-07-21T08:00:00.000Z"),
       }),
       true
@@ -326,6 +328,7 @@ describe("priorityRank", () => {
           priority: "Medium",
           assignee: "Milos Dostanic",
           updatedAt: freshAt,
+          createdAt: freshAt,
           dueDate: null,
           excerpt: "",
           url: null,
@@ -337,6 +340,7 @@ describe("priorityRank", () => {
           priority: "Medium",
           assignee: "Milos Dostanic",
           updatedAt: staleSource.sourceDate,
+          createdAt: "2026-05-02T09:00:00.000Z",
           dueDate: null,
           excerpt: "",
           url: null,

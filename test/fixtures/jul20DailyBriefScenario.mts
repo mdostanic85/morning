@@ -5,6 +5,9 @@
 
 export const JUL20_TODAY = "2026-07-20";
 
+/** Fixed evaluation instant for ranking — keeps claim-aware / recency windows stable. */
+export const JUL20_NOW_MS = Date.parse("2026-07-20T13:05:00.000Z");
+
 export const JUL20_MY_NAME = "Milos Dostanic";
 
 /** Expected DailyBriefV2 decision snapshot (target after ranking/composer fix). */
@@ -72,6 +75,7 @@ export type Jul20JiraPending = {
   dueDate: string | null;
   url: string | null;
   updatedAt: string;
+  createdAt: string | null;
   excerpt: string;
 };
 
@@ -101,6 +105,8 @@ export const jul20Sources: Jul20FixtureSource[] = [
       priority: "Medium",
       assignee: "Milos Dostanic",
       statusCategoryKey: "new",
+      created: "2026-07-20T12:55:00.000Z",
+      updated: "2026-07-20T13:05:00.000Z",
     },
     createdAt,
   },
@@ -151,6 +157,8 @@ export const jul20Sources: Jul20FixtureSource[] = [
       priority: "Medium",
       assignee: "Milos Dostanic",
       statusCategoryKey: "indeterminate",
+      created: "2026-05-04T09:30:00.000Z",
+      updated: "2026-07-10T12:00:00.000Z",
     },
     createdAt,
   },
@@ -337,6 +345,9 @@ export const jul20JiraPending: Jul20JiraPending[] = [
     dueDate: null,
     url: "https://example.atlassian.net/browse/UATL-376",
     updatedAt: "2026-07-20T13:05:00.000Z",
+    // Filed and assigned the same morning — this is what makes it genuinely
+    // "newly assigned" rather than an old ticket someone commented on.
+    createdAt: "2026-07-20T12:55:00.000Z",
     excerpt: "Assignee: Milos Dostanic\nStatus: To Do\nPriority: Medium",
   },
   {
@@ -348,6 +359,7 @@ export const jul20JiraPending: Jul20JiraPending[] = [
     dueDate: null,
     url: "https://example.atlassian.net/browse/UATL-233",
     updatedAt: "2026-07-10T12:00:00.000Z",
+    createdAt: "2026-05-04T09:30:00.000Z",
     excerpt: "Assignee: Milos Dostanic\nStatus: In Progress\nPriority: Medium",
   },
   // UATL-367 is Done — intentionally absent from open Jira pending snapshot.

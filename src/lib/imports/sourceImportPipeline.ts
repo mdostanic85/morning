@@ -24,6 +24,7 @@ import {
 import type { ShouldCancelSync } from "@/lib/imports/syncCancellation";
 import { computeSourceContentHash } from "@/lib/imports/sourceContentHash";
 import { recordSourceRevision } from "@/lib/imports/sourceRevision";
+import { assignmentEvidenceFromObservedAssignees } from "@/lib/connectors/jiraAssignmentEvidence";
 
 const VOLATILE_CONNECTOR_METADATA_KEYS = new Set(["query"]);
 
@@ -75,6 +76,23 @@ export async function importConnectorSources(
         sourceType: candidate.sourceType,
         sourceExternalId: candidate.sourceExternalId,
       });
+      if (
+        candidate.sourceType === "jira" &&
+        existing &&
+        typeof candidate.metadata?.assignmentChangedAt !== "string"
+      ) {
+        const observedChange = assignmentEvidenceFromObservedAssignees({
+          previousAssignee: existing.metadata?.assignee,
+          currentAssignee: candidate.metadata?.assignee,
+          observedAt: new Date().toISOString(),
+        });
+        if (observedChange) {
+          candidate.metadata = {
+            ...(candidate.metadata ?? {}),
+            ...observedChange,
+          };
+        }
+      }
       const newContentHash = computeSourceContentHash({
         title: candidate.title,
         body: candidate.body,

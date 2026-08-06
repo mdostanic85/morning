@@ -50,6 +50,8 @@ export interface TaskConfidenceInput {
   primarySource: ConfidenceSourceFields;
   /** Whether a project is currently assigned to the primary source/task. */
   hasProject: boolean;
+  /** Verbatim source quotes — the only free text that may prove ownership. */
+  evidenceQuotes?: string[];
   /** WL-10: a durable person-entity id for `ownerName`, once resolved. Null when unresolved or self-scoped. */
   resolvedPersonId?: number | null;
   /**
@@ -88,6 +90,7 @@ function computeAssignmentSignals(input: {
   nextAction: string;
   currentUserName: string | null;
   primarySource: ConfidenceSourceFields;
+  evidenceQuotes?: string[];
 }) {
   const selected = input.currentUserName ? myOwnerFilter(input.currentUserName) : null;
   const jiraAssignee =
@@ -103,11 +106,19 @@ function computeAssignmentSignals(input: {
     input.ownerName != null &&
     selected != null &&
     personMatchesFilter(input.ownerName, selected, input.currentUserName);
+  // Source-backed only: a commitment the user actually made, addressed to him,
+  // or handed down by a stakeholder. LLM prose naming the user proves nothing.
   const firstPersonCommitment =
     !input.ownerName &&
     input.currentUserName != null &&
     classifyTaskOwnership(
-      { owner: null, title: input.title, reason: input.reason, nextAction: input.nextAction },
+      {
+        owner: null,
+        title: input.title,
+        reason: input.reason,
+        nextAction: input.nextAction,
+        evidenceQuotes: input.evidenceQuotes,
+      },
       input.currentUserName
     ) === "mine";
 

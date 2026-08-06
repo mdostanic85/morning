@@ -14,8 +14,8 @@ import {
  type LucideIcon,
 } from "lucide-react";
 import { Card } from "@heroui/react/card";
-import { Tooltip } from "@heroui/react/tooltip";
 import { AppBadge } from "./AppBadge";
+import { AppTooltip } from "./AppTooltip";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { DailyFocusCard } from "./DailyFocusCard";
 import { EvidencePanel, type EvidenceItem } from "./EvidencePanel";
@@ -51,14 +51,16 @@ export interface TaskCardProps {
  headingLevel?: HeadingLevel;
 }
 
-const STATUS_DESCRIPTION: Record<WorkTaskStatus, string> = {
- now: "In focus. You are actively working on this.",
- next: "Up next when your current focus clears",
- later: "On the radar but not for today",
- waiting: "Blocked. Waiting on someone else.",
- tomorrow: "Scheduled for tomorrow",
- unclear: "Needs your input before work can begin",
- done: "Completed",
+/**
+ * Only the buckets whose one-word label leaves the boundary ambiguous get an
+ * explainer. `now` and `done` say everything already.
+ */
+const STATUS_DESCRIPTION: Partial<Record<WorkTaskStatus, string>> = {
+  next: "Queued behind your current focus, still for today.",
+  later: "On the radar, with no day assigned yet.",
+  waiting: "Someone else has to move before you can continue.",
+  tomorrow: "Deliberately pushed out of today.",
+  unclear: "Ownership or the requirement is ambiguous — resolve it before starting.",
 };
 
 const STATUS_ICON: Record<WorkTaskStatus, LucideIcon> = {
@@ -80,6 +82,23 @@ const STATUS_BADGE: Record<WorkTaskStatus, string> = {
  unclear: "border-unclear/40 bg-unclear/8 text-unclear",
  done: "border-good/40 bg-good/8 text-good",
 };
+
+function StatusBadge({ status }: { status: WorkTaskStatus }) {
+ const Icon = STATUS_ICON[status];
+ const description = STATUS_DESCRIPTION[status];
+ const badge = (
+ <AppBadge
+ className={cn("capitalize font-normal", STATUS_BADGE[status])}
+ icon={<Icon className="size-3.5" aria-hidden />}
+ >
+ {status}
+ </AppBadge>
+ );
+
+ if (!description) return badge;
+
+ return <AppTooltip content={description}>{badge}</AppTooltip>;
+}
 
 export function TaskCard({
  id,
@@ -164,23 +183,7 @@ export function TaskCard({
  </Heading>
 
  <div className="mt-3 flex flex-wrap items-center gap-2">
- <Tooltip delay={400}>
- <Tooltip.Trigger>
- <AppBadge
- className={cn("capitalize font-normal", STATUS_BADGE[status])}
- icon={(() => {
- const Icon = STATUS_ICON[status];
- return <Icon className="size-3.5" aria-hidden />;
- })()}
- >
- {status}
- </AppBadge>
- </Tooltip.Trigger>
- <Tooltip.Content placement="top" showArrow className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background">
- <Tooltip.Arrow />
- {STATUS_DESCRIPTION[status]}
- </Tooltip.Content>
- </Tooltip>
+ <StatusBadge status={status} />
  {sourceTypes.map((sourceType) => (
  <SourceBadge key={sourceType} sourceType={sourceType} />
  ))}
@@ -190,17 +193,11 @@ export function TaskCard({
  <span className="text-sm font-medium text-waiting">Unassigned project</span>
  )}
  {priorityScore != null ? (
- <Tooltip delay={400}>
- <Tooltip.Trigger>
+ <AppTooltip content="Priority score, 0 to 1. Higher means Worklight ranked it more urgent.">
  <span className="cursor-default font-utility text-sm text-muted-soft">
  {priorityScore.toFixed(2)}
  </span>
- </Tooltip.Trigger>
- <Tooltip.Content placement="top" showArrow className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background">
- <Tooltip.Arrow />
- Priority score. A higher score means the task is more urgent.
- </Tooltip.Content>
- </Tooltip>
+ </AppTooltip>
  ) : null}
  </div>
  </div>

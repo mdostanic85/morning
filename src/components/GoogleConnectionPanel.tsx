@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { AppBadge } from "@/components/AppBadge";
+import { AppTooltip } from "@/components/AppTooltip";
 import { Button } from "@heroui/react/button";
 import { Heading } from "@/components/Heading";
 
@@ -81,13 +82,14 @@ export function GoogleConnectionPanel({
               {anyConnected ? "Reconnect Google" : "Connect Google"}
             </a>
           ) : (
-            <span
-              className="link-btn-primary disabled"
-              aria-disabled="true"
-              title="Google OAuth credentials are missing. See details below."
+            <AppTooltip
+              content="Google OAuth credentials are missing. See details below."
+              isInteractive
             >
-              Connect Google
-            </span>
+              <span className="link-btn-primary disabled" aria-disabled="true" tabIndex={0}>
+                Connect Google
+              </span>
+            </AppTooltip>
           )}
           {anyConnected ? (
             <Button

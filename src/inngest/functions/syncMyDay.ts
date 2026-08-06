@@ -385,17 +385,13 @@ export const syncMyDay = inngest.createFunction(
       return { syncRunId, status: "cancelled" as const };
     }
 
-    const figmaAudits = await runStep("audit-today-figma-work", () =>
-      runTodayFigmaTaskAudits()
-    );
-
-    const briefingResult = await runStep("build-briefing", () =>
-      buildTodayBriefing({ jiraPending })
-    );
-
-    const dailyBriefResult = await runStep("build-daily-brief-v2", () =>
-      buildDailyBriefV2({ jiraPending })
-    );
+    // Figma audits, LLM briefing, and deterministic daily brief are independent
+    // once the queue is rebuilt — run them together to cut finalize wall-clock.
+    const [figmaAudits, briefingResult, dailyBriefResult] = await Promise.all([
+      runStep("audit-today-figma-work", () => runTodayFigmaTaskAudits()),
+      runStep("build-briefing", () => buildTodayBriefing({ jiraPending })),
+      runStep("build-daily-brief-v2", () => buildDailyBriefV2({ jiraPending })),
+    ]);
 
     if (
       await runStep("check-cancelled-before-publication", () =>

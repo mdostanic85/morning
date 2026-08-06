@@ -1,7 +1,7 @@
 "use client";
 
-import { Tooltip } from "@heroui/react/tooltip";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
+import { AppTooltip } from "@/components/AppTooltip";
 
 function bucket(value: number): { tone: AppBadgeTone } {
   if (value >= 0.7) return { tone: "good" };
@@ -33,17 +33,8 @@ export function ConfidenceBadge({
   if (!withTooltip) return badge;
 
   return (
-    <Tooltip delay={400}>
-      <Tooltip.Trigger>{badge}</Tooltip.Trigger>
-      <Tooltip.Content
-        placement="top"
-        showArrow
-        className="max-w-xs bg-foreground px-3 py-1.5 text-sm text-background"
-      >
-        <Tooltip.Arrow />
-        How sure Worklight is that it understood this task from its sources. This does not measure
-        importance. Low means you should review the evidence before acting.
-      </Tooltip.Content>
-    </Tooltip>
+    <AppTooltip content="How well the sources back this task, not how important it is. Below 40%, read the evidence before acting.">
+      {badge}
+    </AppTooltip>
   );
 }

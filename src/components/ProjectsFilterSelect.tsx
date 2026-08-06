@@ -2,8 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Key } from "react";
-import { Select } from "@heroui/react/select";
-import { ListBox } from "@heroui/react/list-box";
+import { Button } from "@heroui/react/button";
+import { Dropdown } from "@heroui/react/dropdown";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 
 const FILTERS = ["all", "active", "inactive"] as const;
@@ -15,9 +15,7 @@ const LABELS: Record<ProjectsFilter, string> = {
  inactive: "Inactive",
 };
 
-const EMPTY = "__empty__";
-const toKey = (v: string | null | undefined) => (v === "" ? EMPTY : v ?? undefined);
-const fromKey = (k: Key | null) => (k === EMPTY ? "" : String(k ?? ""));
+const fromKey = (k: Key | null) => String(k ?? "");
 
 interface ProjectsFilterSelectProps {
  activeFilter: ProjectsFilter;
@@ -41,29 +39,34 @@ export function ProjectsFilterSelect({ activeFilter, counts }: ProjectsFilterSel
  }
 
  return (
- <Select
- selectedKey={toKey(activeFilter)}
- onSelectionChange={handleChange}
+ <Dropdown>
+ <Button
+ type="button"
+ variant="outline"
+ size="md"
+ className="h-(--control-height) min-w-52 justify-between"
  aria-label="Filter projects"
  >
- <Select.Trigger className="flex h-11 w-fit items-center justify-between gap-1.5 rounded-lg border border-border bg-background/70 px-3 text-sm shadow-none">
- <Select.Value className="flex flex-1 text-left">
- {(state) => (state.isPlaceholder ? "Filter projects" : state.defaultChildren)}
- </Select.Value>
- <Select.Indicator className="text-muted">
- <ChevronDownIcon className="size-4" />
- </Select.Indicator>
- </Select.Trigger>
- <Select.Popover
+ <span>
+ {LABELS[activeFilter]}{" "}
+ <span className="tabular-nums text-muted-soft">({counts[activeFilter]})</span>
+ </span>
+ <ChevronDownIcon className="size-3.5 shrink-0 opacity-70" aria-hidden />
+ </Button>
+ <Dropdown.Popover
  placement="bottom start"
  offset={6}
- className="min-w-40 rounded-lg border border-border bg-overlay p-1"
+ className="min-w-(--trigger-width) rounded-lg border border-border bg-overlay p-1"
  >
- <ListBox aria-label="Project filters" className="max-h-72 overflow-y-auto outline-none">
+ <Dropdown.Menu
+ aria-label="Project filters"
+ onAction={(key) => handleChange(key)}
+ className="max-h-72 overflow-y-auto outline-none"
+ >
  {FILTERS.map((filter) => {
  const label = `${LABELS[filter]} (${counts[filter]})`;
  return (
- <ListBox.Item
+ <Dropdown.Item
  key={filter}
  id={filter}
  textValue={label}
@@ -71,14 +74,14 @@ export function ProjectsFilterSelect({ activeFilter, counts }: ProjectsFilterSel
  >
  {LABELS[filter]}
  <span className="ml-1 tabular-nums text-muted-soft">({counts[filter]})</span>
- <ListBox.ItemIndicator className="absolute right-2">
- <CheckIcon className="size-4" />
- </ListBox.ItemIndicator>
- </ListBox.Item>
+ {activeFilter === filter ? (
+ <CheckIcon className="absolute right-2 size-4" aria-hidden />
+ ) : null}
+ </Dropdown.Item>
  );
  })}
- </ListBox>
- </Select.Popover>
- </Select>
+ </Dropdown.Menu>
+ </Dropdown.Popover>
+ </Dropdown>
  );
 }

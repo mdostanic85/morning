@@ -15,7 +15,7 @@ test("gpt-oss models do not support vision", () => {
 test("Groq Qwen 3.6 and OpenAI gpt-4.1 support vision", () => {
   assert.equal(modelSupportsVision("groq", "qwen/qwen3.6-27b"), true);
   assert.equal(modelSupportsVision("openai", "gpt-4.1"), true);
-  assert.equal(modelSupportsVision("anthropic", "claude-3-7-sonnet-latest"), true);
+  assert.equal(modelSupportsVision("anthropic", "claude-sonnet-4-5"), true);
 });
 
 test("local models never claim vision support", () => {

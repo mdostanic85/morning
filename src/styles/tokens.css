@@ -37,6 +37,20 @@
   --surface-tertiary-foreground: var(--foreground);
   --overlay: #ffffff;
   --overlay-foreground: var(--foreground);
+  /* A tooltip is a temporary overlay, not another card: it inverts against the
+     page so it reads as "on top of" the UI instead of merging into it. */
+  --tooltip-background: #0b2f67;
+  --tooltip-foreground: #ffffff;
+  --tooltip-border: transparent;
+  --tooltip-radius: 0.625rem;
+  --tooltip-max-width: 20rem;
+  --tooltip-padding-block: 0.5rem;
+  --tooltip-padding-inline: 0.6875rem;
+  --tooltip-font-size: var(--font-size-min);
+  --tooltip-line-height: 1.4;
+  --tooltip-arrow-size: 0.4375rem;
+  --tooltip-shadow: 0 2px 6px rgba(11, 47, 103, 0.2),
+    0 18px 40px -20px rgba(11, 47, 103, 0.5);
   --muted: #627083;
   --muted-soft: #8492a3;
   --border: #dbe4ef;
@@ -63,8 +77,8 @@
   --default: var(--surface-soft);
   --default-foreground: var(--foreground);
   /* HeroUI Tabs / segmented controls */
-  --segment: #ffffff;
-  --segment-foreground: var(--foreground);
+  --segment: var(--accent-soft-surface);
+  --segment-foreground: var(--accent-strong);
   --field-background: #ffffff;
   --field-foreground: var(--foreground);
   --field-placeholder: var(--muted-soft);
@@ -209,6 +223,11 @@
   --surface-tertiary-foreground: var(--foreground);
   --overlay: #18243a;
   --overlay-foreground: var(--foreground);
+  --tooltip-background: #eef3fc;
+  --tooltip-foreground: #0d1424;
+  --tooltip-border: transparent;
+  --tooltip-shadow: 0 2px 8px rgba(0, 0, 0, 0.45),
+    0 20px 44px -22px rgba(0, 0, 0, 0.7);
   --muted: #aeb9cc;
   --muted-soft: #8e9ab0;
   --border: #34445f;

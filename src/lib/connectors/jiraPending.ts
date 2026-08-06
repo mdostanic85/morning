@@ -14,7 +14,38 @@ export interface JiraPendingSnapshot {
   dueDate: string | null;
   url: string | null;
   updatedAt: string;
+  /**
+   * Jira issue creation time, when the transport reported it. `updatedAt`
+   * moves for any edit, so this is the only field that can show an issue
+   * landed — and was assigned — inside the "newly assigned" window.
+   */
+  createdAt: string | null;
+  /** Changelog/observation evidence for the current assignee. */
+  assignmentChangedAt?: string | null;
+  /** Undefined means no assignee history was available. */
+  previousAssignee?: string | null;
   excerpt: string;
+}
+
+function metadataCreatedAt(metadata: Record<string, unknown> | null | undefined): string | null {
+  return typeof metadata?.created === "string" ? metadata.created : null;
+}
+
+function metadataAssignmentChangedAt(
+  metadata: Record<string, unknown> | null | undefined
+): string | null {
+  return typeof metadata?.assignmentChangedAt === "string"
+    ? metadata.assignmentChangedAt
+    : null;
+}
+
+function metadataPreviousAssignee(
+  metadata: Record<string, unknown> | null | undefined
+): string | null | undefined {
+  if (!metadata || !Object.prototype.hasOwnProperty.call(metadata, "previousAssignee")) {
+    return undefined;
+  }
+  return typeof metadata.previousAssignee === "string" ? metadata.previousAssignee : null;
 }
 
 export async function fetchJiraPendingSnapshot(maxResults = 20): Promise<JiraPendingSnapshot[]> {
@@ -48,6 +79,9 @@ export async function fetchJiraPendingSnapshot(maxResults = 20): Promise<JiraPen
           dueDate: parsed.dueDate,
           url: issue.url ?? null,
           updatedAt: issue.sourceDate,
+          createdAt: metadataCreatedAt(issue.metadata),
+          assignmentChangedAt: metadataAssignmentChangedAt(issue.metadata),
+          previousAssignee: metadataPreviousAssignee(issue.metadata),
           excerpt: jiraBodyExcerpt(issue.body),
         };
       });
@@ -72,6 +106,9 @@ export async function fetchJiraPendingSnapshot(maxResults = 20): Promise<JiraPen
         dueDate: parsed.dueDate,
         url: issue.url ?? null,
         updatedAt: issue.sourceDate,
+        createdAt: metadataCreatedAt(issue.metadata),
+        assignmentChangedAt: metadataAssignmentChangedAt(issue.metadata),
+        previousAssignee: metadataPreviousAssignee(issue.metadata),
         excerpt: jiraBodyExcerpt(issue.body),
       };
     });
@@ -120,6 +157,9 @@ export function jiraPendingFromSourceItems(
         dueDate: parsed.dueDate,
         url: item.url,
         updatedAt: item.sourceDate,
+        createdAt: metadataCreatedAt(item.metadata),
+        assignmentChangedAt: metadataAssignmentChangedAt(item.metadata),
+        previousAssignee: metadataPreviousAssignee(item.metadata),
         excerpt: jiraBodyExcerpt(item.body),
       };
     });

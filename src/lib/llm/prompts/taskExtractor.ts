@@ -36,9 +36,30 @@ const ROLE = `You are the task extraction engine for a local-first daily work op
 
 function ownershipRuleText(currentUserName?: string | null): string {
   if (currentUserName && currentUserName.trim()) {
-    return `The user's name is "${currentUserName.trim()}". A task is only "actionable" if it is clearly ${currentUserName.trim()}'s own responsibility to act on. If the source names a different, specific person as the one who needs to act, ${currentUserName.trim()} is NOT the owner of that task.`;
+    const user = currentUserName.trim();
+    return `The user's name is "${user}". A task is only "actionable" if the source itself shows it is ${user}'s own responsibility. If the source names a different, specific person as the one who needs to act, ${user} is NOT the owner of that task.`;
   }
-  return `The user's name was not provided to you. Treat any task whose owner is explicitly named as a specific person as NOT clearly the user's task. Only an unattributed first-person commitment (e.g. "I'll do X", "I will follow up") may be treated as the user's own task with full confidence.`;
+  return `The user's name was not provided to you. Treat any task whose owner is explicitly named as a specific person as NOT clearly the user's task, and leave "ownershipEvidence" null — with no known identity you cannot prove a task belongs to the user.`;
+}
+
+/**
+ * Ownership must be provable from the source, never from the model's own
+ * phrasing of the task. Writing "<user> needs to…" in `reason` is a paraphrase,
+ * not evidence, so the model is required to cite the line it relied on.
+ */
+function ownershipEvidenceRuleText(currentUserName?: string | null): string {
+  const user = currentUserName?.trim() || "the user";
+  return `
+- Ownership evidence: read the source and judge whether the work is ${user}'s or directed at ${user}. Record that judgment in "ownershipEvidence", and only when a real line in the source supports it:
+  - "jira_assignee" — the issue is assigned to ${user}. "addressedTo" is the assignee name as written.
+  - "addressed_to_user" — someone speaks to ${user} in the source ("${user}, can you…", "@${user} please…", a message sent to ${user}). "addressedBy" is the speaker, "addressedTo" is ${user} as named there.
+  - "user_commitment" — ${user}'s OWN speaker turn says what he will do ("${user}: I'll finish the screens"). "addressedBy" must be ${user}. A first-person sentence spoken by anyone else is NOT this signal.
+  - "stakeholder_instruction" — Matt Pettit (Product Manager) or Lucas Saeed (Design Team Lead) states what they expect from ${user}, or hands ${user} new information. "addressedBy" is the stakeholder, "addressedTo" is ${user}.
+  - "other_person" — the source shows someone else owns the work. "addressedTo" is that person.
+  - "none" — the source does not settle ownership. Use this whenever you are inferring rather than reading.
+  - "quote" must be copied verbatim from the source content, long enough to contain the proof on its own. A quote you composed, summarised, or stitched together is invalid and the ownership claim will be discarded.
+  - Never justify ownership with your own wording of "title", "reason", or "nextAction" — those are yours, not the source's. If the only thing pointing at ${user} is a sentence you wrote, the correct signal is "none".
+`.trim();
 }
 
 function jobInstructions(currentUserName?: string | null): string {
@@ -51,6 +72,7 @@ function jobInstructions(currentUserName?: string | null): string {
 - Ownership: ${ownershipRuleText(currentUserName)}
   - If a task's owner is named and is not clearly the user, lower "confidence" — it may not belong on the user's queue at all.
   - If it sounds like someone else is responsible for the actual work, set status to "waiting" (the user is expecting something back from them) or "unclear" (the user's role in it isn't clear) — never "actionable".
+${ownershipEvidenceRuleText(currentUserName)}
 - Vagueness: if you cannot derive a specific, concrete "nextAction" and specific "doneCriteria" from the source, the task is too vague to act on — set status to "unclear" rather than inventing specificity that isn't in the source.
 - "title" must fit on one desktop UI line: use 3–7 words and no more than 44 characters. Make it immediately clear by naming the concrete action and its object or intended result. Do not copy workflow labels or nested source headings such as "DESIGN -", "Task:", or "Review ticket". For Jira tasks, keep the Jira key once at the start, then use the shortest clear action phrasing (for example, "UATL-367 · Convert file manager to Canvas").
 - "reason" must be 1–2 sentences: first state what triggered the task, then name what the user needs to deliver or decide. Include file, system, person, or location names when the source provides them. If sources disagree, state the winning understanding and briefly note that it replaced the earlier direction. Do not pad with vague filler.
@@ -75,10 +97,14 @@ function jobInstructions(currentUserName?: string | null): string {
   For any single task, ignore information more than 5 days older than the newest evidence for that task — it is stale and must not shape title, nextAction, doneCriteria, or reason. Within those 5 days, the newest information is the most valid.
 - Action items spoken in a transcript ("please fix", "update", "ship", "change X") — especially from Matt Pettit or Lucas Saeed — are high-priority candidate tasks. Note supersession in reason when they override older PRD/Jira wording.
 - If this source is a meeting transcript and something the user is expected to do was discussed, you MUST extract it as a task even when no Jira ticket or other written record exists for it. A spoken commitment in a meeting is sufficient evidence on its own — do not drop it just because it is not tracked elsewhere.
+- Named work labels without a Jira key (e.g. "SPEC", "BOM-SPEC", a short product nickname spoken as its own work item):
+  - If the source mentions such a label and an existing open task already carries that same label in its title/reason, you MUST set "existingTaskId" to that task and pack the new evidence/next step onto it.
+  - Do not create a parallel fragment like "Update the SPEC" beside an open SPEC task — merge into the existing one.
+  - Only create a new task when no open task already represents that named work.
 - Merge-first for transcripts (Granola / Gemini / meeting notes): prefer updating an existing open task over creating a parallel fragment.
   - If the source mentions a Jira key that matches an existing open task (title or jiraKey field), you MUST set "existingTaskId" to that task. Put the newest concrete next step for that ticket into nextAction/doneCriteria — do not invent a second "Review UATL-…" / "Finish remaining…" task beside it.
   - If the source does not name a key but clearly continues the user's only active now/next ticket on the same topic (same feature/area), set "existingTaskId" to that task.
-  - Use null only for genuinely new work (different ticket, different owner, or a waiting item that is not the user's current ticket).
+  - Use null only for genuinely new work (different ticket, different named work label, different owner, or a waiting item that is not the user's current ticket).
   - Small follow-ups that refine the same ticket (final screens, ping for review, handoff polish) belong on that existingTaskId, not as separate later tasks.
 - You may receive existing open tasks. If a source changes, clarifies, or adds evidence to one of them, set "existingTaskId" to that task id. Never force a weak match merely because wording is similar when multiple active tasks compete.
 - If project context is provided, use its people/keywords/description only to help you judge ownership and domain terminology — never as a source of tasks by itself; every task must still be evidenced in the source content, not in the project context.
@@ -109,6 +135,12 @@ const OUTPUT_SHAPE = `{
       "waitingOn": string | null,     // required when status is "waiting"
       "unclearReason": string | null, // required when status is "unclear"
       "owner": string | null,
+      "ownershipEvidence": {
+        "signal": "jira_assignee" | "addressed_to_user" | "user_commitment" | "stakeholder_instruction" | "other_person" | "none",
+        "quote": string,              // verbatim source line proving the signal
+        "addressedBy": string | null, // who spoke / assigned
+        "addressedTo": string | null  // who the work is for
+      } | null,
       "dueDate": string | null,       // ISO 8601 date, or null
       "confidence": number,           // 0..1
       "evidence": [ { "quote": string } ]  // at least one verbatim quote
@@ -164,7 +196,7 @@ export function buildTaskExtractorUserPrompt(input: TaskExtractorInput): string 
       : null,
     input.existingTasks && input.existingTasks.length > 0
       ? [
-          "Existing open tasks (merge transcript updates into these when the Jira key or only-active topic matches):",
+          "Existing open tasks (merge transcript updates into these when the Jira key, named work label like SPEC, or only-active topic matches):",
           wrapUntrustedContent("existing tasks", JSON.stringify(input.existingTasks, null, 2)),
           "",
         ].join("\n")
@@ -210,6 +242,22 @@ export const extractedTaskSchema = z
     waitingOn: z.string().min(1).nullable(),
     unclearReason: z.string().min(1).nullable(),
     owner: z.string().min(1).nullable(),
+    ownershipEvidence: z
+      .object({
+        signal: z.enum([
+          "jira_assignee",
+          "addressed_to_user",
+          "user_commitment",
+          "stakeholder_instruction",
+          "other_person",
+          "none",
+        ]),
+        quote: z.string().min(1),
+        addressedBy: z.string().min(1).nullable().default(null),
+        addressedTo: z.string().min(1).nullable().default(null),
+      })
+      .nullable()
+      .default(null),
     dueDate: z.string().min(1).nullable(),
     confidence: confidenceSchema,
     evidence: z.array(evidenceQuoteSchema).min(1),

@@ -80,6 +80,90 @@
       color 140ms ease;
   }
 
+  /* AppTooltip is the single tooltip styling boundary. max-content keeps
+     short labels intact; the viewport-aware cap lets prose wrap at spaces
+     without splitting words or producing narrow, jagged columns. */
+  .app-tooltip-trigger {
+    display: inline-flex;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .app-tooltip-content {
+    position: fixed;
+    z-index: 100;
+    pointer-events: none;
+    transform: translateX(-50%);
+    inline-size: max-content;
+    max-inline-size: min(var(--tooltip-max-width), calc(100vw - 2rem));
+    padding: var(--tooltip-padding-block) var(--tooltip-padding-inline);
+    border: 1px solid var(--tooltip-border);
+    border-radius: var(--tooltip-radius);
+    background: var(--tooltip-background);
+    color: var(--tooltip-foreground);
+    box-shadow: var(--tooltip-shadow);
+    font-size: var(--tooltip-font-size);
+    font-weight: 500;
+    line-height: var(--tooltip-line-height);
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    text-wrap: pretty;
+    animation: app-tooltip-in var(--motion-fast) var(--ease-out) both;
+  }
+
+  /* The arrow ties the overlay to the element it explains, so a tooltip near
+     a dense badge row can't be mistaken for a neighbouring chip. */
+  .app-tooltip-arrow {
+    position: absolute;
+    left: var(--tooltip-arrow-left);
+    inline-size: calc(var(--tooltip-arrow-size) * 2);
+    block-size: calc(var(--tooltip-arrow-size) * 2);
+    margin-left: calc(var(--tooltip-arrow-size) * -1);
+    border-radius: 2px;
+    background: var(--tooltip-background);
+    transform: rotate(45deg);
+  }
+
+  .app-tooltip-content[data-placement="top"] .app-tooltip-arrow {
+    bottom: calc(var(--tooltip-arrow-size) * -1 + 1px);
+  }
+
+  .app-tooltip-content[data-placement="bottom"] .app-tooltip-arrow {
+    top: calc(var(--tooltip-arrow-size) * -1 + 1px);
+  }
+
+  @keyframes app-tooltip-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(var(--tooltip-enter-shift, 4px));
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .app-tooltip-content {
+      animation: none;
+    }
+  }
+
+  /* Task chat send control must stay circular; the global button radius
+     above would otherwise force --radius-control corners on the 44×44 icon. */
+  button[data-slot="button"].chat-send {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    padding: 0;
+    border-radius: var(--radius-pill);
+  }
+  button[data-slot="button"].chat-send[data-disabled="true"],
+  button[data-slot="button"].chat-send:disabled {
+    border-radius: var(--radius-pill);
+  }
+
   /* SyncMyDayButton is an explicit, component-owned exception that uses a
      HeroUI Button slot for its animated brand surface. */
   button[data-slot="button"].sync-day-cta {

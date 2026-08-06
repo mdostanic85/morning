@@ -18,7 +18,7 @@ const MODEL_COST_PER_MILLION_TOKENS: Record<string, { input: number; output: num
   "llama-3.1-8b-instant": { input: 0.05, output: 0.08 },
   "gpt-4.1": { input: 2.0, output: 8.0 },
   "gpt-4.1-mini": { input: 0.4, output: 1.6 },
-  "claude-3-7-sonnet-latest": { input: 3.0, output: 15.0 },
+  "claude-sonnet-4-5": { input: 3.0, output: 15.0 },
   "text-embedding-3-small": { input: 0.02, output: 0 },
 };
 

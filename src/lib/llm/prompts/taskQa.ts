@@ -50,6 +50,21 @@ export const taskQaOutputSchema = z.object({
 
 export type TaskQaOutput = z.infer<typeof taskQaOutputSchema>;
 
+/**
+ * Provider-safe ceilings for task chat.
+ *
+ * Without a total budget, general questions can pack 60 full source bodies
+ * (24k chars each) plus 100 knowledge items into one prompt and exceed every
+ * model context window. Character budgets are conservative enough for Groq
+ * fallbacks (~32k–128k tokens) while leaving room for the system prompt and
+ * the 4k-token completion.
+ */
+export const TASK_CHAT_USER_PROMPT_BUDGET = 72_000;
+export const TASK_CHAT_MAX_SOURCES = 60;
+export const TASK_CHAT_MAX_KNOWLEDGE = 40;
+export const TASK_CHAT_MAX_SOURCE_BODY_CHARS = 8_000;
+export const TASK_CHAT_MAX_KNOWLEDGE_CONTENT_CHARS = 1_000;
+
 export const TASK_QA_SYSTEM_PROMPT = buildStrictSystemPrompt({
   role: `You are a personal work assistant. You answer questions using only the synced work context supplied by the application. A selected task may be supplied to narrow the scope; otherwise, answer across all supplied work context. Accuracy and calibrated uncertainty matter more than being helpful at any cost.`,
   jobInstructions: `
@@ -79,7 +94,12 @@ export const TASK_QA_SYSTEM_PROMPT = buildStrictSystemPrompt({
 }`,
 });
 
-export function buildTaskQaUserPrompt(input: TaskQaInput): string {
+function clampText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).trimEnd()}…`;
+}
+
+function renderTaskQaUserPrompt(input: TaskQaInput): string {
   return [
     `Question: ${wrapUntrustedContent("user question", input.question)}`,
     `Current user: ${wrapUntrustedContent("current user", input.currentUserName ?? "unknown")}`,
@@ -95,4 +115,64 @@ export function buildTaskQaUserPrompt(input: TaskQaInput): string {
     "Extracted work knowledge:",
     wrapUntrustedContent("work knowledge", JSON.stringify(input.knowledge, null, 2)),
   ].join("\n");
+}
+
+/**
+ * Cap per-item size, then drop lowest-priority entries (callers sort sources
+ * highest-priority first) until the rendered user prompt fits the budget.
+ */
+function applyTaskQaBudget(input: TaskQaInput): TaskQaInput {
+  let sources = input.sources
+    .slice(0, TASK_CHAT_MAX_SOURCES)
+    .map((source) => ({
+      ...source,
+      body: clampText(source.body, TASK_CHAT_MAX_SOURCE_BODY_CHARS),
+    }));
+  let knowledge = input.knowledge
+    .slice(0, TASK_CHAT_MAX_KNOWLEDGE)
+    .map((item) => ({
+      ...item,
+      content: clampText(item.content, TASK_CHAT_MAX_KNOWLEDGE_CONTENT_CHARS),
+    }));
+
+  let fitted: TaskQaInput = { ...input, sources, knowledge };
+  while (
+    renderTaskQaUserPrompt(fitted).length > TASK_CHAT_USER_PROMPT_BUDGET &&
+    (sources.length > 1 || knowledge.length > 0)
+  ) {
+    if (sources.length > 1) {
+      sources = sources.slice(0, -1);
+    } else {
+      knowledge = knowledge.slice(0, -1);
+    }
+    fitted = { ...input, sources, knowledge };
+  }
+
+  // Last resort: shrink the sole remaining source body until the prompt fits.
+  if (
+    renderTaskQaUserPrompt(fitted).length > TASK_CHAT_USER_PROMPT_BUDGET &&
+    sources.length === 1
+  ) {
+    const originalBody = sources[0].body;
+    let bodyBudget = Math.min(originalBody.length, TASK_CHAT_MAX_SOURCE_BODY_CHARS);
+    while (bodyBudget > 500) {
+      bodyBudget = Math.floor(bodyBudget * 0.7);
+      sources = [
+        {
+          ...sources[0],
+          body: clampText(originalBody, bodyBudget),
+        },
+      ];
+      fitted = { ...input, sources, knowledge };
+      if (renderTaskQaUserPrompt(fitted).length <= TASK_CHAT_USER_PROMPT_BUDGET) {
+        break;
+      }
+    }
+  }
+
+  return fitted;
+}
+
+export function buildTaskQaUserPrompt(input: TaskQaInput): string {
+  return renderTaskQaUserPrompt(applyTaskQaBudget(input));
 }

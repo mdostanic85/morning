@@ -1,4 +1,4 @@
-/* ── Human-readable morning brief ──────────────────────────────────────────
+/* ── Human-readable daily brief ────────────────────────────────────────────
    A quiet bento layout: primary focus plus next-up tasks beside meetings.
    Cards size to their content — they do not stretch to fill the grid.
 ─────────────────────────────────────────────────────────────────────────── */
@@ -359,6 +359,15 @@
   font-size: 0.95rem;
   font-weight: 680;
   line-height: 1.58;
+}
+
+/* Shown only when the action is not backed by the evidence beside it. */
+.brief-pillar-action p.brief-action-warning {
+  margin-top: 0.55rem;
+  color: var(--danger);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .brief-pillar ul {

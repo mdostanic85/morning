@@ -19,10 +19,13 @@ export const JOB_TYPES = [
   "figma_frame_discovery",
   "delivery_sync_review",
   "hydra_report",
+  // The only job allowed on the public/cheap provider. Its input is text the
+  // user pasted deliberately, never ingested personal source content.
+  "public_research",
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
-export const PROVIDERS = ["openai", "anthropic", "groq", "local"] as const;
+export const PROVIDERS = ["openai", "anthropic", "groq", "gemini", "local"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
 export interface ModelConfig {

@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import {
   workTasks as workTasksTable,
   evidence as evidenceTable,
+  taskCriterionEvidence as taskCriterionEvidenceTable,
   verificationReports as verificationReportsTable,
   syncReviewReports as syncReviewReportsTable,
 } from "@/db/tables";
@@ -619,8 +620,11 @@ export async function approveWorkTask(id: number): Promise<WorkTask | null> {
 }
 
 export async function deleteWorkTask(id: number): Promise<void> {
+  // `task_criterion_evidence` FKs both task and evidence with no CASCADE.
+  // Clear those links first so neither evidence nor task delete can raise 23503.
   if (isPostgresDatabase()) {
     await db.transaction(async (tx) => {
+      await tx.delete(taskCriterionEvidenceTable).where(eq(taskCriterionEvidenceTable.taskId, id));
       await tx.delete(evidenceTable).where(eq(evidenceTable.taskId, id));
       await tx.delete(verificationReportsTable).where(eq(verificationReportsTable.taskId, id));
       await tx.delete(workTasksTable).where(eq(workTasksTable.id, id));
@@ -629,6 +633,7 @@ export async function deleteWorkTask(id: number): Promise<void> {
   }
 
   await withTransaction((tx) => {
+    syncRun(tx.delete(taskCriterionEvidenceTable).where(eq(taskCriterionEvidenceTable.taskId, id)));
     syncRun(tx.delete(evidenceTable).where(eq(evidenceTable.taskId, id)));
     syncRun(tx.delete(verificationReportsTable).where(eq(verificationReportsTable.taskId, id)));
     syncRun(tx.delete(workTasksTable).where(eq(workTasksTable.id, id)));
