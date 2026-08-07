@@ -238,6 +238,23 @@ export function buildRedirectUri(origin: string, provider: OAuthProvider): strin
 }
 
 /**
+ * Canonical public origin for OAuth redirects. Prefer WORKLIGHT_APP_URL so the
+ * redirect_uri stays stable across Vercel aliases (worklight.vercel.app vs
+ * *.vercel.app deployment hosts). Auth and token exchange must use the same value.
+ */
+export function resolveAppOrigin(requestUrl: string): string {
+  const configured = process.env.WORKLIGHT_APP_URL?.trim().replace(/\/+$/, "");
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      // Fall through to the request origin when the env value is malformed.
+    }
+  }
+  return new URL(requestUrl).origin;
+}
+
+/**
  * Resolve which provider an OAuth callback belongs to.
  * Google providers share one redirect URI, so the path may say "gmail" while
  * state says "calendar".

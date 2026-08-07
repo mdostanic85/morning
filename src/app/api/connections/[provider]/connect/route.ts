@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildAuthorizationUrl } from "@/lib/connectors/oauth";
+import { buildAuthorizationUrl, resolveAppOrigin } from "@/lib/connectors/oauth";
 import { isConnectionProvider, isOAuthProvider } from "@/lib/connectors/providers";
 
 export async function GET(
@@ -12,7 +12,7 @@ export async function GET(
   }
 
   const url = new URL(request.url);
-  const origin = url.origin;
+  const origin = resolveAppOrigin(request.url);
   const linkGoogle = url.searchParams.get("link") === "google";
   try {
     return NextResponse.redirect(
