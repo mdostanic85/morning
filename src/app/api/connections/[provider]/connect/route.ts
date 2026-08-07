@@ -15,7 +15,9 @@ export async function GET(
   const origin = url.origin;
   const linkGoogle = url.searchParams.get("link") === "google";
   try {
-    return NextResponse.redirect(buildAuthorizationUrl({ provider, origin, linkGoogle }));
+    return NextResponse.redirect(
+      await buildAuthorizationUrl({ provider, origin, linkGoogle })
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not start OAuth flow.";
     return NextResponse.redirect(

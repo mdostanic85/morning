@@ -26,16 +26,16 @@ export async function GET(
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error_description") ?? url.searchParams.get("error");
-  const provider: OAuthProvider = resolveOAuthCallbackProvider(urlProvider, state);
+  const provider: OAuthProvider = await resolveOAuthCallbackProvider(urlProvider, state);
   // Read linked providers before consuming the state (consume deletes it).
-  const linkedProviders = state ? getOAuthStateLinkedProviders(state) : [];
+  const linkedProviders = state ? await getOAuthStateLinkedProviders(state) : [];
 
   if (oauthError) {
     return NextResponse.redirect(
       `${origin}/settings?connection_error=${encodeURIComponent(oauthError)}`
     );
   }
-  if (!code || !state || !consumeOAuthState(state, provider)) {
+  if (!code || !state || !(await consumeOAuthState(state, provider))) {
     return NextResponse.redirect(
       `${origin}/settings?connection_error=${encodeURIComponent("Invalid or expired OAuth callback. Please try connecting again.")}`
     );
