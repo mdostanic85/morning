@@ -35,6 +35,21 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
 
+  async function parseSettingsResponse(res: Response): Promise<{
+    statuses?: ProviderKeyStatus[];
+    error?: string;
+  }> {
+    const text = await res.text();
+    if (!text.trim()) {
+      throw new Error(res.ok ? "Empty response from server." : `Request failed (${res.status}).`);
+    }
+    try {
+      return JSON.parse(text) as { statuses?: ProviderKeyStatus[]; error?: string };
+    } catch {
+      throw new Error(res.ok ? "Unexpected response from server." : `Request failed (${res.status}).`);
+    }
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!key.trim()) return;
@@ -45,11 +60,11 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider: status.provider, key }),
       });
-      const data = await res.json();
+      const data = await parseSettingsResponse(res);
       if (!res.ok) {
         throw new Error(data.error ?? "Could not save the key.");
       }
-      const updated = data.statuses.find(
+      const updated = data.statuses?.find(
         (s: ProviderKeyStatus) => s.provider === status.provider
       );
       if (updated) setStatus(updated);
@@ -71,11 +86,11 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider: status.provider, enabled }),
       });
-      const data = await res.json();
+      const data = await parseSettingsResponse(res);
       if (!res.ok) {
         throw new Error(data.error ?? "Could not update provider.");
       }
-      const updated = data.statuses.find(
+      const updated = data.statuses?.find(
         (s: ProviderKeyStatus) => s.provider === status.provider
       );
       if (updated) setStatus(updated);
@@ -95,11 +110,11 @@ export function ApiKeyForm({ initialStatus }: { initialStatus: ProviderKeyStatus
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider: status.provider }),
       });
-      const data = await res.json();
+      const data = await parseSettingsResponse(res);
       if (!res.ok) {
         throw new Error(data.error ?? "Could not remove the key.");
       }
-      const updated = data.statuses.find(
+      const updated = data.statuses?.find(
         (s: ProviderKeyStatus) => s.provider === status.provider
       );
       if (updated) setStatus(updated);

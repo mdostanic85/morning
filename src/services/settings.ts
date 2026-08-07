@@ -1,14 +1,17 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { connectionSecrets as connectionSecretsTable } from "@/db/tables";
+import { execute, fetchOne } from "@/db/query";
+import { decryptSecret, encryptSecret } from "@/lib/crypto/secretBox";
 
-// API keys are intentionally kept out of the SQLite `settings` table and out
-// of any endpoint that returns raw values to the browser. They live in their
-// own local, gitignored file and are only ever exposed to the client as a
-// masked preview.
-//
-// Resolution order (also relied on by the LLM router): environment variable
-// first, then the local secrets file saved from the Settings page.
+// API keys stay out of any endpoint that returns raw values to the browser.
+// Resolution order: environment variable first, then the encrypted DB blob
+// (Settings page). A local `data/secrets.json` is only a legacy read fallback
+// for pre-Postgres installs — writes always go to Postgres so hosted deploys
+// (read-only filesystem) keep working.
 
 export const CLOUD_LLM_PROVIDERS = ["groq", "openai", "anthropic", "gemini"] as const;
 export type CloudLlmProvider = (typeof CLOUD_LLM_PROVIDERS)[number];
@@ -26,8 +29,12 @@ const ENV_VAR_NAME: Record<LlmProvider, string> = {
   local: "LOCAL_LLM_API_KEY",
 };
 
-const secretsPath = path.join(process.cwd(), "data", "secrets.json");
-const llmSettingsPath = path.join(process.cwd(), "data", "llm-settings.json");
+/** Reserved `connection_secrets.provider` keys — not real connectors. */
+const LLM_KEYS_BLOB = "llm.api_keys";
+const LLM_SETTINGS_BLOB = "llm.settings";
+
+const legacySecretsPath = path.join(process.cwd(), "data", "secrets.json");
+const legacyLlmSettingsPath = path.join(process.cwd(), "data", "llm-settings.json");
 
 type SecretsFile = Partial<Record<LlmProvider, string>>;
 type LlmSettingsFile = {
@@ -54,51 +61,70 @@ export interface LocalLlmStatus {
   source: "env" | "settings" | null;
 }
 
-function readSecretsFile(): SecretsFile {
-  if (!fs.existsSync(secretsPath)) return {};
+async function readEncryptedBlob<T>(provider: string): Promise<T | null> {
+  const row = await fetchOne(
+    db
+      .select()
+      .from(connectionSecretsTable)
+      .where(eq(connectionSecretsTable.provider, provider))
+  );
+  if (!row) return null;
+  return JSON.parse(decryptSecret(row.ciphertext)) as T;
+}
+
+async function writeEncryptedBlob(provider: string, value: unknown): Promise<void> {
+  const ciphertext = encryptSecret(JSON.stringify(value));
+  await execute(
+    db
+      .insert(connectionSecretsTable)
+      .values({ provider, ciphertext })
+      .onConflictDoUpdate({
+        target: connectionSecretsTable.provider,
+        set: { ciphertext, updatedAt: new Date().toISOString() },
+      })
+  );
+}
+
+function readLegacyJsonFile<T>(filePath: string): T | null {
+  if (!fs.existsSync(filePath)) return null;
   try {
-    return JSON.parse(fs.readFileSync(secretsPath, "utf-8"));
+    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
   } catch {
-    return {};
+    return null;
   }
 }
 
-function writeSecretsFile(secrets: SecretsFile) {
-  const dir = path.dirname(secretsPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(secretsPath, JSON.stringify(secrets, null, 2), {
-    mode: 0o600,
-  });
+async function readSecretsFile(): Promise<SecretsFile> {
+  const fromDb = await readEncryptedBlob<SecretsFile>(LLM_KEYS_BLOB);
+  if (fromDb) return fromDb;
+  return readLegacyJsonFile<SecretsFile>(legacySecretsPath) ?? {};
 }
 
-function readLlmSettingsFile(): LlmSettingsFile {
-  if (!fs.existsSync(llmSettingsPath)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(llmSettingsPath, "utf-8")) as LlmSettingsFile;
-  } catch {
-    return {};
-  }
+async function writeSecretsFile(secrets: SecretsFile): Promise<void> {
+  await writeEncryptedBlob(LLM_KEYS_BLOB, secrets);
 }
 
-function writeLlmSettingsFile(settings: LlmSettingsFile) {
-  const dir = path.dirname(llmSettingsPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(llmSettingsPath, JSON.stringify(settings, null, 2), {
-    mode: 0o600,
-  });
+async function readLlmSettingsFile(): Promise<LlmSettingsFile> {
+  const fromDb = await readEncryptedBlob<LlmSettingsFile>(LLM_SETTINGS_BLOB);
+  if (fromDb) return fromDb;
+  return readLegacyJsonFile<LlmSettingsFile>(legacyLlmSettingsPath) ?? {};
 }
 
-function disabledProviders(): Set<LlmProvider> {
-  const disabled = readLlmSettingsFile().disabled ?? [];
+async function writeLlmSettingsFile(settings: LlmSettingsFile): Promise<void> {
+  await writeEncryptedBlob(LLM_SETTINGS_BLOB, settings);
+}
+
+async function disabledProviders(): Promise<Set<LlmProvider>> {
+  const disabled = (await readLlmSettingsFile()).disabled ?? [];
   return new Set(disabled.filter((provider) => LLM_PROVIDERS.includes(provider)));
 }
 
 export async function isProviderEnabled(provider: LlmProvider): Promise<boolean> {
-  return !disabledProviders().has(provider);
+  return !(await disabledProviders()).has(provider);
 }
 
 export async function setProviderEnabled(provider: LlmProvider, enabled: boolean) {
-  const settings = readLlmSettingsFile();
+  const settings = await readLlmSettingsFile();
   const disabled = new Set(
     (settings.disabled ?? []).filter((item) => LLM_PROVIDERS.includes(item))
   );
@@ -108,7 +134,7 @@ export async function setProviderEnabled(provider: LlmProvider, enabled: boolean
     disabled.add(provider);
   }
   settings.disabled = Array.from(disabled);
-  writeLlmSettingsFile(settings);
+  await writeLlmSettingsFile(settings);
 }
 
 function mask(key: string): string {
@@ -122,13 +148,13 @@ export interface ProviderKeyStatus {
   maskedKey: string | null;
   /** True when the key comes from an environment variable rather than the Settings page. */
   source: "env" | "settings" | null;
-  /** When false, router skips this provider but the saved key stays on disk. */
+  /** When false, router skips this provider but the saved key stays stored. */
   enabled: boolean;
 }
 
 export async function getApiKeyStatuses(): Promise<ProviderKeyStatus[]> {
-  const secrets = readSecretsFile();
-  const disabled = disabledProviders();
+  const secrets = await readSecretsFile();
+  const disabled = await disabledProviders();
   return CLOUD_LLM_PROVIDERS.map((provider) => {
     const envKey = process.env[ENV_VAR_NAME[provider]];
     const savedKey = secrets[provider];
@@ -149,7 +175,7 @@ function normalizeLocalBaseUrl(value: string): string {
 
 /** Local chat configuration. Environment values take precedence over Settings. */
 export async function getLocalLlmConfig(): Promise<LocalLlmConfig | null> {
-  const settings = readLlmSettingsFile();
+  const settings = await readLlmSettingsFile();
   const envBaseUrl = process.env.LOCAL_LLM_BASE_URL?.trim();
   const envModel = process.env.LOCAL_LLM_MODEL?.trim();
   const baseUrl = normalizeLocalBaseUrl(envBaseUrl || settings.local?.baseUrl || "");
@@ -167,8 +193,8 @@ export async function getLocalLlmConfig(): Promise<LocalLlmConfig | null> {
 }
 
 export async function getLocalLlmStatus(): Promise<LocalLlmStatus> {
-  const settings = readLlmSettingsFile();
-  const secrets = readSecretsFile();
+  const settings = await readLlmSettingsFile();
+  const secrets = await readSecretsFile();
   const envBaseUrl = process.env.LOCAL_LLM_BASE_URL?.trim();
   const envModel = process.env.LOCAL_LLM_MODEL?.trim();
   const envKey = process.env.LOCAL_LLM_API_KEY?.trim();
@@ -176,11 +202,12 @@ export async function getLocalLlmStatus(): Promise<LocalLlmStatus> {
   const model = (envModel || settings.local?.model || "").trim();
   const key = envKey || secrets.local || null;
   const source = envBaseUrl || envModel || envKey ? "env" : baseUrl || model || key ? "settings" : null;
+  const disabled = await disabledProviders();
 
   return {
     provider: "local",
     configured: Boolean(baseUrl && model),
-    enabled: Boolean(baseUrl && model) && !disabledProviders().has("local"),
+    enabled: Boolean(baseUrl && model) && !disabled.has("local"),
     baseUrl,
     model,
     maskedKey: key ? mask(key) : null,
@@ -200,7 +227,7 @@ export async function saveLocalLlmConfig(input: {
   const model = input.model.trim();
   if (!model) throw new Error("Local LLM model is required.");
 
-  const settings = readLlmSettingsFile();
+  const settings = await readLlmSettingsFile();
   const wasConfigured = Boolean(settings.local?.baseUrl && settings.local?.model);
   settings.local = {
     baseUrl: normalizeLocalBaseUrl(parsedUrl.toString()),
@@ -211,7 +238,7 @@ export async function saveLocalLlmConfig(input: {
   if (!wasConfigured && !(settings.disabled ?? []).includes("local")) {
     settings.disabled = [...(settings.disabled ?? []), "local"];
   }
-  writeLlmSettingsFile(settings);
+  await writeLlmSettingsFile(settings);
 
   if (input.apiKey?.trim()) {
     await saveApiKey("local", input.apiKey);
@@ -219,9 +246,9 @@ export async function saveLocalLlmConfig(input: {
 }
 
 export async function clearLocalLlmConfig(): Promise<void> {
-  const settings = readLlmSettingsFile();
+  const settings = await readLlmSettingsFile();
   delete settings.local;
-  writeLlmSettingsFile(settings);
+  await writeLlmSettingsFile(settings);
   await clearApiKey("local");
 }
 
@@ -233,7 +260,7 @@ export async function clearLocalLlmConfig(): Promise<void> {
 export async function getRawApiKey(provider: LlmProvider): Promise<string | null> {
   const envKey = process.env[ENV_VAR_NAME[provider]];
   if (envKey) return envKey;
-  const secrets = readSecretsFile();
+  const secrets = await readSecretsFile();
   return secrets[provider] ?? null;
 }
 
@@ -257,13 +284,13 @@ export async function getActiveProviders(): Promise<LlmProvider[]> {
 }
 
 export async function saveApiKey(provider: LlmProvider, key: string) {
-  const secrets = readSecretsFile();
+  const secrets = await readSecretsFile();
   secrets[provider] = key.trim();
-  writeSecretsFile(secrets);
+  await writeSecretsFile(secrets);
 }
 
 export async function clearApiKey(provider: LlmProvider) {
-  const secrets = readSecretsFile();
+  const secrets = await readSecretsFile();
   delete secrets[provider];
-  writeSecretsFile(secrets);
+  await writeSecretsFile(secrets);
 }
