@@ -4,6 +4,7 @@ import {
   exchangeCodeForToken,
   getOAuthConfig,
   getOAuthStateLinkedProviders,
+  resolveAppOrigin,
   resolveOAuthCallbackProvider,
   type OAuthProvider,
 } from "@/lib/connectors/oauth";
@@ -22,7 +23,7 @@ export async function GET(
   }
 
   const url = new URL(request.url);
-  const origin = url.origin;
+  const origin = resolveAppOrigin(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error_description") ?? url.searchParams.get("error");

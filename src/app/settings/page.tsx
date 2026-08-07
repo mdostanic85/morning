@@ -45,11 +45,7 @@ export default async function SettingsPage({
  ? null
  : `To enable direct API access, add ${vars} to .env.local, create the OAuth app at ${url}, then restart the app. Connected app access works without these keys.`;
 
-  const googleSetupHint = oauthSetupHint(
-    hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"),
-    "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET",
-    "console.cloud.google.com"
-  );
+  const googleConfigured = hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET");
   const googleProviders = [
     { provider: "gmail", label: "Gemini notes" },
     { provider: "calendar", label: "Google Calendar" },
@@ -69,6 +65,12 @@ export default async function SettingsPage({
   const googleAllConnected = googleSources
     .filter((source) => !source.hidden)
     .every((source) => source.status === "connected");
+  const googleRedirectUri = `${(process.env.WORKLIGHT_APP_URL?.trim() || "https://worklight.vercel.app").replace(/\/+$/, "")}/api/connections/gmail/callback`;
+  const googleSetupHint = !googleConfigured
+    ? oauthSetupHint(false, "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET", "console.cloud.google.com")
+    : googleAllConnected
+      ? null
+      : `In Google Cloud → Credentials → your Web client, Authorized redirect URIs must include exactly: ${googleRedirectUri}`;
 
   const connectionCards = [
     {
