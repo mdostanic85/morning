@@ -1,7 +1,10 @@
 import "server-only";
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
+import { eq } from "drizzle-orm";
+import { db } from "@/db/client";
+import { connectionSecrets as connectionSecretsTable } from "@/db/tables";
+import { execute, fetchOne } from "@/db/query";
+import { decryptSecret, encryptSecret } from "@/lib/crypto/secretBox";
 import { saveConnectionSecret, type ConnectionSecret } from "@/services/connectionSecrets";
 import { fetchWithTimeout } from "@/lib/http";
 
@@ -59,7 +62,11 @@ interface OAuthConfig {
   extraAuthParams?: Record<string, string>;
 }
 
-const statePath = path.join(process.cwd(), "data", "oauth-states.json");
+/**
+ * CSRF/state tokens for OAuth live in Postgres (one encrypted row per state),
+ * not on the local filesystem — hosted deploys have no writable persistent disk.
+ */
+const OAUTH_STATE_PREFIX = "oauth.state.";
 
 interface OAuthStateEntry {
   provider: OAuthProvider;
@@ -68,19 +75,44 @@ interface OAuthStateEntry {
   linkedProviders?: OAuthProvider[];
 }
 
-function readStateFile(): Record<string, OAuthStateEntry> {
-  if (!fs.existsSync(statePath)) return {};
+function stateProviderKey(state: string): string {
+  return `${OAUTH_STATE_PREFIX}${state}`;
+}
+
+async function readStateEntry(state: string): Promise<OAuthStateEntry | null> {
+  const row = await fetchOne(
+    db
+      .select()
+      .from(connectionSecretsTable)
+      .where(eq(connectionSecretsTable.provider, stateProviderKey(state)))
+  );
+  if (!row) return null;
   try {
-    return JSON.parse(fs.readFileSync(statePath, "utf-8"));
+    return JSON.parse(decryptSecret(row.ciphertext)) as OAuthStateEntry;
   } catch {
-    return {};
+    return null;
   }
 }
 
-function writeStateFile(states: Record<string, OAuthStateEntry>) {
-  const dir = path.dirname(statePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(statePath, JSON.stringify(states, null, 2), { mode: 0o600 });
+async function writeStateEntry(state: string, entry: OAuthStateEntry): Promise<void> {
+  const ciphertext = encryptSecret(JSON.stringify(entry));
+  await execute(
+    db
+      .insert(connectionSecretsTable)
+      .values({ provider: stateProviderKey(state), ciphertext })
+      .onConflictDoUpdate({
+        target: connectionSecretsTable.provider,
+        set: { ciphertext, updatedAt: new Date().toISOString() },
+      })
+  );
+}
+
+async function deleteStateEntry(state: string): Promise<void> {
+  await execute(
+    db
+      .delete(connectionSecretsTable)
+      .where(eq(connectionSecretsTable.provider, stateProviderKey(state)))
+  );
 }
 
 function env(name: string): string {
@@ -155,58 +187,44 @@ export function getOAuthConfig(provider: OAuthProvider): OAuthConfig | null {
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
-function pruneExpiredStates(
-  states: Record<string, OAuthStateEntry>
-): Record<string, OAuthStateEntry> {
-  const now = Date.now();
-  return Object.fromEntries(
-    Object.entries(states).filter(
-      ([, entry]) => now - new Date(entry.createdAt).getTime() < STATE_TTL_MS
-    )
-  );
+function isStateFresh(entry: OAuthStateEntry): boolean {
+  return Date.now() - new Date(entry.createdAt).getTime() < STATE_TTL_MS;
 }
 
-export function createOAuthState(
+export async function createOAuthState(
   provider: OAuthProvider,
   linkedProviders?: OAuthProvider[]
-): string {
+): Promise<string> {
   const state = crypto.randomBytes(24).toString("hex");
-  const states = pruneExpiredStates(readStateFile());
-  states[state] = {
+  await writeStateEntry(state, {
     provider,
     createdAt: new Date().toISOString(),
     ...(linkedProviders && linkedProviders.length > 0 ? { linkedProviders } : {}),
-  };
-  writeStateFile(states);
+  });
   return state;
 }
 
-export function getOAuthStateProvider(state: string): OAuthProvider | null {
-  const states = readStateFile();
-  const entry = states[state];
-  if (!entry) return null;
-  const ageMs = Date.now() - new Date(entry.createdAt).getTime();
-  if (ageMs >= STATE_TTL_MS) return null;
+export async function getOAuthStateProvider(state: string): Promise<OAuthProvider | null> {
+  const entry = await readStateEntry(state);
+  if (!entry || !isStateFresh(entry)) {
+    if (entry) await deleteStateEntry(state);
+    return null;
+  }
   return entry.provider;
 }
 
 /** Providers a still-valid OAuth state should connect together (empty when none). */
-export function getOAuthStateLinkedProviders(state: string): OAuthProvider[] {
-  const entry = readStateFile()[state];
-  if (!entry) return [];
-  const ageMs = Date.now() - new Date(entry.createdAt).getTime();
-  if (ageMs >= STATE_TTL_MS) return [];
+export async function getOAuthStateLinkedProviders(state: string): Promise<OAuthProvider[]> {
+  const entry = await readStateEntry(state);
+  if (!entry || !isStateFresh(entry)) return [];
   return entry.linkedProviders ?? [];
 }
 
-export function consumeOAuthState(state: string, provider: OAuthProvider): boolean {
-  const states = readStateFile();
-  const entry = states[state];
-  delete states[state];
-  writeStateFile(pruneExpiredStates(states));
+export async function consumeOAuthState(state: string, provider: OAuthProvider): Promise<boolean> {
+  const entry = await readStateEntry(state);
+  await deleteStateEntry(state);
   if (!entry || entry.provider !== provider) return false;
-  const ageMs = Date.now() - new Date(entry.createdAt).getTime();
-  return ageMs < STATE_TTL_MS;
+  return isStateFresh(entry);
 }
 
 export function buildRedirectUri(origin: string, provider: OAuthProvider): string {
@@ -224,12 +242,12 @@ export function buildRedirectUri(origin: string, provider: OAuthProvider): strin
  * Google providers share one redirect URI, so the path may say "gmail" while
  * state says "calendar".
  */
-export function resolveOAuthCallbackProvider(
+export async function resolveOAuthCallbackProvider(
   urlProvider: OAuthProvider,
   state: string | null
-): OAuthProvider {
+): Promise<OAuthProvider> {
   if (!state) return urlProvider;
-  const stateProvider = getOAuthStateProvider(state);
+  const stateProvider = await getOAuthStateProvider(state);
   if (!stateProvider) return urlProvider;
   if (stateProvider === urlProvider) return stateProvider;
   if (isGoogleOAuthProvider(urlProvider) && isGoogleOAuthProvider(stateProvider)) {
@@ -238,12 +256,12 @@ export function resolveOAuthCallbackProvider(
   return urlProvider;
 }
 
-export function buildAuthorizationUrl(input: {
+export async function buildAuthorizationUrl(input: {
   provider: OAuthProvider;
   origin: string;
   /** Google only: request Gmail + Calendar + Drive scopes in a single consent. */
   linkGoogle?: boolean;
-}): string {
+}): Promise<string> {
   const config = getOAuthConfig(input.provider);
   if (!config || !config.clientId) {
     throw new Error(`Missing OAuth client config for ${input.provider}.`);
@@ -258,7 +276,7 @@ export function buildAuthorizationUrl(input: {
     redirect_uri: buildRedirectUri(input.origin, input.provider),
     response_type: "code",
     scope: scopes.join(" "),
-    state: createOAuthState(input.provider, linkedProviders),
+    state: await createOAuthState(input.provider, linkedProviders),
     ...(config.extraAuthParams ?? {}),
   });
 
