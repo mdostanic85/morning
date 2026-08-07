@@ -35,28 +35,42 @@ export async function PUT(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const body = await request.json();
-  if (typeof body?.enabled !== "boolean") {
+  try {
+    const body = await request.json();
+    if (typeof body?.enabled !== "boolean") {
+      return NextResponse.json(
+        { error: "An enabled boolean is required." },
+        { status: 400 }
+      );
+    }
+
+    const current = await getLocalLlmStatus();
+    if (body.enabled && !current.configured) {
+      return NextResponse.json(
+        { error: "Save a Local LLM base URL and model before enabling it." },
+        { status: 400 }
+      );
+    }
+
+    await setProviderEnabled("local", body.enabled);
+    return NextResponse.json({ status: await getLocalLlmStatus() });
+  } catch (error) {
     return NextResponse.json(
-      { error: "An enabled boolean is required." },
-      { status: 400 }
+      { error: error instanceof Error ? error.message : "Could not update Local LLM." },
+      { status: 500 }
     );
   }
-
-  const current = await getLocalLlmStatus();
-  if (body.enabled && !current.configured) {
-    return NextResponse.json(
-      { error: "Save a Local LLM base URL and model before enabling it." },
-      { status: 400 }
-    );
-  }
-
-  await setProviderEnabled("local", body.enabled);
-  return NextResponse.json({ status: await getLocalLlmStatus() });
 }
 
 export async function DELETE() {
-  await clearLocalLlmConfig();
-  await setProviderEnabled("local", false);
-  return NextResponse.json({ status: await getLocalLlmStatus() });
+  try {
+    await clearLocalLlmConfig();
+    await setProviderEnabled("local", false);
+    return NextResponse.json({ status: await getLocalLlmStatus() });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Could not clear Local LLM." },
+      { status: 500 }
+    );
+  }
 }
