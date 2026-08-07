@@ -305,10 +305,10 @@ export function AuthForm() {
     return (
       <div className="flex w-full flex-col gap-4">
         <div>
-          <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+          <h2 className="font-display text-[1.75rem] font-semibold tracking-tight text-foreground">
             Check your email
           </h2>
-          <p className="mt-1.5 text-[15px] leading-relaxed text-muted">
+          <p className="mt-2 text-[15px] leading-relaxed text-muted">
             Enter the verification code we sent to {email.trim() || "you"}.
           </p>
         </div>
@@ -375,11 +375,11 @@ export function AuthForm() {
       <div>
         <h2
           id="sign-in-heading"
-          className="font-display text-2xl font-semibold tracking-tight text-foreground"
+          className="font-display text-[1.75rem] font-semibold tracking-tight text-foreground"
         >
           {mode === "sign-in" ? "Welcome back" : "Create your account"}
         </h2>
-        <p className="mt-1.5 text-[15px] leading-relaxed text-muted">
+        <p className="mt-2 text-[15px] leading-relaxed text-muted">
           {mode === "sign-in" ? (
             <>Sign in to see today&apos;s focus.</>
           ) : (

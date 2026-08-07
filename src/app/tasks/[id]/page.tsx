@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, ExternalLink } from "lucide-react";
 import { getWorkTaskById } from "@/services/workTasks";
 import { getSourceItems } from "@/services/sourceItems";
+import { getUserProfile } from "@/services/userProfile";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
 import { SourceBadge } from "@/components/SourceBadge";
 import { BackToTodayButton } from "@/components/BackToTodayButton";
@@ -10,6 +11,7 @@ import { TaskActionButtons } from "@/components/TaskActionButtons";
 import { buildTaskSupportingSources } from "@/lib/tasks/taskSupportingSources";
 import { SOURCE_TYPES, type SourceType } from "@/domain/sourceItem";
 import { filterMeetingContextForTask } from "@/lib/tasks/evidenceRelevance";
+import { addressUserInCopy } from "@/lib/tasks/addressUserInCopy";
 import { humanizeReason } from "@/lib/tasks/humanizeReason";
 import { ReasonText } from "@/components/ReasonText";
 import { Heading } from "@/components/Heading";
@@ -106,12 +108,14 @@ export default async function TaskDetailPage({
  const taskId = Number(id);
  if (!Number.isInteger(taskId)) notFound();
 
- const [task, sourceItems] = await Promise.all([
+ const [task, sourceItems, profile] = await Promise.all([
  getWorkTaskById(taskId),
  getSourceItems(),
+ getUserProfile(),
  ]);
  if (!task) notFound();
 
+  const profileName = profile?.name?.trim() || null;
   const sourceById = new Map(sourceItems.map((source) => [source.id, source]));
   const isJiraTask = task.evidence.some(
     (item) => sourceById.get(item.sourceItemId)?.sourceType === "jira"
@@ -140,6 +144,13 @@ export default async function TaskDetailPage({
     supporting.groups.find((g) => g.jiraStatus)?.jiraStatus ??
     null;
 
+  const displayTitle = addressUserInCopy(task.title, profileName);
+  const displayReason = addressUserInCopy(
+    humanizeReason(task.reason, task.title, { maxSentences: 4, maxLength: 1200 }),
+    profileName
+  );
+  const displayNextAction = addressUserInCopy(task.nextAction, profileName);
+
   const outcomeChecks = matchCriteriaToDeliveryChecks(task.doneCriteria, {
     verification: task.latestVerificationReport,
     syncReview: task.latestSyncReviewReport,
@@ -155,7 +166,7 @@ export default async function TaskDetailPage({
     const evidence = task.evidence[index] ?? task.evidence[0] ?? null;
     return {
       number: index + 1,
-      criterion,
+      criterion: addressUserInCopy(criterion, profileName),
       isDone: check.verdict === "met",
       detail: check.detail,
       meta: outcomeSyncMeta(check, task.latestSyncReviewReport),
@@ -180,13 +191,13 @@ export default async function TaskDetailPage({
  <AppBadge tone={jiraStatusTone(jiraStatus)}>{jiraStatus}</AppBadge>
  ) : null}
  </div>
- <Heading level={1} className="mt-4 max-w-4xl">{task.title}</Heading>
+ <Heading level={1} className="mt-4 max-w-4xl">{displayTitle}</Heading>
  <div className="mt-4 w-full">
  <strong className="block text-sm uppercase tracking-[0.08em] text-accent-strong">
  Why this matters
  </strong>
  <ReasonText
- text={humanizeReason(task.reason, task.title, { maxSentences: 4, maxLength: 1200 })}
+ text={displayReason}
  sentencePerLine
  className="ft-screen-lead mt-2 text-muted"
  />
@@ -429,7 +440,7 @@ export default async function TaskDetailPage({
               <Heading level={2} visualLevel={4}>Change status</Heading>
               <p className="mt-2 text-sm leading-relaxed text-muted">
                 <span className="font-semibold text-foreground">Next: </span>
-                {task.nextAction}
+                {displayNextAction}
               </p>
               <div className="mt-4">
                 <TaskActionButtons

@@ -4,13 +4,16 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { XIcon } from "lucide-react";
 import { Toast } from "@heroui/react/toast";
 import { Button } from "@heroui/react/button";
+import { Modal } from "@heroui/react/modal";
 import { cn } from "@/lib/utils";
 import { SyncWhatsNewPanel } from "./SyncWhatsNewPanel";
 import type { SyncWhatsNew } from "@/lib/imports/syncWhatsNew";
 import type { ConnectionProvider } from "@/lib/connectors/providers";
 import loadingAnimation from "./loadingAnimation.json";
+import styles from "./SyncMyDayOverlay.module.css";
 
 const ACTIVE_SYNC_RUN_KEY = "worklight:activeSyncRunId";
 const POLL_INTERVAL_MS = 2000;
@@ -228,25 +231,8 @@ function resolveFinalizeStatus(
  return "hidden";
 }
 
-function overlayHeadline(syncRunStatus: string | null): string {
- if (syncRunStatus === "cancelling") return "Stopping the update…";
- return "Updating your day";
-}
-
-function overlayStepLine(
- providerItems: ProviderProgressItem[],
- finalizeStatus: FinalizeUiStatus
-): string {
- const settled = providerItems.filter(
- (item) => item.status === "completed" || item.status === "failed" || item.status === "cancelled"
- ).length;
- const failed = providerItems.filter((item) => item.status === "failed").length;
- const total = providerItems.length;
- if (total === 0) return "Preparing source checks…";
- if (finalizeStatus === "running") return "Building your queue and daily briefing…";
- const activeSource = providerItems.find((item) => item.status === "running");
- if (activeSource) return `Checking ${activeSource.label}`;
- return `${settled} of ${total} checked${failed > 0 ? ` · ${failed} need attention` : ""}`;
+function overlayHeadline(): string {
+  return "Updating your day";
 }
 
 /** 0..1 across provider steps plus the finalize step. */
@@ -466,21 +452,68 @@ function resultSummaryLine(result: SyncResult): string {
  return `${parts.join(", ")} across your sources.`;
 }
 
+type SyncStep = {
+  id: string;
+  label: string;
+  status: ProviderUiStatus | FinalizeUiStatus;
+  detail: string;
+};
+
+function buildSyncSteps(
+  providerItems: ProviderProgressItem[],
+  finalizeStatus: FinalizeUiStatus
+): SyncStep[] {
+  const steps: SyncStep[] = providerItems.map((item) => ({
+    id: item.id,
+    label: item.label,
+    status: item.status,
+    detail: item.detail,
+  }));
+
+  if (finalizeStatus !== "hidden") {
+    steps.push({
+      id: "finalize",
+      label: "Today’s briefing",
+      status: finalizeStatus,
+      detail:
+        finalizeStatus === "running"
+          ? "Turning fresh signals into your prioritized queue…"
+          : finalizeStatus === "completed"
+            ? "Priority queue and briefing refreshed"
+            : finalizeStatus === "failed"
+              ? "Could not finish queue or briefing"
+              : finalizeStatus === "cancelled"
+                ? "Stopped before the briefing finished"
+                : "Starts after all sources are checked",
+    });
+  }
+
+  return steps;
+}
+
+function resolveFocusStep(steps: SyncStep[]): SyncStep | null {
+  if (steps.length === 0) return null;
+  return (
+    steps.find((step) => step.status === "running") ??
+    steps.find((step) => step.status === "queued") ??
+    steps.find((step) => step.status === "failed") ??
+    steps[steps.length - 1]
+  );
+}
+
 function StatusDot({ status }: { status: ProviderUiStatus | FinalizeUiStatus }) {
   return (
     <span
       aria-hidden
       className={cn(
-        "flex size-5 shrink-0 items-center justify-center rounded-full transition-all duration-300",
+        styles.statusDot,
         status === "completed"
-          ? "bg-good/10 text-good"
+          ? styles.statusDotCompleted
           : status === "failed"
-            ? "bg-danger/10 text-danger"
-            : status === "cancelled"
-              ? "text-muted"
-              : status === "running"
-                ? "text-accent"
-                : "text-muted-soft"
+            ? styles.statusDotFailed
+            : status === "running"
+              ? styles.statusDotRunning
+              : styles.statusDotIdle
       )}
     >
       {status === "completed" ? (
@@ -498,321 +531,353 @@ function StatusDot({ status }: { status: ProviderUiStatus | FinalizeUiStatus }) 
   );
 }
 
-function ProgressRow({
- label,
- status,
- detail,
+const STEP_EXIT_MS = 240;
+
+function SyncStepStage({
+  step,
+  index,
+  total,
 }: {
- label: string;
- status: ProviderUiStatus | FinalizeUiStatus;
- detail: string;
+  step: SyncStep;
+  index: number;
+  total: number;
 }) {
-  const failed = status === "failed";
-  const active = status === "running";
-  const done = status === "completed";
+  const [displayed, setDisplayed] = useState(step);
+  const [displayedIndex, setDisplayedIndex] = useState(index);
+  const [phase, setPhase] = useState<"enter" | "exit" | "settle">("enter");
+  const prevIdRef = useRef(step.id);
+
+  useEffect(() => {
+    if (step.id === prevIdRef.current) {
+      setDisplayed(step);
+      setDisplayedIndex(index);
+      return;
+    }
+
+    setPhase("exit");
+    const swap = window.setTimeout(() => {
+      prevIdRef.current = step.id;
+      setDisplayed(step);
+      setDisplayedIndex(index);
+      setPhase("enter");
+    }, STEP_EXIT_MS);
+
+    return () => window.clearTimeout(swap);
+  }, [step, index]);
+
+  useEffect(() => {
+    if (phase !== "enter") return;
+    const settle = window.setTimeout(() => setPhase("settle"), 340);
+    return () => window.clearTimeout(settle);
+  }, [phase, displayed.id]);
+
+  const failed = displayed.status === "failed";
+  const active = displayed.status === "running";
 
   return (
-    <li
-      className={cn(
-        "flex items-center gap-2.5 px-3 py-2 transition-colors duration-300",
-        active && "bg-accent/[0.045]"
-      )}
-    >
-      <StatusDot status={status} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <p
-            className={cn(
-              "truncate text-sm font-semibold leading-snug tracking-[-0.01em] transition-colors duration-300",
-              failed ? "text-danger" : done || active ? "text-foreground" : "text-muted-soft"
-            )}
-          >
-            {label}
-          </p>
+    <div className={styles.stepStage} aria-live="polite">
+      <div
+        key={displayed.id}
+        className={cn(
+          styles.stepCard,
+          phase === "exit" && styles.stepCardExit,
+          phase === "enter" && styles.stepCardEnter
+        )}
+      >
+        <div className={styles.stepCardTop}>
+          <StatusDot status={displayed.status} />
           <span
             className={cn(
-              "shrink-0 text-sm font-bold uppercase tracking-[0.08em]",
+              styles.sourceStatus,
               failed
                 ? "text-danger"
                 : active
                   ? "text-accent"
-                  : done
+                  : displayed.status === "completed"
                     ? "text-good"
                     : "text-muted-soft"
             )}
           >
-            {statusLabel(status)}
+            {statusLabel(displayed.status)}
           </span>
         </div>
-        {(active || failed) && detail ? (
-          <p
-            className={cn(
-              "mt-0.5 text-sm leading-snug",
-              failed ? "text-danger/90" : "text-muted"
-            )}
-          >
-            {detail}
-          </p>
-        ) : null}
+        <p
+          className={cn(
+            styles.stepCardLabel,
+            failed ? "text-danger" : "text-foreground"
+          )}
+        >
+          {displayed.label}
+        </p>
+        <p className={cn(styles.stepCardDetail, failed && "text-danger/90")}>
+          {displayed.detail}
+        </p>
       </div>
-    </li>
+      <p className={styles.stepCounter}>
+        {Math.min(displayedIndex + 1, total)} of {total}
+      </p>
+    </div>
   );
 }
 
 function SyncResultView({
- result,
- onClose,
+  result,
+  onClose,
 }: {
- result: SyncResult;
- onClose: () => void;
+  result: SyncResult;
+  onClose: () => void;
 }) {
- const ok = result.status === "completed";
- const partial = result.status === "partially_completed";
+  const ok = result.status === "completed";
+  const partial = result.status === "partially_completed";
 
- return (
- <div className="flex flex-col p-6 sm:p-7">
- <div
- aria-hidden
- className={cn(
- "mx-auto flex size-16 items-center justify-center rounded-full border transition-colors",
- ok
- ? "border-good/20 bg-good/10 text-good"
- : partial
- ? "border-warm/20 bg-warm/10 text-warm"
- : "border-danger/20 bg-danger/10 text-danger"
- )}
- >
- {ok || partial ? (
- <svg viewBox="0 0 20 20" className="h-7 w-7 fill-none stroke-current" strokeWidth="2">
- <path d="M4 10.5 8.5 15 16 5.5" strokeLinecap="round" strokeLinejoin="round" />
- </svg>
- ) : (
- <span className="font-display text-xl font-semibold leading-none">!</span>
- )}
- </div>
+  return (
+    <div className={cn(styles.resultWrap, "flex flex-col px-1 pb-1 pt-2")}>
+      <div
+        aria-hidden
+        className={cn(
+          "mx-auto flex size-16 items-center justify-center rounded-full border transition-colors",
+          ok
+            ? "border-good/20 bg-good/10 text-good"
+            : partial
+              ? "border-warm/20 bg-warm/10 text-warm"
+              : "border-danger/20 bg-danger/10 text-danger"
+        )}
+      >
+        {ok || partial ? (
+          <svg viewBox="0 0 20 20" className="h-7 w-7 fill-none stroke-current" strokeWidth="2">
+            <path d="M4 10.5 8.5 15 16 5.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : (
+          <span className="font-display text-xl font-semibold leading-none">!</span>
+        )}
+      </div>
 
- <p className="mt-5 text-center font-display text-xl font-semibold tracking-[-0.03em]">
- {resultHeadline(result.status)}
- </p>
- <p className="mx-auto mt-1.5 max-w-xs text-center text-[14px] leading-relaxed text-muted">
- {resultSummaryLine(result)}
- </p>
+      <p className="mt-5 text-center font-display text-xl font-semibold tracking-[-0.03em]">
+        {resultHeadline(result.status)}
+      </p>
+      <p className="mx-auto mt-1.5 max-w-xs text-center text-[14px] leading-relaxed text-muted">
+        {resultSummaryLine(result)}
+      </p>
 
- {result.issues.length > 0 ? (
- <ul className="mt-6 space-y-3 rounded-2xl border border-warm/20 bg-warm/5 p-4">
- {result.issues.map((issue) => (
- <li key={issue.id}>
- <p className="text-[14px] font-medium leading-snug text-foreground">{issue.label}</p>
- <p className="mt-0.5 text-[14px] leading-relaxed text-muted">{issue.detail}</p>
- {issue.href ? (
- <Link
- href={issue.href}
- onClick={onClose}
- className="mt-1 inline-block text-[14px] text-accent underline-offset-2 hover:underline"
- >
- {issue.hrefLabel ?? "Open"}
- </Link>
- ) : null}
- </li>
- ))}
- </ul>
- ) : null}
+      {result.issues.length > 0 ? (
+        <ul className="mt-6 space-y-3 rounded-2xl border border-warm/20 bg-warm/5 p-4">
+          {result.issues.map((issue) => (
+            <li key={issue.id}>
+              <p className="text-[14px] font-medium leading-snug text-foreground">{issue.label}</p>
+              <p className="mt-0.5 text-[14px] leading-relaxed text-muted">{issue.detail}</p>
+              {issue.href ? (
+                <Link
+                  href={issue.href}
+                  onClick={onClose}
+                  className="mt-1 inline-block text-[14px] text-accent underline-offset-2 hover:underline"
+                >
+                  {issue.hrefLabel ?? "Open"}
+                </Link>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
- <Button type="button" className="mt-7 w-full" onClick={onClose}>
- {result.issues.length > 0 ? "Got it" : "Show my day"}
- </Button>
- </div>
- );
+      <Button type="button" className="mt-7 w-full" onClick={onClose}>
+        {result.issues.length > 0 ? "Got it" : "Show my day"}
+      </Button>
+    </div>
+  );
 }
 
 export type SyncAnimationMode = "idle" | "running" | "success" | "warning" | "failed";
 
 function SyncActivityAnimation({ mode }: { mode: SyncAnimationMode }) {
- const running = mode === "running";
- const [reducedMotion, setReducedMotion] = useState(
- () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
- );
+  const running = mode === "running";
+  const [reducedMotion, setReducedMotion] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
 
- useEffect(() => {
- const media = window.matchMedia("(prefers-reduced-motion: reduce)");
- const update = () => setReducedMotion(media.matches);
- media.addEventListener("change", update);
- return () => media.removeEventListener("change", update);
- }, []);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
- if (reducedMotion || mode !== "running") {
- return (
- <span
- aria-hidden
- className={cn(
- "flex size-14 shrink-0 items-center justify-center rounded-2xl border",
- mode === "success" && "border-good/40 bg-good/10 text-good",
- mode === "warning" && "border-warm/40 bg-warm/10 text-warm",
- mode === "failed" && "border-danger/40 bg-danger/10 text-danger",
- (mode === "idle" || mode === "running") && "border-accent/20 bg-accent/5 text-accent"
- )}
- >
- {mode === "success" || mode === "warning" ? (
- <svg viewBox="0 0 20 20" className="h-5 w-5 fill-none stroke-current" strokeWidth="2">
- <path d="M4 10.5 8.5 15 16 5.5" strokeLinecap="round" strokeLinejoin="round" />
- </svg>
- ) : mode === "failed" ? (
- <span className="font-display text-lg font-semibold leading-none">!</span>
- ) : (
- <span className={cn("size-2 rounded-full bg-current", running && "animate-pulse motion-reduce:animate-none")} />
- )}
- </span>
- );
- }
+  if (reducedMotion || mode !== "running") {
+    return (
+      <span
+        aria-hidden
+        className={cn(
+          "flex size-[6.25rem] shrink-0 items-center justify-center rounded-[1.75rem] border",
+          mode === "success" && "border-good/40 bg-good/10 text-good",
+          mode === "warning" && "border-warm/40 bg-warm/10 text-warm",
+          mode === "failed" && "border-danger/40 bg-danger/10 text-danger",
+          (mode === "idle" || mode === "running") && "border-accent/20 bg-accent/5 text-accent"
+        )}
+      >
+        {mode === "success" || mode === "warning" ? (
+          <svg viewBox="0 0 20 20" className="h-8 w-8 fill-none stroke-current" strokeWidth="2">
+            <path d="M4 10.5 8.5 15 16 5.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : mode === "failed" ? (
+          <span className="font-display text-2xl font-semibold leading-none">!</span>
+        ) : (
+          <span
+            className={cn(
+              "size-2.5 rounded-full bg-current",
+              running && "animate-pulse motion-reduce:animate-none"
+            )}
+          />
+        )}
+      </span>
+    );
+  }
 
- return (
- <div aria-hidden className="size-14 shrink-0 overflow-hidden">
- <Lottie animationData={loadingAnimation} loop autoplay />
- </div>
- );
+  return (
+    <div className={styles.lottieWrap} aria-hidden>
+      <div className={styles.lottie}>
+        <Lottie animationData={loadingAnimation} loop autoplay />
+      </div>
+    </div>
+  );
 }
 
 function SyncOverlay({
- providerItems,
- finalizeStatus,
- syncRunStatus,
- networkError,
- cancelRequested,
- result,
- onCancelRequested,
- onClose,
+  providerItems,
+  finalizeStatus,
+  networkError,
+  result,
+  onCancelRequested,
+  onClose,
 }: {
- providerItems: ProviderProgressItem[];
- finalizeStatus: FinalizeUiStatus;
- syncRunStatus: string | null;
- networkError: string | null;
- cancelRequested: boolean;
- result: SyncResult | null;
- onCancelRequested: () => void;
- onClose: () => void;
+  providerItems: ProviderProgressItem[];
+  finalizeStatus: FinalizeUiStatus;
+  networkError: string | null;
+  result: SyncResult | null;
+  onCancelRequested: () => void;
+  onClose: () => void;
 }) {
- const headline = overlayHeadline(syncRunStatus);
- const stepLine = overlayStepLine(providerItems, finalizeStatus);
- const progress = result ? 1 : overlayProgress(providerItems, finalizeStatus);
- const showFinalize = finalizeStatus !== "hidden";
+  const headline = overlayHeadline();
+  const progress = result ? 1 : overlayProgress(providerItems, finalizeStatus);
+  const progressPct = Math.round(progress * 100);
+  const steps = useMemo(
+    () => buildSyncSteps(providerItems, finalizeStatus),
+    [providerItems, finalizeStatus]
+  );
+  const focusStep = useMemo(() => resolveFocusStep(steps), [steps]);
+  const focusIndex = focusStep ? steps.findIndex((step) => step.id === focusStep.id) : 0;
 
- const showCancelAction =
- !result && !cancelRequested && syncRunStatus !== "cancelled" && syncRunStatus !== "cancelling";
+  const animationMode: SyncAnimationMode = result
+    ? result.status === "completed"
+      ? "success"
+      : result.status === "partially_completed"
+        ? "warning"
+        : result.status === "failed" || result.status === "cancelled"
+          ? "failed"
+          : "idle"
+    : "running";
 
- const animationMode: SyncAnimationMode = result
- ? result.status === "completed"
- ? "success"
- : result.status === "partially_completed"
- ? "warning"
- : result.status === "failed" || result.status === "cancelled"
- ? "failed"
- : "idle"
- : syncRunStatus === "running" || syncRunStatus === "cancelling"
- ? "running"
- : "idle";
+  const handleOpenChange = (open: boolean) => {
+    if (open) return;
+    // X / Escape only dismisses the finished result. Abort while syncing is Cancel.
+    if (result) onClose();
+  };
 
- return (
- <aside
- className="fixed inset-x-3 bottom-3 z-40 max-h-[calc(100dvh-1.5rem)] overflow-hidden rounded-[1.75rem] border border-border/90 bg-surface/95 backdrop-blur-xl sm:inset-x-auto sm:right-5 sm:bottom-5 sm:w-[27.5rem]"
- aria-label={result ? resultHeadline(result.status) : headline}
- aria-live="polite"
- >
- {result ? (
- <SyncResultView result={result} onClose={onClose} />
- ) : (
- <>
- <div className="p-5 pb-4 sm:p-6 sm:pb-5">
- <div className="flex items-center gap-4">
- <SyncActivityAnimation mode={animationMode} />
- <div className="min-w-0 flex-1">
- <p className="text-sm font-bold uppercase tracking-[0.14em] text-accent">
- Live source update
- </p>
- <p className="mt-1 font-display text-xl font-semibold tracking-[-0.035em] text-foreground">
- {headline}
- </p>
- </div>
- <span className="rounded-full bg-accent-soft-surface px-2.5 py-1 font-utility text-sm font-semibold tabular-nums text-accent">
- {Math.round(progress * 100)}%
- </span>
- </div>
+  return (
+    <Modal isOpen onOpenChange={handleOpenChange}>
+      <Modal.Backdrop
+        variant="blur"
+        isDismissable={false}
+        className={cn("bg-background/80", styles.backdrop)}
+      >
+        <Modal.Container placement="center" size="md" className="w-full max-w-none px-4">
+          <Modal.Dialog
+            aria-label={result ? resultHeadline(result.status) : headline}
+            aria-live="polite"
+            className={styles.dialog}
+          >
+            {result ? (
+              <Modal.Header className={styles.header}>
+                <Modal.Heading className="sr-only">
+                  {resultHeadline(result.status)}
+                </Modal.Heading>
+                <Modal.CloseTrigger className={styles.close}>
+                  <XIcon aria-hidden />
+                  <span className="sr-only">Close</span>
+                </Modal.CloseTrigger>
+              </Modal.Header>
+            ) : (
+              <Modal.Heading className="sr-only">{headline}</Modal.Heading>
+            )}
 
- <div className="mt-5 flex items-center justify-between gap-4">
- <p className={cn("truncate text-sm font-medium", networkError ? "text-danger" : "text-muted")}>
- {networkError ?? stepLine}
- </p>
- <span className="shrink-0 text-sm tabular-nums text-muted-soft">
- {providerItems.filter((item) => item.status === "completed").length}/{providerItems.length}
- </span>
- </div>
- <div
- className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface-soft ring-1 ring-inset ring-border/40"
- role="progressbar"
- aria-valuemin={0}
- aria-valuemax={100}
- aria-valuenow={Math.round(progress * 100)}
- >
- <div
- className={cn(
- "h-full rounded-full transition-[width] duration-700 ease-out",
- networkError
- ? "bg-danger/70"
-                   : "bg-[linear-gradient(90deg,var(--sync-grad-1),var(--sync-grad-2),var(--sync-grad-3),var(--sync-grad-4),var(--sync-grad-5))]"
- )}
- style={{ width: `${Math.round(progress * 100)}%` }}
- />
- </div>
- </div>
+            <div className={cn(styles.body, !result && styles.bodySyncing)}>
+              {result ? (
+                <SyncResultView result={result} onClose={onClose} />
+              ) : (
+                <>
+                  <div className={styles.hero}>
+                    <SyncActivityAnimation mode={animationMode} />
+                    <p className={styles.eyebrow}>Sync my day</p>
+                    <p className={styles.headline}>{headline}</p>
+                    {networkError ? (
+                      <p className={cn(styles.stepLine, styles.stepLineError)} role="status">
+                        {networkError}
+                      </p>
+                    ) : null}
+                  </div>
 
- <section className="mx-3 mb-3 rounded-[1.15rem] border border-border/80 bg-surface-soft/70 sm:mx-4 sm:mb-4">
- <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
- <p className="text-sm font-semibold tracking-[-0.01em] text-muted">
- Checking {providerItems.length} source{providerItems.length === 1 ? "" : "s"}
- </p>
- </div>
- <ul className="pb-1.5">
- {providerItems.map((item) => (
- <ProgressRow key={item.id} label={item.label} status={item.status} detail={item.detail} />
- ))}
- {showFinalize ? (
- <ProgressRow
- label="Today’s briefing"
- status={finalizeStatus}
- detail={
- finalizeStatus === "running"
- ? "Turning fresh signals into your prioritized queue…"
- : finalizeStatus === "completed"
- ? "Priority queue and briefing refreshed"
- : finalizeStatus === "failed"
- ? "Could not finish queue or briefing"
- : "Starts after all sources are checked"
- }
- />
- ) : null}
- </ul>
- </section>
+                  <div className={styles.progressBlock}>
+                    <div className={styles.progressMeta}>
+                      <p className={styles.progressLabel}>Progress</p>
+                      <p className={styles.progressPct}>{progressPct}%</p>
+                    </div>
+                    <div
+                      className={styles.progressTrack}
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={progressPct}
+                    >
+                      <div
+                        className={cn(
+                          styles.progressFill,
+                          networkError && styles.progressFillError
+                        )}
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+                  </div>
 
- <div className="border-t border-border/70 px-5 py-3 sm:px-6">
- {showCancelAction ? (
- <Button
- type="button"
- variant="ghost"
- size="sm"
- className="mx-auto flex text-sm text-muted hover:text-foreground"
- onClick={onCancelRequested}
- >
- Stop update
- </Button>
- ) : cancelRequested ? (
- <p className="text-center text-sm text-muted" role="status">
- Finishing in-flight requests before stopping…
- </p>
- ) : null}
- </div>
- </>
- )}
- </aside>
- );
+                  {focusStep ? (
+                    <SyncStepStage
+                      step={focusStep}
+                      index={Math.max(0, focusIndex)}
+                      total={steps.length}
+                    />
+                  ) : (
+                    <p className={styles.stepLine} role="status">
+                      Preparing source checks…
+                    </p>
+                  )}
+
+                  <div className={styles.footer}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="min-w-[8.5rem]"
+                      onClick={onCancelRequested}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
+  );
 }
 
 async function requestPersistedCancel(syncRunId: number): Promise<void> {
@@ -823,36 +888,48 @@ async function requestPersistedCancel(syncRunId: number): Promise<void> {
  }
 }
 
+class SyncUiDismissedError extends Error {
+  constructor() {
+    super("Sync UI dismissed");
+    this.name = "SyncUiDismissedError";
+  }
+}
+
 async function pollSyncRun(
- syncRunId: number,
- onUpdate: (status: SyncStatusResponse) => void,
- onNetworkError: (message: string | null) => void
+  syncRunId: number,
+  onUpdate: (status: SyncStatusResponse) => void,
+  onNetworkError: (message: string | null) => void,
+  isDismissed: () => boolean
 ): Promise<SyncStatusResponse> {
- let consecutiveErrors = 0;
+  let consecutiveErrors = 0;
 
- while (true) {
- try {
- const res = await fetch(`/api/day/sync/${syncRunId}`);
- const data = (await res.json()) as SyncStatusResponse;
- if (!res.ok) {
- throw new Error(data.error ?? "Could not read sync status.");
- }
- consecutiveErrors = 0;
- onNetworkError(null);
- onUpdate(data);
- if (data.progress?.isTerminal || TERMINAL_SYNC_STATUSES.has(data.syncRun.status)) {
- return data;
- }
- } catch {
- consecutiveErrors += 1;
- onNetworkError("Connection lost. Retrying…");
- if (consecutiveErrors >= 8) {
- throw new Error("Could not reach sync status. Check your connection and try again.");
- }
- }
+  while (true) {
+    if (isDismissed()) throw new SyncUiDismissedError();
 
- await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
- }
+    try {
+      const res = await fetch(`/api/day/sync/${syncRunId}`);
+      const data = (await res.json()) as SyncStatusResponse;
+      if (!res.ok) {
+        throw new Error(data.error ?? "Could not read sync status.");
+      }
+      consecutiveErrors = 0;
+      onNetworkError(null);
+      if (isDismissed()) throw new SyncUiDismissedError();
+      onUpdate(data);
+      if (data.progress?.isTerminal || TERMINAL_SYNC_STATUSES.has(data.syncRun.status)) {
+        return data;
+      }
+    } catch (error) {
+      if (error instanceof SyncUiDismissedError) throw error;
+      consecutiveErrors += 1;
+      onNetworkError("Connection lost. Retrying…");
+      if (consecutiveErrors >= 8) {
+        throw new Error("Could not reach sync status. Check your connection and try again.");
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
 }
 
 export function SyncMyDayButton({
@@ -867,139 +944,144 @@ export function SyncMyDayButton({
  const [whatsNew, setWhatsNew] = useState<SyncWhatsNew | null>(null);
  const [liveStatus, setLiveStatus] = useState<SyncStatusResponse | null>(null);
  const [networkError, setNetworkError] = useState<string | null>(null);
- const [cancelRequested, setCancelRequested] = useState(false);
- const [result, setResult] = useState<SyncResult | null>(null);
- const cancelRequestInFlightRef = useRef(false);
- const resumeAttemptedRef = useRef(false);
+  const [result, setResult] = useState<SyncResult | null>(null);
+  const dismissedRef = useRef(false);
+  const resumeAttemptedRef = useRef(false);
 
- const providerItems = useMemo(
- () =>
- buildProviderItems(
- sources,
- liveStatus?.providerRuns ?? [],
- liveStatus?.syncRun.status ?? "running"
- ),
- [sources, liveStatus]
- );
+  const providerItems = useMemo(
+    () =>
+      buildProviderItems(
+        sources,
+        liveStatus?.providerRuns ?? [],
+        liveStatus?.syncRun.status ?? "running"
+      ),
+    [sources, liveStatus]
+  );
 
- const finalizeStatus = useMemo(
- () => resolveFinalizeStatus(liveStatus?.syncRun.status ?? "running", providerItems),
- [liveStatus?.syncRun.status, providerItems]
- );
+  const finalizeStatus = useMemo(
+    () => resolveFinalizeStatus(liveStatus?.syncRun.status ?? "running", providerItems),
+    [liveStatus?.syncRun.status, providerItems]
+  );
 
- const clearActiveSyncRun = useCallback(() => {
- sessionStorage.removeItem(ACTIVE_SYNC_RUN_KEY);
- setLiveStatus(null);
- setNetworkError(null);
- }, []);
+  const clearActiveSyncRun = useCallback(() => {
+    sessionStorage.removeItem(ACTIVE_SYNC_RUN_KEY);
+    setLiveStatus(null);
+    setNetworkError(null);
+  }, []);
 
- const requestCancel = useCallback(async () => {
- const stored = sessionStorage.getItem(ACTIVE_SYNC_RUN_KEY);
- if (!stored || cancelRequestInFlightRef.current) return;
+  const resetSyncUi = useCallback(() => {
+    setResult(null);
+    setStatus("idle");
+    setLiveStatus(null);
+    setNetworkError(null);
+  }, []);
 
- const syncRunId = Number(stored);
- if (!Number.isFinite(syncRunId)) return;
+  /** Cancel server-side and hard-close the modal immediately — no “stopping…” wait. */
+  const requestCancel = useCallback(() => {
+    const stored = sessionStorage.getItem(ACTIVE_SYNC_RUN_KEY);
+    const syncRunId = Number(stored);
+    dismissedRef.current = true;
+    clearActiveSyncRun();
+    resetSyncUi();
 
- cancelRequestInFlightRef.current = true;
- setCancelRequested(true);
- setNetworkError(null);
+    if (Number.isFinite(syncRunId)) {
+      void requestPersistedCancel(syncRunId).catch(() => {
+        // UI already closed; backend may still finish the in-flight wave.
+      });
+    }
+  }, [clearActiveSyncRun, resetSyncUi]);
 
- try {
- await requestPersistedCancel(syncRunId);
- } catch (error) {
- cancelRequestInFlightRef.current = false;
- setCancelRequested(false);
- setNetworkError(
- error instanceof Error ? error.message : "Could not request sync cancellation."
- );
- }
- }, []);
+  const closeResult = useCallback(() => {
+    dismissedRef.current = true;
+    clearActiveSyncRun();
+    resetSyncUi();
+  }, [clearActiveSyncRun, resetSyncUi]);
 
- const closeResult = useCallback(() => {
- setResult(null);
- setStatus("idle");
- setLiveStatus(null);
- setCancelRequested(false);
- }, []);
+  const runSync = useCallback(
+    async (existingSyncRunId?: number) => {
+      dismissedRef.current = false;
+      setStatus("syncing");
+      setResult(null);
+      setWhatsNew(null);
+      setNetworkError(null);
+      setLiveStatus(null);
 
- const runSync = useCallback(
- async (existingSyncRunId?: number) => {
- setStatus("syncing");
- setResult(null);
- setWhatsNew(null);
- setNetworkError(null);
- setLiveStatus(null);
- setCancelRequested(false);
- cancelRequestInFlightRef.current = false;
+      try {
+        let activeSyncRunId = existingSyncRunId ?? null;
 
- try {
- let activeSyncRunId = existingSyncRunId ?? null;
+        if (!activeSyncRunId) {
+          const res = await fetch("/api/day/sync", { method: "POST" });
+          const enqueue = (await res.json()) as SyncEnqueueResponse;
+          if (!res.ok) {
+            throw new Error(enqueue.error ?? "Sync failed.");
+          }
+          activeSyncRunId = enqueue.syncRunId;
+        }
 
- if (!activeSyncRunId) {
- const res = await fetch("/api/day/sync", { method: "POST" });
- const enqueue = (await res.json()) as SyncEnqueueResponse;
- if (!res.ok) {
- throw new Error(enqueue.error ?? "Sync failed.");
- }
- activeSyncRunId = enqueue.syncRunId;
- }
+        if (dismissedRef.current) return;
 
- sessionStorage.setItem(ACTIVE_SYNC_RUN_KEY, String(activeSyncRunId));
+        sessionStorage.setItem(ACTIVE_SYNC_RUN_KEY, String(activeSyncRunId));
 
- const finalStatus = await pollSyncRun(
- activeSyncRunId,
- (snapshot) => {
- setLiveStatus(snapshot);
- if (
- snapshot.syncRun.status === "cancelling" ||
- snapshot.syncRun.status === "cancelled"
- ) {
- setCancelRequested(true);
- }
- },
- (message) => setNetworkError(message)
- );
+        const finalStatus = await pollSyncRun(
+          activeSyncRunId,
+          (snapshot) => {
+            if (!dismissedRef.current) setLiveStatus(snapshot);
+          },
+          (message) => {
+            if (!dismissedRef.current) setNetworkError(message);
+          },
+          () => dismissedRef.current
+        );
 
- setLiveStatus(finalStatus);
- // Let the progress bar visibly reach the end before swapping views.
- await new Promise((resolve) => setTimeout(resolve, 450));
+        if (dismissedRef.current) return;
 
- const syncIssues = buildCompletionIssues(finalStatus);
- const dedupedIssues = dedupeSyncIssues(syncIssues);
+        setLiveStatus(finalStatus);
+        // Let the progress bar visibly reach the end before swapping views.
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        if (dismissedRef.current) return;
 
- if (finalStatus.whatsNew?.hasNew) {
- setWhatsNew(finalStatus.whatsNew);
- }
+        const syncIssues = buildCompletionIssues(finalStatus);
+        const dedupedIssues = dedupeSyncIssues(syncIssues);
 
- setResult({
- status: finalStatus.syncRun.status,
- created: finalStatus.providerRuns.reduce((sum, entry) => sum + entry.itemsCreated, 0),
- updated: finalStatus.providerRuns.reduce((sum, entry) => sum + entry.itemsUpdated, 0),
- unchanged: finalStatus.providerRuns.reduce((sum, entry) => sum + entry.itemsUnchanged, 0),
- issues: finalStatus.syncRun.status === "cancelled" ? [] : dedupedIssues,
- });
+        if (finalStatus.whatsNew?.hasNew) {
+          setWhatsNew(finalStatus.whatsNew);
+        }
 
- clearActiveSyncRun();
- if (finalStatus.syncRun.status !== "cancelled") {
- // Refresh while the result view is open so the page behind is
- // already up to date when the user closes it.
- router.refresh();
- }
- } catch (err) {
- clearActiveSyncRun();
- setStatus("idle");
- const message = err instanceof Error ? err.message : "Sync failed.";
- const failureIssues = dedupeSyncIssues([humanizeSyncIssue(message)]);
- // A temporary polling/network failure belongs in a toast, not as permanent
- // error chrome under the primary Sync button. Concrete provider failures are
- // still shown in the sync result modal with their relevant actions.
- showSyncIssueToasts(failureIssues, router);
- } finally {
- cancelRequestInFlightRef.current = false;
- }
- },
- [clearActiveSyncRun, router]
- );
+        setResult({
+          status: finalStatus.syncRun.status,
+          created: finalStatus.providerRuns.reduce((sum, entry) => sum + entry.itemsCreated, 0),
+          updated: finalStatus.providerRuns.reduce((sum, entry) => sum + entry.itemsUpdated, 0),
+          unchanged: finalStatus.providerRuns.reduce(
+            (sum, entry) => sum + entry.itemsUnchanged,
+            0
+          ),
+          issues: finalStatus.syncRun.status === "cancelled" ? [] : dedupedIssues,
+        });
+
+        clearActiveSyncRun();
+        if (finalStatus.syncRun.status !== "cancelled") {
+          // Refresh while the result view is open so the page behind is
+          // already up to date when the user closes it.
+          router.refresh();
+        }
+      } catch (err) {
+        if (err instanceof SyncUiDismissedError || dismissedRef.current) {
+          clearActiveSyncRun();
+          resetSyncUi();
+          return;
+        }
+        clearActiveSyncRun();
+        setStatus("idle");
+        const message = err instanceof Error ? err.message : "Sync failed.";
+        const failureIssues = dedupeSyncIssues([humanizeSyncIssue(message)]);
+        // A temporary polling/network failure belongs in a toast, not as permanent
+        // error chrome under the primary Sync button. Concrete provider failures are
+        // still shown in the sync result modal with their relevant actions.
+        showSyncIssueToasts(failureIssues, router);
+      }
+    },
+    [clearActiveSyncRun, resetSyncUi, router]
+  );
 
  useEffect(() => {
  if (resumeAttemptedRef.current) return;
@@ -1022,18 +1104,16 @@ export function SyncMyDayButton({
 
  return (
  <div className="flex flex-col items-start gap-1.5">
- {status === "syncing" ? (
- <SyncOverlay
- providerItems={providerItems}
- finalizeStatus={finalizeStatus}
- syncRunStatus={liveStatus?.syncRun.status ?? "running"}
- networkError={networkError}
- cancelRequested={cancelRequested}
- result={result}
- onCancelRequested={() => void requestCancel()}
- onClose={closeResult}
- />
- ) : null}
+      {status === "syncing" ? (
+        <SyncOverlay
+          providerItems={providerItems}
+          finalizeStatus={finalizeStatus}
+          networkError={networkError}
+          result={result}
+          onCancelRequested={requestCancel}
+          onClose={closeResult}
+        />
+      ) : null}
  <Button
  type="button"
  size="lg"

@@ -53,6 +53,7 @@ You must follow these rules without exception:
 10. Write natural, direct English for a busy teammate. Prefer short sentences and concrete verbs. Do not use em dashes or en dashes, canned introductions, generic conclusions, promotional language, rhetorical questions, or phrases such as "it is important to note", "in today's fast-paced world", "delve into", "unlock", "not only ... but also", or "serves as".
 11. Do not repeat the same fact across authored fields. Each field must do its own job: reason gives context, priority explains timing, next action names the first move, and done criteria describe observable completion.
 12. Keep authored text as short as the job allows. Never add filler to reach a sentence count.
+13. When referring to the current user in fields you author, write in second person ("you", "your"). Do not put their name into titles, summaries, reasons, next actions, priority explanations, done criteria, or other narrative fields. Keep their name only inside verbatim evidence quotes required by rule 6.
 `.trim();
 
 /**

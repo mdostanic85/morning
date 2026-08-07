@@ -1,0 +1,309 @@
+/* Why Now — Arcade / Circle / Teams: title → underline tabs → quiet body */
+
+.dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 36rem;
+  max-height: min(82dvh, 40rem);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-hero);
+  background: var(--overlay);
+  color: var(--foreground);
+  box-shadow: var(--elevation-raised);
+  outline: none;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.35rem 0;
+}
+
+.headerCopy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-right: 0.5rem;
+}
+
+.headerIntro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 450;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  margin: -0.15rem -0.25rem 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.close:hover {
+  background: color-mix(in srgb, #ffffff 10%, var(--surface-soft));
+  color: var(--foreground);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.close svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.tabs {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.85rem 1.35rem 1.35rem;
+}
+
+.tabList {
+  display: flex;
+  width: 100%;
+  gap: 0;
+}
+
+.tab {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 2.5rem !important;
+  min-height: 2.5rem !important;
+  padding-inline: 0.75rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+.tabPanel {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding-top: 1.1rem;
+}
+
+.panelStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.sectionLead {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 450;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/* Quiet 10% white wash — no accent/purple fill */
+.conclusion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inset);
+  background: color-mix(in srgb, #ffffff 10%, var(--surface-soft));
+}
+
+.conclusionLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+.conclusionLead {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.9375rem;
+  font-weight: 450;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.conclusionRest {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 450;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.sourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sourceCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inset);
+  background: color-mix(in srgb, #ffffff 10%, var(--surface-soft));
+}
+
+.sourceRank {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.1rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+
+.sourceBody {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sourceMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.sourceTitle {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.sourceDate {
+  margin: 0;
+  color: var(--muted-soft);
+  font-size: var(--font-size-min);
+  line-height: 1.35;
+}
+
+.sourceTitleLink {
+  color: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+  text-underline-offset: 3px;
+}
+
+.sourceTitleLink:hover {
+  color: var(--accent-strong);
+  text-decoration-color: var(--accent-strong);
+}
+
+.sourceQuote {
+  margin: 0;
+  padding: 0.55rem 0 0.55rem 0.75rem;
+  border-left: 2px solid var(--border);
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 450;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.sourceSummary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 450;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.sourceLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  color: var(--accent-strong);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sourceLink:hover {
+  color: var(--foreground);
+}
+
+.sourceMissingLink {
+  margin: 0;
+  color: var(--muted-soft);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.emptySources {
+  margin: 0;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inset);
+  background: color-mix(in srgb, #ffffff 10%, var(--surface-soft));
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 450;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+@media (max-width: 640px) {
+  .dialog {
+    max-width: none;
+    max-height: min(92dvh, 100%);
+    border-radius: var(--radius-surface, var(--radius-hero));
+  }
+
+  .header,
+  .tabs {
+    padding-left: 1.1rem;
+    padding-right: 1.1rem;
+  }
+}
