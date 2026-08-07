@@ -2,18 +2,9 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
-  CalendarDays,
   CheckCircle2,
-  CircleDashed,
   Clock3,
-  ExternalLink,
-  FileText,
-  GitBranch,
   LockKeyhole,
-  Mail,
-  MessageSquare,
-  PenTool,
-  Ticket,
 } from "lucide-react";
 import type { DailyBriefV2, DailyWorkItem } from "@/domain/dailyBrief";
 import type { SourceType } from "@/domain/sourceItem";
@@ -21,17 +12,16 @@ import type { WorkTaskStatus } from "@/domain/workTask";
 import type { TodayMeeting } from "@/lib/calendar/todayMeetings";
 import { AppBadge, type AppBadgeTone } from "@/components/AppBadge";
 import { AppTooltip } from "@/components/AppTooltip";
-import { sourceTypeDescription } from "@/components/SourceBadge";
 import { JiraStatusBadge } from "@/components/JiraMetadataBadges";
 import { Heading } from "@/components/Heading";
 import { SyncMyDayButton } from "@/components/SyncMyDayButton";
 import { TodayMeetingsCard } from "@/components/TodayMeetingsCard";
 import { NeedsInputRail } from "@/components/NeedsInputRail";
 import { DismissibleDayChange } from "@/components/DismissibleDayChange";
-import { WhyThisButton } from "@/components/WhyThisButton";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
-import { sourceTypeLabel } from "@/lib/tasks/taskSupportingSources";
+import { WhyThisButton } from "@/components/WhyThisButton";
 import { dedupeBlockedWaiting } from "@/lib/dailyBrief/blockedWaitingDedupe";
+import { addressUserInCopy } from "@/lib/tasks/addressUserInCopy";
 import { humanizeReason } from "@/lib/tasks/humanizeReason";
 import { assessFocusCoherence, type FocusCoherenceGap } from "@/lib/tasks/focusCoherence";
 import { taskEligibleForBriefPriority } from "@/lib/filters/ownerFilter";
@@ -87,20 +77,14 @@ interface AttentionEntry {
   task: HumanReadableTask | null;
 }
 
-function firstName(profileName: string | null): string | null {
-  return profileName?.trim().split(/\s+/)[0] || null;
-}
-
-/** Shown under the next action itself, where the user is about to act on it. */
-const ACTION_GAP_COPY: Record<FocusCoherenceGap, string> = {
-  ungrounded: "Nothing in the evidence below backs this action. Open the source and confirm it before acting.",
-  "off-topic":
-    "This action describes different work than the title and done criteria above. Confirm what this task is before acting.",
+/** Condensed for the focus status signal when the next action could not be verified. */
+const ACTION_GAP_SIGNAL: Record<FocusCoherenceGap, string> = {
+  ungrounded: "Needs confirmation before acting",
+  "off-topic": "Needs clarification before acting",
 };
 
-/** The same finding, condensed for the status badge tooltip. */
-const ACTION_GAP_BADGE_HINT: Record<FocusCoherenceGap, string> = {
-  ungrounded: "The next action is not backed by this card's evidence. Confirm it before starting.",
+const ACTION_GAP_HINT: Record<FocusCoherenceGap, string> = {
+  ungrounded: "The next action is not backed by the task’s sources. Confirm it in the detail view before starting.",
   "off-topic": "The next action does not match the title and done criteria. Confirm it before starting.",
 };
 
@@ -112,35 +96,34 @@ function firstFilled(...values: (string | null | undefined)[]): string | null {
   return null;
 }
 
-function todayLabel(date = new Date()): string {
-  return date.toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
+/** Compact next-up row under focus — two visible, the rest behind See more. */
+const MAX_NEXT_UP_VISIBLE = 2;
+const MAX_NEXT_UP_TOTAL = 6;
+const MAX_ATTENTION = 1 + MAX_NEXT_UP_TOTAL;
 
-function evidenceDate(task: HumanReadableTask | null): string | null {
+function latestSignalTime(task: HumanReadableTask | null): number | null {
   if (!task) return null;
-  const times = task.evidence
-    .map((evidence) => Date.parse(evidence.sourceDate))
-    .filter(Number.isFinite);
-  return times.length ? new Date(Math.max(...times)).toISOString() : task.updatedAt;
+  const times = [
+    ...task.evidence.map((evidence) => Date.parse(evidence.sourceDate)),
+    Date.parse(task.updatedAt),
+  ].filter(Number.isFinite);
+  return times.length ? Math.max(...times) : null;
 }
 
-/** Bento side column — at most two "Next up" rows inside the tile. */
-const MAX_NEXT_UP = 2;
-const MAX_ATTENTION = 1 + MAX_NEXT_UP;
-
-function relativeTime(value: string | null): string | null {
-  if (!value) return null;
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return null;
-  const hours = Math.max(0, Math.round((Date.now() - timestamp) / 3_600_000));
-  if (hours < 1) return "updated less than an hour ago";
-  if (hours < 24) return `updated ${hours}h ago`;
-  return `updated ${Math.round(hours / 24)}d ago`;
+function nextUpcomingMeeting(meetings: TodayMeeting[]): TodayMeeting | null {
+  const now = Date.now();
+  const upcoming = meetings
+    .filter((meeting) => {
+      if (meeting.allDay || !meeting.startsAt) return false;
+      const start = Date.parse(meeting.startsAt);
+      if (!Number.isFinite(start)) return false;
+      const end = meeting.endsAt ? Date.parse(meeting.endsAt) : start + 3_600_000;
+      return Number.isFinite(end) && end > now;
+    })
+    .sort(
+      (a, b) => Date.parse(a.startsAt ?? "") - Date.parse(b.startsAt ?? "")
+    );
+  return upcoming[0] ?? null;
 }
 
 function jiraKey(entry: AttentionEntry): string | null {
@@ -163,7 +146,7 @@ function statusBadge(
   description: string | null;
   tone: AppBadgeTone;
   icon: typeof Clock3;
-} {
+} | null {
   const item = entry.item;
   const task = entry.task;
   const key = jiraKey(entry);
@@ -193,7 +176,7 @@ function statusBadge(
   if (actionGap) {
     return {
       label: "Clarify first",
-      description: ACTION_GAP_BADGE_HINT[actionGap],
+      description: ACTION_GAP_HINT[actionGap],
       tone: "warning",
       icon: AlertTriangle,
     };
@@ -230,12 +213,19 @@ function statusBadge(
       icon: CheckCircle2,
     };
   }
-  return {
-    label: "To do",
-    description: null,
-    tone: "neutral",
-    icon: CircleDashed,
-  };
+  // Default "To do" adds no signal on next-up cards — omit it.
+  return null;
+}
+
+/** Drop a leading Jira key from the title when the same key already has a badge. */
+function titleWithoutJiraKey(title: string, key: string | null): string {
+  if (!key) return title;
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stripped = title
+    .replace(new RegExp(`^${escaped}\\s*[·.:\\-–—|]\\s*`, "i"), "")
+    .replace(new RegExp(`^${escaped}\\b\\s*`, "i"), "")
+    .trim();
+  return stripped || title;
 }
 
 function resolveAttention(
@@ -314,6 +304,28 @@ function resolveAttention(
     if (resolved.length >= MAX_ATTENTION) break;
   }
 
+  // Pad next-up from the owned queue so See more has something to reveal
+  // beyond the brief's two afterThat slots. Never invent a focus here —
+  // only fill when a primary already qualified.
+  if (resolved.length > 0 && resolved.length < MAX_ATTENTION) {
+    const usedIds = new Set(
+      resolved.map((entry) => entry.task?.id).filter((id): id is number => id != null)
+    );
+    const usedKeys = new Set(
+      resolved.map((entry) => jiraKey(entry)).filter((key): key is string => Boolean(key))
+    );
+
+    for (const task of ownedTasks) {
+      if (usedIds.has(task.id)) continue;
+      const key = task.title.match(/\b([A-Z][A-Z0-9]+-\d+)\b/)?.[1] ?? null;
+      if (key && usedKeys.has(key)) continue;
+      resolved.push({ item: null, task });
+      usedIds.add(task.id);
+      if (key) usedKeys.add(key);
+      if (resolved.length >= MAX_ATTENTION) break;
+    }
+  }
+
   return resolved;
 }
 
@@ -339,96 +351,173 @@ function StatusBadge({
   return <AppTooltip content={description}>{badge}</AppTooltip>;
 }
 
-const SOURCE_ICON: Partial<Record<SourceType, typeof Clock3>> = {
-  jira: Ticket,
-  granola: FileText,
-  drive: FileText,
-  manual_transcript: FileText,
-  confluence: FileText,
-  calendar: CalendarDays,
-  gmail: Mail,
-  figma: PenTool,
-  github: GitBranch,
-  discord: MessageSquare,
-  git: GitBranch,
-};
+type FocusSignalKind =
+  | "blocked"
+  | "clarify"
+  | "waiting"
+  | "review"
+  | "continue"
+  | "meeting"
+  | "recent"
+  | "ready";
 
-/** Where this evidence came from — the source system, not just its title. */
-function SourceBadge({ sourceType }: { sourceType: SourceType }) {
-  const Icon = SOURCE_ICON[sourceType] ?? FileText;
-  return (
-    <AppTooltip content={sourceTypeDescription(sourceType)}>
-      <AppBadge tone="default" icon={<Icon className="size-3.5" aria-hidden />}>
-        {sourceTypeLabel(sourceType)}
-      </AppBadge>
-    </AppTooltip>
-  );
+interface FocusSignal {
+  kind: FocusSignalKind;
+  label: string;
+  description: string | null;
 }
 
-function EvidenceRow({
-  entry,
-  evidence,
-  confidence,
-}: {
-  entry: AttentionEntry;
-  /** Chosen by `assessFocusCoherence` so it matches the action shown above. */
-  evidence: HumanReadableTask["evidence"][number] | null;
-  confidence: number | null | undefined;
-}) {
-  const sourceLink = entry.item?.sourceLinks[0] ?? null;
-  const label = evidence?.sourceTitle ?? sourceLink?.label ?? null;
-  const url = evidence?.url ?? sourceLink?.url ?? null;
-  const sourceType = evidence?.sourceType ?? null;
-  // A quote is only a quote when it is verbatim. A summary is a paraphrase and
-  // must never be dressed up in quotation marks (evidence over assertion).
-  const quote = evidence?.quote?.trim() || null;
-  const summary = evidence?.summary?.trim() || null;
+/** Short essence of the task itself — what it is — not the ranking rationale. */
+function focusSupportingSentence(
+  entry: AttentionEntry,
+  title: string,
+  profileName: string | null
+): string {
+  const raw = firstFilled(entry.task?.reason, entry.item?.reason);
+  if (!raw) {
+    return "Clarify what this work requires, then take the next concrete step.";
+  }
+  return addressUserInCopy(humanizeReason(raw, title), profileName);
+}
 
-  return (
-    <div className={css("brief-pillar brief-pillar-evidence")}>
-      <div className={css("brief-pillar-label-row")}>
-        <h3 className={css("brief-pillar-label")}>Evidence</h3>
-        {confidence != null ? <ConfidenceBadge level={confidence} /> : null}
-      </div>
-      {label || sourceType ? (
-        <div className={css("brief-evidence-body")}>
-          <div className={css("brief-evidence-source")}>
-            {sourceType ? <SourceBadge sourceType={sourceType} /> : null}
-            {url ? (
-              <a href={url} target="_blank" rel="noreferrer" className={css("brief-source-link")}>
-                {label}
-                <ExternalLink className="size-3.5" aria-hidden />
-              </a>
-            ) : label ? (
-              <strong className={css("brief-evidence-title")}>{label}</strong>
-            ) : null}
-          </div>
-          {quote ? (
-            <blockquote className={css("brief-evidence-quote")}>“{quote}”</blockquote>
-          ) : summary ? (
-            <p className={css("brief-evidence-summary")}>{summary}</p>
-          ) : (
-            <p className={css("brief-evidence-missing")}>
-              No direct quote confirms this yet. Open the source before acting.
-            </p>
-          )}
-        </div>
-      ) : (
-        <p className={css("brief-evidence-missing")}>No source excerpt is available. Clarify before acting.</p>
-      )}
-    </div>
+function resolveFocusSignal(
+  entry: AttentionEntry,
+  brief: DailyBriefV2 | null,
+  actionGap: FocusCoherenceGap | null,
+  nextMeeting: TodayMeeting | null
+): FocusSignal | null {
+  const item = entry.item;
+  const task = entry.task;
+  const key = jiraKey(entry);
+  const blocked = brief?.blockedWaiting.some(
+    (blockedItem) =>
+      (key && blockedItem.jiraKey === key) ||
+      blockedItem.title.toLowerCase() === (item?.title ?? task?.title ?? "").toLowerCase()
   );
+  const copy = `${item?.reason ?? task?.reason ?? ""} ${item?.nextAction ?? task?.nextAction ?? ""} ${task?.priorityExplanation ?? ""}`;
+  const waitingOn = task?.waitingOn?.trim();
+
+  if (blocked || waitingOn) {
+    const person = waitingOn
+      ? waitingOn.replace(/^(waiting on|blocked by|blocked on)\s+/i, "").trim()
+      : null;
+    return {
+      kind: "blocked",
+      label: person
+        ? `Waiting for ${person}`
+        : blocked
+          ? "Blocked"
+          : "Waiting on someone else",
+      description: "Something outside your control has to move before you can finish.",
+    };
+  }
+
+  if (item?.statusHint === "unclear" || task?.status === "unclear" || actionGap) {
+    return {
+      kind: "clarify",
+      label: actionGap ? ACTION_GAP_SIGNAL[actionGap] : "Needs clarification",
+      description: actionGap ? ACTION_GAP_HINT[actionGap] : "Ownership or the requirement is unclear.",
+    };
+  }
+
+  if (/\b(confirm|confirmation|sign[- ]?off|approval)\b/i.test(copy)) {
+    return {
+      kind: "waiting",
+      label: "Waiting for approval",
+      description: null,
+    };
+  }
+
+  if (/\b(review|changes requested|feedback)\b/i.test(copy) || /\breview\b/i.test(task?.jiraStatus ?? "")) {
+    return {
+      kind: "review",
+      label: "Needs review",
+      description: null,
+    };
+  }
+
+  if (task?.status === "waiting" || item?.statusHint === "waiting") {
+    return {
+      kind: "waiting",
+      label: "Waiting to continue",
+      description: "Paused until something outside your control changes.",
+    };
+  }
+
+  if (task?.status === "now") {
+    return {
+      kind: "continue",
+      label: "Ready to continue",
+      description: null,
+    };
+  }
+
+  if (nextMeeting?.startsAt) {
+    const starts = Date.parse(nextMeeting.startsAt);
+    const minutes = (starts - Date.now()) / 60_000;
+    if (Number.isFinite(minutes) && minutes >= 0 && minutes <= 120) {
+      return {
+        kind: "meeting",
+        label: "Before your next meeting",
+        description: nextMeeting.title ? `Next up: ${nextMeeting.title}` : null,
+      };
+    }
+  }
+
+  const latest = latestSignalTime(task);
+  if (latest != null) {
+    const hours = (Date.now() - latest) / 3_600_000;
+    if (hours >= 0 && hours < 4) {
+      return {
+        kind: "recent",
+        label: hours < 1 ? "New instruction received" : "Recently changed",
+        description: null,
+      };
+    }
+  }
+
+  return {
+    kind: "ready",
+    label: "Needs attention now",
+    description: null,
+  };
+}
+
+function focusPrimaryLabel(signal: FocusSignal | null, status: WorkTaskStatus | undefined): string {
+  switch (signal?.kind) {
+    case "blocked":
+      return "Resolve blocker";
+    case "clarify":
+      return "Clarify task";
+    case "waiting":
+      return "Check dependency";
+    case "review":
+      return "Review changes";
+    case "continue":
+      return "Continue";
+    case "meeting":
+      return "Prepare for meeting";
+    default:
+      return status === "now" ? "Continue" : "Start this task";
+  }
 }
 
 /** The single most important task — the only one that should visually dominate the page. */
-function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV2 | null }) {
-  const index = 0;
-  // Every pillar reads from the live task first. Evidence only ever comes from
-  // the task, and the brief is a snapshot composed in parallel with the action
-  // planner — mixing the two let the card pair a sync-old action with fresh
-  // evidence. The brief item stays the fallback for unlinked brief text.
-  const title = firstFilled(entry.task?.title, entry.item?.title) ?? "Unresolved work";
-  const reason = humanizeReason(firstFilled(entry.task?.reason, entry.item?.reason), title);
+function FocusCard({
+  entry,
+  brief,
+  nextMeeting,
+  profileName,
+}: {
+  entry: AttentionEntry;
+  brief: DailyBriefV2 | null;
+  nextMeeting: TodayMeeting | null;
+  profileName: string | null;
+}) {
+  // Live task fields win over the brief snapshot so the card never pairs a
+  // stale action with fresher task state. Brief text is the fallback only.
+  const rawTitle = firstFilled(entry.task?.title, entry.item?.title) ?? "Unresolved work";
+  const title = addressUserInCopy(rawTitle, profileName);
   const nextAction =
     firstFilled(entry.task?.nextAction, entry.item?.nextAction) ??
     "Clarify the requirement and record the supporting source.";
@@ -440,169 +529,197 @@ function FocusCard({ entry, brief }: { entry: AttentionEntry; brief: DailyBriefV
         : ["The requirement and completion check are recorded with evidence."];
   const coherence = assessFocusCoherence({
     nextAction,
-    title,
+    title: rawTitle,
     doneCriteria,
     evidence: entry.task?.evidence ?? [],
   });
-  const badge = statusBadge(entry, brief, index, coherence.gap);
-  const updated = relativeTime(evidenceDate(entry.task));
-  const key = jiraKey(entry);
+  const support = focusSupportingSentence(entry, rawTitle, profileName);
+  const signal = resolveFocusSignal(entry, brief, coherence.gap, nextMeeting);
   const href = entry.task ? `/tasks/${entry.task.id}` : null;
-  const whyFirst =
-    entry.task?.priorityExplanation || entry.item?.reason || entry.task?.reason || "";
+  const primaryLabel = focusPrimaryLabel(signal, entry.task?.status);
+  const whyFirst = addressUserInCopy(
+    firstFilled(
+      entry.task?.priorityExplanation,
+      entry.item?.reason,
+      entry.task?.reason
+    ) ?? "",
+    profileName
+  );
+  const signalClass =
+    signal?.kind === "blocked" || signal?.kind === "clarify"
+      ? "brief-focus-signal brief-focus-signal--alert"
+      : signal?.kind === "waiting" || signal?.kind === "review"
+        ? "brief-focus-signal brief-focus-signal--caution"
+        : "brief-focus-signal";
 
   return (
-    <article className={css("brief-focus-card brief-focus-primary")}>
-      <div className={css("brief-focus-topline")}>
-        <div className={css("brief-badge-row")}>
-          <StatusBadge
-            label={badge.label}
-            description={badge.description}
-            tone={badge.tone}
-            Icon={badge.icon}
-          />
-          <JiraStatusBadge status={entry.task?.jiraStatus ?? null} />
-          {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
-          {updated ? <span className={css("brief-updated")}>{updated}</span> : null}
-        </div>
+    <article
+      className={css("brief-focus-card brief-focus-primary")}
+      aria-labelledby="today-focus-title"
+    >
+      <div className={css("brief-focus-context")}>
+        <AppBadge tone="accent">Current focus</AppBadge>
       </div>
 
       <div className={css("brief-focus-heading")}>
         {href ? (
-          <Link href={href}>
-            <Heading level={2} visualLevel={3}>{title}</Heading>
+          <Link href={href} className={css("brief-focus-title-link")}>
+            <Heading id="today-focus-title" level={2} visualLevel={2}>
+              {title}
+            </Heading>
           </Link>
         ) : (
-          <Heading level={2} visualLevel={3}>{title}</Heading>
+          <Heading id="today-focus-title" level={2} visualLevel={2}>
+            {title}
+          </Heading>
         )}
-        <p>{reason}</p>
+        {support ? <p className={css("brief-focus-support")}>{support}</p> : null}
       </div>
 
-      <div className={css("brief-pillars")}>
-        <div className={css("brief-pillar brief-pillar-action")}>
-          <h3 className={css("brief-pillar-label")}>
-            {coherence.gap ? "Next action — unverified" : "Next action"}
-          </h3>
-          <p className={css("brief-action-copy")}>{nextAction}</p>
-          {coherence.gap ? (
-            <p className={css("brief-action-warning")}>{ACTION_GAP_COPY[coherence.gap]}</p>
-          ) : null}
-        </div>
+      {signal ? (
+        <p className={css(signalClass)} title={signal.description ?? undefined}>
+          {addressUserInCopy(signal.label, profileName)}
+        </p>
+      ) : null}
 
-        <div className={css("brief-pillar brief-pillar-done")}>
-          <h3 className={css("brief-pillar-label")}>Done when</h3>
-          <ul>
-            {doneCriteria.slice(0, 3).map((criterion) => (
-              <li key={criterion}>{criterion}</li>
-            ))}
-          </ul>
-        </div>
-
-        <EvidenceRow
-          entry={entry}
-          evidence={coherence.evidence}
-          confidence={entry.task?.confidence}
-        />
-      </div>
-
-      <div className={css("brief-focus-footer")}>
+      <div className={css("brief-focus-actions")}>
         {entry.task ? (
-          <WhyThisButton whyFirst={whyFirst} evidence={entry.task.evidence} />
-        ) : (
-          <span className="text-sm text-muted">Link a task before you can start work here.</span>
-        )}
-        {href ? (
-          <Link href={href} className="button button--primary button--sm shrink-0">
-            Start this task
-            <ArrowRight aria-hidden />
-          </Link>
+          <WhyThisButton
+            whyFirst={whyFirst}
+            evidence={entry.task.evidence}
+            className={css("brief-focus-action-btn")}
+          />
         ) : null}
+        {href ? (
+          <Link
+            href={href}
+            className={cn("link-btn-primary motion-btn", css("brief-focus-action-btn"))}
+          >
+            {primaryLabel}
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
+        ) : (
+          <p className={css("brief-focus-unlinked")}>
+            Link a task before you can continue from here.
+          </p>
+        )}
       </div>
     </article>
   );
 }
 
 /**
- * One compact row inside the Next up tile.
- * Next action and the first done criterion stay visible at this size; the
- * evidence source is intentionally deferred to the task detail page rather
- * than repeated in this compact list.
+ * Compact next-up card under focus: badges, headline, one short line
+ * about what the work is. Full pillars live on the task detail page.
  */
-function NextUpRow({
+function NextUpCard({
   entry,
   brief,
   index,
+  profileName,
 }: {
   entry: AttentionEntry;
   brief: DailyBriefV2 | null;
   index: number;
+  profileName: string | null;
 }) {
-  const title = entry.item?.title ?? entry.task?.title ?? "Unresolved work";
-  const nextAction =
-    entry.item?.nextAction ??
-    entry.task?.nextAction ??
-    "Clarify the requirement before acting.";
-  const badge = statusBadge(entry, brief, index);
+  const rawTitle = entry.item?.title ?? entry.task?.title ?? "Unresolved work";
   const key = jiraKey(entry);
+  const title = addressUserInCopy(titleWithoutJiraKey(rawTitle, key), profileName);
+  const support = focusSupportingSentence(entry, rawTitle, profileName);
+  const badge = statusBadge(entry, brief, index);
   const href = entry.task ? `/tasks/${entry.task.id}` : null;
   const confidence = entry.task?.confidence ?? null;
 
   return (
     <div
       className={cn(
-        styles["brief-nextup-row"],
-        href && styles["brief-nextup-row--linked"]
+        styles["brief-nextup-card"],
+        href && styles["brief-nextup-card--linked"]
       )}
     >
-      <div className={css("brief-nextup-row-badges")}>
-        <StatusBadge
-          label={badge.label}
-          description={badge.description}
-          tone={badge.tone}
-          Icon={badge.icon}
-        />
+      <div className={css("brief-nextup-card-badges")}>
+        {badge ? (
+          <StatusBadge
+            label={badge.label}
+            description={badge.description}
+            tone={badge.tone}
+            Icon={badge.icon}
+          />
+        ) : null}
         <JiraStatusBadge status={entry.task?.jiraStatus ?? null} />
         {confidence != null ? <ConfidenceBadge level={confidence} /> : null}
         {key ? <AppBadge tone="neutral">{key}</AppBadge> : null}
       </div>
-      <div className={css("brief-nextup-body")}>
-        <h3 className={css("brief-nextup-title")}>
-          {href ? (
-            // Stretched link: the whole card opens the task, this anchor just
-            // supplies the accessible label and hit-area (see ::after in CSS).
-            <Link href={href} className={css("brief-nextup-title-link")}>
-              {title}
-            </Link>
-          ) : (
-            <span>{title}</span>
-          )}
-        </h3>
-        <p className={css("brief-nextup-action")}>{nextAction}</p>
-      </div>
+      <h3 className={css("brief-nextup-card-title")}>
+        {href ? (
+          <Link href={href} className={css("brief-nextup-card-title-link")}>
+            {title}
+          </Link>
+        ) : (
+          <span>{title}</span>
+        )}
+      </h3>
+      <p className={css("brief-nextup-card-support")}>{support}</p>
     </div>
   );
 }
 
-/** Single bounded tile that holds at most MAX_NEXT_UP compact rows. */
-function NextUpTile({
+/** Horizontal next-up row under focus; overflow sits behind a plain See more. */
+function NextUpRail({
   entries,
   brief,
+  profileName,
 }: {
   entries: AttentionEntry[];
   brief: DailyBriefV2 | null;
+  profileName: string | null;
 }) {
   if (entries.length === 0) return null;
+
+  const visible = entries.slice(0, MAX_NEXT_UP_VISIBLE);
+  const extra = entries.slice(MAX_NEXT_UP_VISIBLE);
+
   return (
-    <section className={css("brief-nextup-tile")}>
-      <h2 className={css("brief-kicker")}>Next up</h2>
-      {entries.map((entry, index) => (
-        <NextUpRow
-          key={entry.task?.id ?? entry.item?.jiraKey ?? entry.item?.title ?? index}
-          entry={entry}
-          brief={brief}
-          index={index + 1}
-        />
-      ))}
+    <section className={css("brief-nextup")} aria-labelledby="today-nextup-title">
+      <h2 id="today-nextup-title" className={css("brief-kicker")}>
+        Next up
+      </h2>
+      <div className={css("brief-nextup-rail")}>
+        {visible.map((entry, index) => (
+          <NextUpCard
+            key={entry.task?.id ?? entry.item?.jiraKey ?? entry.item?.title ?? index}
+            entry={entry}
+            brief={brief}
+            index={index + 1}
+            profileName={profileName}
+          />
+        ))}
+        {extra.length > 0 ? (
+          <details className={css("brief-nextup-more")}>
+            <summary className={css("brief-nextup-more-summary")}>
+              <span className={css("brief-nextup-more-open")}>See more</span>
+              <span className={css("brief-nextup-more-close")}>Show less</span>
+            </summary>
+            <div className={css("brief-nextup-extra")}>
+              {extra.map((entry, index) => (
+                <NextUpCard
+                  key={
+                    entry.task?.id ??
+                    entry.item?.jiraKey ??
+                    entry.item?.title ??
+                    index + MAX_NEXT_UP_VISIBLE
+                  }
+                  entry={entry}
+                  brief={brief}
+                  index={index + 1 + MAX_NEXT_UP_VISIBLE}
+                  profileName={profileName}
+                />
+              ))}
+            </div>
+          </details>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -620,27 +737,27 @@ export function HumanReadableTodayView({
 }: HumanReadableTodayViewProps) {
   const attention = resolveAttention(tasks, dailyBrief, profileName);
   const primary = attention[0] ?? null;
-  const nextTasks = attention.slice(1, 1 + MAX_NEXT_UP);
-  const name = firstName(profileName);
+  const nextTasks = attention.slice(1, 1 + MAX_NEXT_UP_TOTAL);
   const dedupedBlockedWaiting = dailyBrief ? dedupeBlockedWaiting(dailyBrief.blockedWaiting) : [];
   const conflicts = dailyBrief?.sourceConflicts ?? [];
-  const hasSideContent = nextTasks.length > 0 || calendarConnected || meetings.length > 0;
+  const hasSideContent = calendarConnected || meetings.length > 0;
+  const nextMeeting = nextUpcomingMeeting(meetings);
 
   return (
     <div className={css("brief-page")}>
       <header className={css("brief-header")}>
-        <div>
-          <Heading level={1}>{name ? `${name}'s focus for today` : "Your focus for today"}</Heading>
-          <p className={css("brief-date")}>
-            <span>{todayLabel()}</span>
-            <span className={css("brief-date-sep")} aria-hidden>
-              ·
-            </span>
-            <span className={css("brief-date-meta")}>What to do first today</span>
+        <div className={css("brief-header-copy")}>
+          <div className={css("brief-header-title-row")}>
+            <Heading level={1} visualLevel={3}>
+              Your focus for today
+            </Heading>
+            <div className={css("brief-header-actions")}>
+              <SyncMyDayButton sources={connectedProviderLabels} lastSyncAt={lastSyncAt} />
+            </div>
+          </div>
+          <p className={css("brief-lede")}>
+            One focus to start, a short next-up list, and today&apos;s meetings — unclear work waits until you decide.
           </p>
-        </div>
-        <div className={css("brief-header-actions")}>
-          <SyncMyDayButton sources={connectedProviderLabels} lastSyncAt={lastSyncAt} />
         </div>
       </header>
 
@@ -670,31 +787,38 @@ export function HumanReadableTodayView({
       <div className={css(`brief-bento${hasSideContent ? "" : " brief-bento--wide"}`)}>
         {primary ? (
           <div className={css("brief-bento-primary")}>
-            <FocusCard entry={primary} brief={dailyBrief} />
+            <FocusCard
+              entry={primary}
+              brief={dailyBrief}
+              nextMeeting={nextMeeting}
+              profileName={profileName}
+            />
+            <NextUpRail entries={nextTasks} brief={dailyBrief} profileName={profileName} />
           </div>
         ) : (
-          <section className={css("brief-empty brief-bento-primary")}>
-            <Heading level={2} visualLevel={3}>Nothing clearly yours yet</Heading>
-            <p>
+          <section className={css("brief-empty brief-bento-primary")} aria-labelledby="today-focus-empty-title">
+            <div className={css("brief-focus-context")}>
+              <AppBadge tone="accent">Current focus</AppBadge>
+            </div>
+            <Heading id="today-focus-empty-title" level={2} visualLevel={2}>
+              Nothing clearly yours yet
+            </Heading>
+            <p className={css("brief-focus-support")}>
               No open work is explicitly assigned to you. Sync again after updates, or leave the
               board empty rather than guessing.
             </p>
+            <div className={css("brief-focus-actions")}>
+              <SyncMyDayButton sources={connectedProviderLabels} lastSyncAt={lastSyncAt} />
+            </div>
           </section>
         )}
 
         {hasSideContent ? (
           <aside className={css("brief-bento-side")}>
-            {/* Next up first — work priority above the calendar */}
-            <NextUpTile entries={nextTasks} brief={dailyBrief} />
             <TodayMeetingsCard meetings={meetings} calendarConnected={calendarConnected} />
           </aside>
         ) : null}
       </div>
-
-      <p className={css("brief-footnote")}>
-        Today shows one focus, up to two next tasks, and your meetings. Unclear work waits for your review.
-        Ambiguous items stay in the attention rail above until you decide.
-      </p>
     </div>
   );
 }

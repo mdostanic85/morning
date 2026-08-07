@@ -49,7 +49,7 @@ export function scoreHydraEvidence(input: {
 
   if (DIRECT_PATTERN.test(haystack)) {
     score += 100;
-    reasons.push("Directly relevant to Miloš");
+    reasons.push("Directly relevant to you");
   }
   if (input.currentUserName && haystack.toLowerCase().includes(input.currentUserName.toLowerCase())) {
     score += 30;

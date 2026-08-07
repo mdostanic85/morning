@@ -192,14 +192,17 @@ export default async function TodayPage() {
       waitingOn: task.waitingOn,
       owner: task.owner,
       updatedAt: task.updatedAt,
-      evidence: task.evidence.map((item) => ({
-        summary: item.summary,
-        quote: item.quote,
-        sourceDate: item.sourceDate,
-        url: item.url,
-        sourceTitle: sourceById.get(item.sourceItemId)?.title ?? "Source",
-        sourceType: sourceById.get(item.sourceItemId)?.sourceType ?? null,
-      })),
+      evidence: task.evidence.map((item) => {
+        const source = sourceById.get(item.sourceItemId);
+        return {
+          summary: item.summary,
+          quote: item.quote,
+          sourceDate: item.sourceDate,
+          url: item.url ?? source?.url ?? null,
+          sourceTitle: source?.title ?? "Source",
+          sourceType: source?.sourceType ?? null,
+        };
+      }),
     };
   });
 

@@ -1,0 +1,429 @@
+/* Sync MyDay — blocking modal; one source at a time, no scroll */
+
+.backdrop {
+  animation: syncBackdropIn 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 24.5rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: var(--radius-hero);
+  background: color-mix(in srgb, var(--overlay) 96%, transparent);
+  color: var(--foreground);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--sync-grad-3) 8%, transparent),
+    0 28px 64px -28px color-mix(in srgb, var(--sync-grad-2) 42%, transparent),
+    var(--elevation-raised);
+  outline: none;
+  animation: syncDialogIn 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 0.85rem 0.85rem 0;
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-soft) 80%, transparent);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.close:hover {
+  background: var(--surface-soft);
+  color: var(--foreground);
+  transform: scale(1.04);
+}
+
+.close:active {
+  transform: scale(0.96);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.close:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
+.close svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  padding: 0.15rem 1.5rem 1.5rem;
+}
+
+.bodySyncing {
+  padding-top: 1.15rem;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1rem;
+  animation: syncFadeUp 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 200ms;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: syncFadeUp 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 60ms;
+}
+
+.lottieWrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 7.5rem;
+  height: 7.5rem;
+}
+
+.lottie {
+  position: relative;
+  width: 6.25rem;
+  height: 6.25rem;
+  overflow: hidden;
+}
+
+.eyebrow {
+  margin: 1rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.headline {
+  margin: 0.4rem 0 0;
+  font-family: var(--type-heading-font-family);
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.stepLine {
+  margin: 0.45rem auto 0;
+  max-width: 20rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+  transition: color 220ms ease, opacity 220ms ease;
+}
+
+.stepLineError {
+  color: var(--danger);
+}
+
+.progressBlock {
+  margin-top: 1.1rem;
+  animation: syncFadeUp 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 120ms;
+}
+
+.progressMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.progressLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.progressPct {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  transition: color 200ms ease;
+}
+
+.progressTrack {
+  position: relative;
+  height: 0.4rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--sync-grad-1),
+    var(--sync-grad-2),
+    var(--sync-grad-3),
+    var(--sync-grad-4),
+    var(--sync-grad-5)
+  );
+  background-size: 200% 100%;
+  transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: syncBarShimmer 2.4s linear infinite;
+}
+
+.progressFillError {
+  background: color-mix(in srgb, var(--danger) 72%, var(--foreground));
+  animation: none;
+}
+
+.stepStage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1.15rem;
+  min-height: 7.75rem;
+}
+
+.stepCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 1rem 1.1rem 1.05rem;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 1.15rem;
+  background: color-mix(in srgb, var(--surface-soft) 78%, transparent);
+  text-align: center;
+  will-change: opacity, filter, transform;
+}
+
+.stepCardEnter {
+  animation: syncStepIn 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.stepCardExit {
+  opacity: 0;
+  filter: blur(10px);
+  transform: translateY(-8px) scale(0.98);
+  transition:
+    opacity 240ms cubic-bezier(0.4, 0, 1, 1),
+    filter 240ms cubic-bezier(0.4, 0, 1, 1),
+    transform 240ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+.stepCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.stepCardLabel {
+  margin: 0.65rem 0 0;
+  font-family: var(--type-heading-font-family);
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.stepCardDetail {
+  margin: 0.35rem 0 0;
+  max-width: 18rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.stepCounter {
+  margin: 0.7rem 0 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--muted-soft);
+}
+
+.sourceStatus {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color 240ms ease;
+}
+
+.statusDot {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  transition:
+    background-color 280ms ease,
+    color 280ms ease,
+    transform 280ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.statusDotCompleted {
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+  color: var(--good);
+  animation: syncPop 360ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+.statusDotFailed {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  animation: syncPop 360ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+.statusDotRunning {
+  color: var(--accent);
+}
+
+.statusDotIdle {
+  color: var(--muted-soft);
+}
+
+.resultWrap {
+  max-height: min(70dvh, 32rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  animation: syncFadeUp 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes syncBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes syncDialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes syncFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes syncStepIn {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes syncPop {
+  from {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes syncBarShimmer {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 200% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .dialog,
+  .hero,
+  .progressBlock,
+  .stepCardEnter,
+  .stepCardExit,
+  .footer,
+  .resultWrap,
+  .statusDotCompleted,
+  .statusDotFailed,
+  .progressFill {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .dialog,
+  .hero,
+  .progressBlock,
+  .stepCard,
+  .footer,
+  .resultWrap {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+
+  .close:hover,
+  .close:active {
+    transform: none;
+  }
+}

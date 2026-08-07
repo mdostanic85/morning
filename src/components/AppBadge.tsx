@@ -38,16 +38,19 @@ export function AppBadge({
   tone = "default",
   icon,
   className,
+  "aria-label": ariaLabel,
 }: {
   children: ReactNode;
   tone?: AppBadgeTone;
   icon?: ReactNode;
   className?: string;
+  "aria-label"?: string;
 }) {
   return (
     <Chip
       variant="tertiary"
       color="default"
+      aria-label={ariaLabel}
       className={cn(
         "tag h-6 min-h-6 w-fit shrink-0 overflow-hidden border text-foreground transition-colors gap-1 font-medium cursor-default",
         TONE_CLASS[tone],

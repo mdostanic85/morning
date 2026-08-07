@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { MoonIcon, SunIcon } from "lucide-react";
-import { Switch } from "@heroui/react/switch";
-import { cn } from "@/lib/utils";
 
 type Theme = "light" | "dark";
 
@@ -59,39 +57,26 @@ export function ThemeSwitcher() {
 
   const dark = theme === "dark";
 
-  function handleChange(selected: boolean) {
-    const nextTheme: Theme = selected ? "dark" : "light";
+  function toggleTheme() {
+    const nextTheme: Theme = dark ? "light" : "dark";
     applyTheme(nextTheme);
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
     setTheme(nextTheme);
   }
 
   return (
-    <div className="flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-border bg-surface/75 px-2.5 py-1.5">
-      <SunIcon
-        className={cn("size-3.5", dark ? "text-muted-soft" : "text-sun-foreground")}
-        aria-hidden
-      />
-      <Switch
-        size="sm"
-        isSelected={dark}
-        onChange={handleChange}
-        isDisabled={!mounted}
-        aria-label={`Use ${dark ? "light" : "dark"} theme`}
-      >
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-        </Switch.Content>
-      </Switch>
-      <MoonIcon
-        className={cn("size-3.5", dark ? "text-accent-strong" : "text-muted-soft")}
-        aria-hidden
-      />
-      <span className="sr-only" aria-live="polite">
-        {dark ? "Dark theme active" : "Light theme active"}
-      </span>
-    </div>
+    <button
+      type="button"
+      onClick={toggleTheme}
+      disabled={!mounted}
+      aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
+      className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-foreground/[0.06] hover:text-foreground disabled:opacity-50"
+    >
+      {dark ? (
+        <SunIcon className="size-4" aria-hidden />
+      ) : (
+        <MoonIcon className="size-4" aria-hidden />
+      )}
+    </button>
   );
 }

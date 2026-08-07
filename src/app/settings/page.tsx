@@ -15,6 +15,7 @@ import type { ConnectionTransport } from "@/domain/connection";
 import { Tabs } from "@heroui/react/tabs";
 import { Heading } from "@/components/Heading";
 import { SettingsHubLinks } from "@/components/SettingsHubLinks";
+import { SignOutControl } from "@/components/auth/SignOutControl";
 
 export const dynamic = "force-dynamic";
 
@@ -368,6 +369,9 @@ export default async function SettingsPage({
  </Tabs.Panel>
  </Tabs>
  <SettingsHubLinks />
+ <div className="border-t border-border pt-4 md:hidden">
+   <SignOutControl />
+ </div>
  </div>
  );
 }

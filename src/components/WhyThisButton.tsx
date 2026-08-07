@@ -3,9 +3,14 @@
 import { useMemo, useState } from "react";
 import { ExternalLinkIcon, XIcon } from "lucide-react";
 import { Button } from "@heroui/react/button";
-import { Drawer } from "@heroui/react/drawer";
+import { Modal } from "@heroui/react/modal";
+import { Tabs } from "@heroui/react/tabs";
 import type { SourceType } from "@/domain/sourceItem";
 import { SourceBadge } from "@/components/SourceBadge";
+import { Heading } from "@/components/Heading";
+import { priorityExplanationForDisplay } from "@/lib/tasks/priorityExplanation";
+import { cn } from "@/lib/utils";
+import styles from "./WhyThisButton.module.css";
 
 export interface WhyThisEvidenceItem {
   summary: string;
@@ -19,6 +24,9 @@ export interface WhyThisEvidenceItem {
 interface WhyThisButtonProps {
   whyFirst: string;
   evidence: WhyThisEvidenceItem[];
+  /** Visible label on the trigger. Defaults to “Why now”. */
+  label?: string;
+  className?: string;
 }
 
 /** Higher = more decisive for “why this task is valid”. */
@@ -52,157 +60,219 @@ function evidenceScore(item: WhyThisEvidenceItem): number {
   const typeWeight = item.sourceType ? (SOURCE_WEIGHT[item.sourceType] ?? 10) : 10;
   const quoteBonus = item.quote?.trim() ? 40 : 0;
   const time = new Date(item.sourceDate).getTime();
-  const recency = Number.isNaN(time) ? 0 : time / 1e12; // tiny tie-breaker, newest wins
+  const recency = Number.isNaN(time) ? 0 : time / 1e12;
   return typeWeight + quoteBonus + recency;
 }
 
-function EvidenceCard({
+/** Split a conclusion into a strong lead sentence + supporting remainder. */
+function conclusionParts(raw: string): { lead: string; rest: string | null } {
+  const cleaned = priorityExplanationForDisplay(raw).trim();
+  if (!cleaned) {
+    return {
+      lead: "No priority explanation was recorded for this task. Open the Sources tab and confirm the requirement before acting.",
+      rest: null,
+    };
+  }
+
+  const sentences =
+    cleaned.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g)?.map((part) => part.trim()).filter(Boolean) ??
+    [cleaned];
+
+  if (sentences.length === 1) {
+    return { lead: sentences[0], rest: null };
+  }
+
+  return {
+    lead: sentences[0],
+    rest: sentences.slice(1).join(" "),
+  };
+}
+
+function sourceLinkLabel(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return host || "Open source";
+  } catch {
+    return "Open source";
+  }
+}
+
+function SourceCard({
   item,
   rank,
 }: {
   item: WhyThisEvidenceItem;
-  rank?: number;
+  rank: number;
 }) {
-  const body = (item.quote?.trim() || item.summary).trim();
-  const isQuote = Boolean(item.quote?.trim());
+  const quote = item.quote?.trim() || null;
+  const summary = item.summary?.trim() || null;
+  const url = item.url?.trim() || null;
 
   return (
-    <li className="rounded-[var(--radius)] border border-border bg-surface/70 p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {rank != null ? (
-          <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-accent/12 text-sm font-medium tabular-nums text-accent-strong">
-            {rank}
-          </span>
-        ) : null}
-        {item.sourceType ? <SourceBadge sourceType={item.sourceType} /> : null}
-        <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
-          {item.sourceTitle}
-        </span>
-      </div>
+    <li className={styles.sourceCard}>
+      <span className={styles.sourceRank} aria-hidden>
+        {rank}
+      </span>
 
-      <p className="mt-2 text-metadata text-muted-soft">{formatDate(item.sourceDate)}</p>
+      <div className={styles.sourceBody}>
+        <div className={styles.sourceMeta}>
+          {item.sourceType ? <SourceBadge sourceType={item.sourceType} /> : null}
+          <p className={styles.sourceTitle}>
+            {url ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className={styles.sourceTitleLink}
+              >
+                {item.sourceTitle}
+              </a>
+            ) : (
+              item.sourceTitle
+            )}
+          </p>
+          <p className={styles.sourceDate}>{formatDate(item.sourceDate)}</p>
+        </div>
 
-      {body ? (
-        isQuote ? (
-          <blockquote className="mt-3 border-l-2 border-accent/45 pl-3 text-sm leading-relaxed text-foreground/90">
-            &ldquo;{body}&rdquo;
-          </blockquote>
+        {quote ? (
+          <blockquote className={styles.sourceQuote}>&ldquo;{quote}&rdquo;</blockquote>
+        ) : summary ? (
+          <p className={styles.sourceSummary}>{summary}</p>
         ) : (
-          <p className="mt-3 text-sm leading-relaxed text-muted">{body}</p>
-        )
-      ) : null}
+          <p className={styles.sourceSummary}>This source is linked, but no excerpt was captured.</p>
+        )}
 
-      {item.url ? (
-        <a
-          href={item.url}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-3 inline-flex items-center gap-1.5 text-sm text-accent underline-offset-2 hover:underline"
-        >
-          Open source
-          <ExternalLinkIcon className="size-3.5" aria-hidden />
-        </a>
-      ) : null}
+        {url ? (
+          <a href={url} target="_blank" rel="noreferrer" className={styles.sourceLink}>
+            {sourceLinkLabel(url)}
+            <ExternalLinkIcon className="size-3.5" aria-hidden />
+          </a>
+        ) : (
+          <p className={styles.sourceMissingLink}>No link available for this source.</p>
+        )}
+      </div>
     </li>
   );
 }
 
-export function WhyThisButton({ whyFirst, evidence }: WhyThisButtonProps) {
+export function WhyThisButton({
+  whyFirst,
+  evidence,
+  label = "Why now",
+  className,
+}: WhyThisButtonProps) {
   const [open, setOpen] = useState(false);
 
-  const { primary, supporting } = useMemo(() => {
-    const ranked = [...evidence].sort((a, b) => evidenceScore(b) - evidenceScore(a));
-    if (ranked.length === 0) return { primary: [] as WhyThisEvidenceItem[], supporting: [] as WhyThisEvidenceItem[] };
-    // Lead with the strongest 1–2; everything else is supporting.
-    const splitAt = Math.min(2, ranked.length);
-    return {
-      primary: ranked.slice(0, splitAt),
-      supporting: ranked.slice(splitAt),
-    };
-  }, [evidence]);
+  const rankedSources = useMemo(
+    () => [...evidence].sort((a, b) => evidenceScore(b) - evidenceScore(a)),
+    [evidence]
+  );
+
+  const sourceCount = rankedSources.length;
+  const { lead, rest } = useMemo(() => conclusionParts(whyFirst), [whyFirst]);
+  const sourcesTabLabel = sourceCount === 1 ? "Sources (1)" : `Sources (${sourceCount})`;
 
   return (
     <>
       <Button
         type="button"
-        size="sm"
-        variant="tertiary"
-        className="shrink-0"
+        size="md"
+        variant="secondary"
+        className={cn("shrink-0", className)}
         onPress={() => setOpen(true)}
       >
-        Why this?
+        {label}
       </Button>
 
-      <Drawer isOpen={open} onOpenChange={setOpen}>
-        <Drawer.Backdrop variant="blur" className="bg-background/75">
-          <Drawer.Content placement="right" className="w-full">
-            <Drawer.Dialog
-              aria-label="Why this task"
-              className="relative flex h-[100dvh] w-full max-w-none flex-col gap-0 overflow-hidden border-l border-border bg-overlay pt-[env(safe-area-inset-top)] text-foreground outline-none sm:max-w-md"
+      <Modal isOpen={open} onOpenChange={setOpen}>
+        <Modal.Backdrop variant="blur" className="bg-background/75">
+          <Modal.Container placement="center" size="lg" className="w-full max-w-none px-4">
+            <Modal.Dialog
+              aria-label="Why this is the current focus"
+              className={styles.dialog}
             >
-              <Drawer.Header className="sticky top-0 z-10 flex flex-col gap-1.5 border-b border-border/70 bg-overlay/95 px-5 py-4 pr-14 backdrop-blur-xl">
-                <Drawer.Heading className="text-lg font-medium tracking-tight">
-                  Why this
-                </Drawer.Heading>
-                <p slot="description" className="text-sm text-muted">
-                  Sources used for this recommendation, strongest first.
-                </p>
-              </Drawer.Header>
+              <Modal.Header className={styles.header}>
+                <div className={styles.headerCopy}>
+                  <Modal.Heading className="sr-only">Why now</Modal.Heading>
+                  <Heading level={2} visualLevel={4}>
+                    Why now
+                  </Heading>
+                  <p slot="description" className={styles.headerIntro}>
+                    Why this is today’s focus, and which source confirms it.
+                  </p>
+                </div>
 
-              <Drawer.Body className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
-                {whyFirst ? (
-                  <section>
-                    <p className="text-sm font-medium uppercase tracking-[0.08em] text-muted-soft">
-                      AI conclusion
-                    </p>
-                    <p className="mt-2 text-sm leading-relaxed text-foreground">{whyFirst}</p>
-                  </section>
-                ) : null}
+                <Modal.CloseTrigger className={styles.close}>
+                  <XIcon aria-hidden />
+                  <span className="sr-only">Close</span>
+                </Modal.CloseTrigger>
+              </Modal.Header>
 
-                {primary.length > 0 ? (
-                  <section>
-                    <p className="text-sm font-medium uppercase tracking-[0.08em] text-muted-soft">
-                      Most decisive
-                    </p>
-                    <ul className="mt-3 space-y-3">
-                      {primary.map((item, index) => (
-                        <EvidenceCard
-                          key={`primary-${item.sourceTitle}-${item.sourceDate}-${index}`}
-                          item={item}
-                          rank={index + 1}
-                        />
-                      ))}
-                    </ul>
-                  </section>
-                ) : (
-                  <p className="text-sm text-muted">No source quotes are attached to this task.</p>
-                )}
+              <div className={styles.tabs}>
+                <Tabs
+                  defaultSelectedKey="priority"
+                  variant="secondary"
+                  className="flex min-h-0 w-full flex-1 flex-col gap-0"
+                >
+                  <Tabs.ListContainer className="w-full">
+                    <Tabs.List
+                      aria-label="Why now sections"
+                      className={styles.tabList}
+                    >
+                      <Tabs.Tab id="priority" className={styles.tab}>
+                        Priority
+                        <Tabs.Indicator />
+                      </Tabs.Tab>
+                      <Tabs.Tab id="sources" className={styles.tab}>
+                        {sourcesTabLabel}
+                        <Tabs.Indicator />
+                      </Tabs.Tab>
+                    </Tabs.List>
+                  </Tabs.ListContainer>
 
-                {supporting.length > 0 ? (
-                  <section>
-                    <p className="text-sm font-medium uppercase tracking-[0.08em] text-muted-soft">
-                      Also supporting
-                    </p>
-                    <ul className="mt-3 space-y-3">
-                      {supporting.map((item, index) => (
-                        <EvidenceCard
-                          key={`support-${item.sourceTitle}-${item.sourceDate}-${index}`}
-                          item={item}
-                        />
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-              </Drawer.Body>
+                  <Tabs.Panel id="priority" className={styles.tabPanel}>
+                    <div className={styles.panelStack}>
+                      <p className={styles.sectionLead}>
+                        Why the system chose this task as today’s focus.
+                      </p>
+                      <div className={styles.conclusion}>
+                        <p className={styles.conclusionLabel}>Conclusion</p>
+                        <p className={styles.conclusionLead}>{lead}</p>
+                        {rest ? <p className={styles.conclusionRest}>{rest}</p> : null}
+                      </div>
+                    </div>
+                  </Tabs.Panel>
 
-              <Drawer.CloseTrigger className="absolute top-3 right-3 size-9 rounded-lg text-muted transition-colors hover:bg-surface-soft hover:text-foreground">
-                <XIcon className="size-4" />
-                <span className="sr-only">Close</span>
-              </Drawer.CloseTrigger>
-            </Drawer.Dialog>
-          </Drawer.Content>
-        </Drawer.Backdrop>
-      </Drawer>
+                  <Tabs.Panel id="sources" className={styles.tabPanel}>
+                    <div className={styles.panelStack}>
+                      <p className={styles.sectionLead}>
+                        Sources that establish this work exists — strongest first.
+                      </p>
+
+                      {sourceCount > 0 ? (
+                        <ul className={styles.sourceList}>
+                          {rankedSources.map((item, index) => (
+                            <SourceCard
+                              key={`${item.sourceTitle}-${item.sourceDate}-${index}`}
+                              item={item}
+                              rank={index + 1}
+                            />
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className={styles.emptySources}>
+                          No sources are attached yet. Sync again or open the task and confirm the
+                          requirement before acting.
+                        </p>
+                      )}
+                    </div>
+                  </Tabs.Panel>
+                </Tabs>
+              </div>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </>
   );
 }

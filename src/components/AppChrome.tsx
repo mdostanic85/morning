@@ -28,9 +28,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
   return (
     <AskMemoryProvider>
       <WelcomeModal />
-      <div className="flex min-h-full flex-1 flex-col md:flex-row">
+      <div className="flex min-h-full flex-1 flex-col">
         <NavBar />
-        <div className="flex min-w-0 flex-1 flex-col pb-[calc(3.75rem+env(safe-area-inset-bottom))] md:pb-0">
+        <div className="flex min-w-0 flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
           <main
             id="main-content"
             tabIndex={-1}

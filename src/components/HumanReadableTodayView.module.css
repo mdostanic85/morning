@@ -1,5 +1,5 @@
 /* ── Human-readable daily brief ────────────────────────────────────────────
-   A quiet bento layout: primary focus plus next-up tasks beside meetings.
+   Quiet bento: primary focus (+ next-up under it) beside today's meetings.
    Cards size to their content — they do not stretch to fill the grid.
 ─────────────────────────────────────────────────────────────────────────── */
 .brief-page {
@@ -7,11 +7,19 @@
 }
 
 .brief-header {
+  margin-bottom: 2rem;
+}
+
+.brief-header-copy {
+  min-width: 0;
+  width: 100%;
+}
+
+.brief-header-title-row {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 2rem;
-  margin-bottom: 2rem;
 }
 
 .brief-header h1 {
@@ -28,27 +36,17 @@
   text-transform: uppercase;
 }
 
-.brief-date {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.75rem 0 0;
-  color: var(--muted);
+.brief-lede {
+  margin: 0.55rem 0 0;
+  color: var(--muted-soft);
   font-size: 0.9375rem;
-}
-
-.brief-date-sep {
-  color: var(--muted-soft);
-}
-
-.brief-date-meta {
-  color: var(--muted-soft);
+  line-height: 1.55;
+  white-space: nowrap;
 }
 
 .brief-header-actions {
   display: flex;
-  max-width: 36rem;
+  flex-shrink: 0;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
@@ -148,7 +146,12 @@
 }
 
 .brief-bento-primary {
+  display: flex;
   grid-column: span 8;
+  flex-direction: column;
+  gap: 1.25rem;
+  /* Keep focus visually first even when the side rail is dense. */
+  min-width: 0;
 }
 
 .brief-bento-side {
@@ -178,26 +181,15 @@
   margin-top: 0.1rem;
 }
 
-.brief-focus-card,
-.brief-empty {
-  border: 1px solid var(--card-shell-border);
-  border-radius: var(--radius-hero);
-  background: var(--surface);
-}
-
-.brief-focus-card {
-  position: relative;
-  padding: 1.35rem;
-  overflow: hidden;
-}
-
-/* The only card allowed to visually dominate the page — everything else stays quiet.
-   Its shell uses an accent-tinted semantic border. */
-.brief-focus-primary {
-  padding: 2.25rem;
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--card-shell-border));
-  background: var(--surface);
-  box-shadow: var(--focus-hero-shadow);
+@keyframes brief-focus-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes brief-top-line-shimmer {
@@ -209,15 +201,55 @@
   }
 }
 
-/* Sync CTA mesh: each blob (comma-separated layer) drifts on its own path so
-   the colors bleed and recombine like a living mesh gradient. */
+@keyframes brief-focus-mesh-drift {
+  0%,
+  100% {
+    background-position: 0% 0%, 100% 0%, 100% 100%, 0% 100%;
+  }
+  25% {
+    background-position: 40% 25%, 65% 10%, 75% 85%, 15% 70%;
+  }
+  50% {
+    background-position: 65% 55%, 35% 45%, 45% 55%, 55% 40%;
+  }
+  75% {
+    background-position: 20% 70%, 85% 55%, 60% 65%, 35% 25%;
+  }
+}
 
+.brief-focus-card,
+.brief-empty {
+  border: 0;
+  border-radius: var(--radius-hero);
+  background: var(--surface-raised);
+}
+
+.brief-focus-card {
+  position: relative;
+  padding: 1.35rem;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Dominant focus surface: soft mesh wash + spectrum top edge. */
+.brief-focus-primary {
+  padding: 2.5rem 2.75rem;
+  background: var(--surface-raised);
+  box-shadow: var(--focus-hero-shadow);
+  transition:
+    transform var(--motion-base) var(--ease-out),
+    box-shadow var(--motion-base) var(--ease-out);
+  animation: brief-focus-enter 480ms var(--ease-out) both;
+}
+
+/* Spectrum accent strip along the top edge. */
 .brief-focus-primary::before {
   content: "";
   position: absolute;
   top: 0;
   right: 0;
   left: 0;
+  z-index: 2;
   height: 4px;
   background: linear-gradient(
     90deg,
@@ -232,17 +264,163 @@
   animation: brief-top-line-shimmer 5s linear infinite;
 }
 
+/* Soft drifting mesh on a solid white card — stay light enough that the
+   surface still reads as white against the blue-gray page wash. */
+.brief-focus-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-color: var(--surface);
+  background-image:
+    radial-gradient(
+      60% 130% at 18% 22%,
+      color-mix(in srgb, var(--sync-grad-1) 9%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      58% 130% at 82% 18%,
+      color-mix(in srgb, var(--sync-grad-4) 8%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      70% 140% at 78% 82%,
+      color-mix(in srgb, var(--sync-grad-5) 8%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      66% 135% at 22% 84%,
+      color-mix(in srgb, var(--sync-grad-2) 8%, transparent),
+      transparent 62%
+    );
+  background-repeat: no-repeat;
+  background-size: 200% 200%;
+  animation: brief-focus-mesh-drift 12s ease-in-out infinite;
+}
+
+.brief-focus-primary > * {
+  position: relative;
+  z-index: 1;
+}
+
+.brief-focus-primary:hover {
+  box-shadow: var(--elevation-raised);
+}
+
+.brief-focus-primary:focus-within {
+  box-shadow:
+    var(--focus-hero-shadow),
+    0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .brief-focus-primary {
+    animation: none;
+    transition: box-shadow var(--motion-fast) ease;
+  }
+
   .brief-focus-primary::before {
     animation: none;
     background-size: 100% 100%;
   }
+
+  .brief-focus-primary::after {
+    animation: none;
+  }
 }
 
-.brief-focus-topline {
+.brief-focus-context {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brief-focus-heading {
+  margin-top: 0.85rem;
+}
+
+.brief-focus-title-link {
+  display: inline-block;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--radius-control);
+}
+
+.brief-focus-title-link:hover h2 {
+  color: var(--accent-strong);
+}
+
+.brief-focus-title-link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.brief-focus-heading h2 {
+  max-width: 40rem;
+  text-wrap: balance;
+  transition: color var(--motion-fast) ease;
+}
+
+.brief-focus-support {
+  width: 100%;
+  max-width: none;
+  margin: 0.85rem 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.brief-focus-signal {
+  display: inline-flex;
+  max-width: 100%;
+  margin: 1.35rem 0 0;
+  padding: 0.35rem 0;
+  color: var(--foreground);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.brief-focus-signal--caution {
+  color: var(--waiting);
+}
+
+.brief-focus-signal--alert {
+  color: var(--danger);
+}
+
+.brief-focus-actions {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+
+/* Shared size for Why now + primary CTA */
+.brief-focus-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  height: 2.75rem;
+  padding-inline: 1.15rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+}
+
+.brief-focus-unlinked {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9375rem;
+  line-height: 1.45;
 }
 
 .brief-badge-row {
@@ -253,221 +431,12 @@
   gap: 0.45rem;
 }
 
-.brief-updated {
-  color: var(--muted-soft);
-  font-size: var(--font-size-min);
-}
-
-.brief-focus-heading {
-  margin-top: 1.35rem;
-}
-
-.brief-focus-heading a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.brief-focus-heading h2 {
-  max-width: 46rem;
-}
-
-.brief-focus-heading a:hover h2 {
-  color: var(--accent-strong);
-}
-
-.brief-focus-heading > p {
-  max-width: 48rem;
-  margin: 0.8rem 0 0;
-  color: var(--muted);
-  font-size: 0.975rem;
-  line-height: 1.65;
-}
-
-.brief-pillars {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  margin-top: 1.6rem;
-}
-
-.brief-pillar {
-  min-width: 0;
-  padding: 1.2rem 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-inset);
-  background: var(--surface);
-}
-
-/* Next action leads Done when: stronger tint + accent border make it the
-   visually dominant pillar, while Done when stays a quiet checklist. */
-.brief-pillar-action {
-  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
-  background: color-mix(in srgb, var(--accent-soft-surface) 55%, var(--surface));
-  box-shadow: none;
-}
-
-.brief-pillar-done {
-  border-color: var(--border);
-  background: var(--surface);
-}
-
-.brief-pillar-evidence {
-  grid-column: 1 / -1;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: var(--surface-soft);
-}
-
+/* Shared kicker style still used by Next up / rails — keep letter-spacing. */
 .brief-pillar-label {
   margin-bottom: 0.85rem;
   color: var(--accent-strong);
   letter-spacing: 0.1em;
   line-height: 1.2;
-}
-
-.brief-pillar-label-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.75rem;
-  margin-bottom: 0.85rem;
-}
-
-.brief-pillar-label-row .brief-pillar-label {
-  margin-bottom: 0;
-}
-
-.brief-pillar-action .brief-pillar-label {
-  color: var(--accent-strong);
-}
-
-.brief-pillar-done .brief-pillar-label {
-  color: var(--muted);
-}
-
-.brief-action-copy,
-.brief-pillar p:not(.brief-pillar-label),
-.brief-pillar ul {
-  margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-.brief-action-copy {
-  color: var(--foreground);
-  font-size: 0.95rem;
-  font-weight: 680;
-  line-height: 1.58;
-}
-
-/* Shown only when the action is not backed by the evidence beside it. */
-.brief-pillar-action p.brief-action-warning {
-  margin-top: 0.55rem;
-  color: var(--danger);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  line-height: 1.45;
-}
-
-.brief-pillar ul {
-  display: grid;
-  gap: 0.55rem;
-  padding: 0;
-  list-style: none;
-}
-
-.brief-pillar li {
-  position: relative;
-  padding-left: 1rem;
-}
-
-.brief-pillar-done li {
-  color: var(--foreground);
-  font-weight: 560;
-  line-height: 1.55;
-}
-
-.brief-pillar li::before {
-  content: "";
-  position: absolute;
-  top: 0.53rem;
-  left: 0;
-  width: 0.35rem;
-  height: 0.35rem;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-}
-
-.brief-source-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--accent-strong);
-  font-size: var(--font-size-min);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.brief-source-link:hover {
-  text-decoration: underline;
-}
-
-.brief-evidence-body {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.brief-evidence-source {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.45rem 0.7rem;
-}
-
-.brief-evidence-title {
-  font-size: var(--font-size-min);
-  font-weight: 700;
-  color: var(--foreground);
-}
-
-.brief-evidence-quote {
-  display: -webkit-box;
-  margin: 0;
-  padding-left: 0.7rem;
-  overflow: hidden;
-  color: var(--foreground);
-  font-size: 0.875rem;
-  font-style: italic;
-  line-height: 1.5;
-  border-left: 2px solid color-mix(in srgb, var(--sky) 55%, var(--border));
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.brief-evidence-summary {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.875rem;
-  line-height: 1.5;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.brief-evidence-missing {
-  color: var(--danger);
-}
-
-.brief-focus-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--border);
 }
 
 /* Secondary tasks stay quiet by design: badge, headline, two-line summary.
@@ -591,18 +560,28 @@
 
 .brief-empty {
   display: grid;
-  min-height: 18rem;
-  align-content: center;
-  padding: 2rem;
+  align-content: start;
+  min-height: 0;
+  padding: 2.5rem 2.75rem;
+  background: color-mix(in srgb, var(--surface-raised) 92%, var(--surface-soft));
+  box-shadow: var(--elevation-section);
+  animation: brief-focus-enter 480ms var(--ease-out) both;
 }
 
+.brief-empty .brief-focus-heading,
 .brief-empty h2 {
-  font-size: var(--type-heading-3-size);
+  margin-top: 0.85rem;
+  max-width: 36rem;
 }
 
-.brief-empty p {
-  margin: 0.5rem 0 0;
-  color: var(--muted);
+.brief-empty .brief-focus-support {
+  margin-top: 0.85rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brief-empty {
+    animation: none;
+  }
 }
 
 .brief-source-details {
@@ -656,68 +635,62 @@
   color: var(--accent-strong);
 }
 
-.brief-footnote {
-  margin: 1.5rem 0 0;
-  color: var(--muted-soft);
-  font-size: var(--font-size-min);
-  text-align: center;
-}
-
 /* ──────────────────────────────────────────────────────────────
-   Next up tile — one bounded tile holding ≤2 rows, each its own
-   bounded card (per HeroUI Figma kit). Hover only shifts the row's
-   border; the row's title link is stretched (::after) so the whole
-   card opens the task.
+   Next up — same width as focus (lives in the primary column).
+   Cards: badges, headline, one short support line. Overflow sits
+   behind a plain See more disclosure.
    ────────────────────────────────────────────────────────────── */
-.brief-nextup-tile {
+.brief-nextup {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 1.1rem 1.25rem 1.25rem;
-  border: 1px solid var(--card-shell-border);
-  border-radius: var(--radius-card);
-  background: var(--surface);
+  min-width: 0;
 }
 
-.brief-nextup-tile > .brief-kicker {
+.brief-nextup > .brief-kicker {
   margin: 0;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border);
 }
 
-.brief-nextup-row {
+.brief-nextup-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+.brief-nextup-card {
   position: relative;
-  display: grid;
-  gap: 0.55rem;
-  padding: 1rem;
-  border: 1px solid transparent;
+  display: flex;
+  flex: 1 1 calc(50% - 4.5rem);
+  min-width: min(100%, 12rem);
+  max-width: 100%;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--card-shell-border);
   border-radius: var(--radius-control);
-  background: var(--surface-soft);
+  background: var(--surface);
   transition: border-color var(--motion-fast) var(--ease-out);
 }
 
-.brief-nextup-row--linked {
+.brief-nextup-card--linked {
   cursor: pointer;
 }
 
-.brief-nextup-row--linked:hover {
+.brief-nextup-card--linked:hover {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
-.brief-nextup-row-badges {
+.brief-nextup-card-badges {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
 }
 
-.brief-nextup-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.brief-nextup-title {
+.brief-nextup-card-title {
   display: block;
   margin: 0;
   color: var(--foreground);
@@ -728,22 +701,21 @@
   text-decoration: none;
 }
 
-.brief-nextup-title-link {
+.brief-nextup-card-title-link {
   color: inherit;
   font: inherit;
   letter-spacing: inherit;
   text-decoration: none;
 }
 
-/* Stretches the title's hit-area to the full card (Bootstrap-style
-   "stretched link") so clicking anywhere on the row opens the task. */
-.brief-nextup-title-link::after {
+/* Stretched link — whole card opens the task. */
+.brief-nextup-card-title-link::after {
   content: "";
   position: absolute;
   inset: 0;
 }
 
-.brief-nextup-action {
+.brief-nextup-card-support {
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
@@ -752,6 +724,62 @@
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.brief-nextup-more {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: auto;
+}
+
+.brief-nextup-more[open] {
+  flex: 1 1 100%;
+  align-self: stretch;
+  margin-left: 0;
+}
+
+.brief-nextup-more-summary {
+  cursor: pointer;
+  padding: 0.35rem 0.15rem;
+  color: var(--muted);
+  font-size: var(--font-size-min);
+  font-weight: 700;
+  list-style: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.brief-nextup-more-summary::-webkit-details-marker {
+  display: none;
+}
+
+.brief-nextup-more-summary:hover {
+  color: var(--accent-strong);
+}
+
+.brief-nextup-more-close {
+  display: none;
+}
+
+.brief-nextup-more[open] > .brief-nextup-more-summary .brief-nextup-more-open {
+  display: none;
+}
+
+.brief-nextup-more[open] > .brief-nextup-more-summary .brief-nextup-more-close {
+  display: inline;
+}
+
+.brief-nextup-more[open] > .brief-nextup-more-summary {
+  display: block;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.brief-nextup-extra {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
 }
 
 /* Static (no-URL) source label — same visual as the linked variant minus interaction */
@@ -769,7 +797,7 @@
    ────────────────────────────────────────────────────────────── */
 .brief-bento--wide .brief-bento-primary {
   grid-column: 1 / -1;
-  max-width: 52rem;
+  max-width: 48rem;
 }
 
 @media (max-width: 960px) {
@@ -780,14 +808,6 @@
 
   .brief-bento-side {
     grid-column: span 5;
-  }
-
-  .brief-pillars {
-    grid-template-columns: 1fr;
-  }
-
-  .brief-pillar-evidence {
-    grid-column: auto;
   }
 }
 
@@ -811,21 +831,35 @@
     grid-column: 1 / -1;
   }
 
-  .brief-focus-card {
-    padding: 1.35rem;
+  .brief-focus-card,
+  .brief-focus-primary,
+  .brief-empty {
+    padding: 1.5rem 1.35rem;
   }
 
-  .brief-pillars {
-    gap: 0.8rem;
-    margin-top: 1.25rem;
+  .brief-focus-support {
+    font-size: 1rem;
   }
 
-  .brief-pillar {
-    padding: 1.05rem;
+  .brief-focus-actions {
+    margin-top: 1.35rem;
   }
 
-  .brief-focus-footer {
-    align-items: flex-start;
-    flex-direction: column;
+  .brief-focus-action-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .brief-nextup-card {
+    flex: 1 1 100%;
+  }
+
+  .brief-nextup-more {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .brief-nextup-extra {
+    grid-template-columns: 1fr;
   }
 }
