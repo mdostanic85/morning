@@ -21,6 +21,8 @@ import {
 import { filterActiveProjects, getProjects } from "@/services/projects";
 import { getSourceItems } from "@/services/sourceItems";
 import { getUserProfile } from "@/services/userProfile";
+import { getTodayMeetings } from "@/lib/calendar/todayMeetings";
+import type { MeetingForRanking } from "@/lib/tasks/meetingPressure";
 import type { AttendanceContext } from "@/lib/tasks/sourceAuthority";
 import {
   applyPlannerDecisions,
@@ -190,7 +192,8 @@ function buildTasksForPlanning(
   sourceById: Map<number, SourceItem>,
   jiraPending: Awaited<ReturnType<typeof fetchJiraPendingSnapshot>>,
   today: string,
-  attendance?: AttendanceContext
+  attendance?: AttendanceContext,
+  meetings?: readonly MeetingForRanking[]
 ): TaskForPlanning[] {
   const jiraByKey = new Map(jiraPending.map((issue) => [issue.key, issue]));
 
@@ -198,7 +201,15 @@ function buildTasksForPlanning(
     const sources = task.evidence
       .map((item) => sourceById.get(item.sourceItemId))
       .filter((source): source is SourceItem => source != null);
-    const ranked = rankWorkTask(toWorkTaskForRanking(task), today, sourceById, jiraByKey, attendance);
+    const ranked = rankWorkTask(
+      toWorkTaskForRanking(task),
+      today,
+      sourceById,
+      jiraByKey,
+      attendance,
+      Date.now(),
+      { meetings }
+    );
 
     return {
       id: task.id,
@@ -239,9 +250,28 @@ function buildTasksForPlanning(
   });
 }
 
+/**
+ * Today's timed meetings for ranking. A calendar outage must never fail the
+ * sync's rebuild phase — without meetings the ranking simply loses the
+ * prep-before-the-meeting signal, which is exactly how it behaved before.
+ */
+async function loadMeetingsForRanking(): Promise<MeetingForRanking[]> {
+  try {
+    const { meetings } = await getTodayMeetings();
+    return meetings.map((meeting) => ({
+      title: meeting.title,
+      startAt: meeting.startsAt,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function rebuildTodayQueue(options?: {
   today?: string;
   jiraPending?: JiraPendingSnapshot[];
+  /** Injected by tests; production reads today's calendar. */
+  meetings?: readonly MeetingForRanking[];
   summaryWriter?: (summary: PriorityPlanSummary) => void | Promise<void>;
 }): Promise<RebuildTodayQueueResult> {
   // Close Done Jira work items and merge duplicates before ranking.
@@ -326,8 +356,17 @@ export async function rebuildTodayQueue(options?: {
   }
 
   const jiraPending = options?.jiraPending ?? await fetchJiraPendingSnapshot();
+  const meetings = options?.meetings ?? (await loadMeetingsForRanking());
   const rankingTasks = tasks.map(toWorkTaskForRanking);
-  const ranked = rankWorkTasks(rankingTasks, today, sourceById, jiraPending, attendance);
+  const ranked = rankWorkTasks(
+    rankingTasks,
+    today,
+    sourceById,
+    jiraPending,
+    attendance,
+    Date.now(),
+    { meetings }
+  );
   const deterministicDecisions = buildQueueDecisionsFromRanking(ranked, rankingTasks);
   const plannerTaskIds = new Set(
     ranked.slice(0, LLM_PLANNER_TASK_LIMIT).map((entry) => entry.taskId)
@@ -344,7 +383,8 @@ export async function rebuildTodayQueue(options?: {
       sourceById,
       jiraPending,
       today,
-      attendance
+      attendance,
+      meetings
     ),
     projects: buildProjectContext(projects),
     recentlyImportedSources: buildRecentSources(activeSources, projectNameById),

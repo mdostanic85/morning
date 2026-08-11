@@ -211,7 +211,10 @@ export function composeDailyBriefV2(input: ComposeDailyBriefInput): DailyBriefV2
     sourceById as Map<number, SourceItem>,
     input.jiraPending,
     rankingAttendance,
-    nowMs
+    nowMs,
+    // Today's calendar is already loaded for `todayMeetings`; ordering must use
+    // the same list, so prep for an upcoming meeting can come first.
+    { meetings: input.meetings }
   );
 
   const taskById = new Map(ownedForPriority.map((task) => [task.id, task]));

@@ -3,6 +3,11 @@ import { getConnectionSecret } from "@/services/connectionSecrets";
 import { getConnectionByProvider } from "@/services/connections";
 import type { ConnectorSourceCandidate } from "./types";
 import { fetchWithTimeout } from "@/lib/http";
+import {
+  formatPrReviewSection,
+  summarizePrReviewState,
+  type GitHubReviewSubmission,
+} from "./githubPrReview";
 
 interface GitHubUser {
   login: string;
@@ -237,12 +242,34 @@ export async function fetchGitHubRepoActivity(repository: string): Promise<GitHu
   };
 }
 
+/**
+ * Comment threads on a long-running PR are unbounded, and the whole thread ends
+ * up in the source body that task/knowledge extraction reads. This pins the
+ * page size GitHub currently defaults to, so the bound is explicit here rather
+ * than inherited from an API default that could change. The review *decisions*
+ * below are what carry the actionable feedback, and those are fetched in full.
+ */
+const MAX_PR_COMMENTS = 30;
+
 async function fetchPrEvidence(repo: string, pr: GitHubPullRequest) {
-  const comments = await githubFetch<GitHubComment[]>(`/repos/${repo}/issues/${pr.number}/comments`);
+  const comments = await githubFetch<GitHubComment[]>(
+    `/repos/${repo}/issues/${pr.number}/comments?per_page=${MAX_PR_COMMENTS}`
+  );
   const reviewComments = await githubFetch<GitHubComment[]>(
-    `/repos/${repo}/pulls/${pr.number}/comments`
+    `/repos/${repo}/pulls/${pr.number}/comments?per_page=${MAX_PR_COMMENTS}`
   );
   const commits = await githubFetch<GitHubCommit[]>(`/repos/${repo}/pulls/${pr.number}/commits`);
+  // Review submissions carry the decision (CHANGES_REQUESTED / APPROVED /
+  // COMMENTED) that inline comments alone never reveal. A repo that forbids
+  // reading reviews must not lose the rest of the PR signal.
+  let reviews: GitHubReviewSubmission[] = [];
+  try {
+    reviews = await githubFetch<GitHubReviewSubmission[]>(
+      `/repos/${repo}/pulls/${pr.number}/reviews?per_page=100`
+    );
+  } catch {
+    reviews = [];
+  }
   let checkRuns: GitHubCheckRunsResponse["check_runs"] = [];
   try {
     const checks = await githubFetch<GitHubCheckRunsResponse>(
@@ -252,7 +279,13 @@ async function fetchPrEvidence(repo: string, pr: GitHubPullRequest) {
   } catch {
     checkRuns = [];
   }
-  return { comments, reviewComments, commits, checkRuns };
+  return {
+    comments: comments.slice(-MAX_PR_COMMENTS),
+    reviewComments: reviewComments.slice(-MAX_PR_COMMENTS),
+    commits,
+    reviews,
+    checkRuns,
+  };
 }
 
 export async function fetchGitHubPrSignalsForRepo(input: {
@@ -276,11 +309,22 @@ export async function fetchGitHubPrSignalsForRepo(input: {
 
   const candidates: ConnectorSourceCandidate[] = [];
   for (const pr of relevant) {
-    const { comments, reviewComments, commits, checkRuns } = await fetchPrEvidence(repo, pr);
+    const { comments, reviewComments, commits, reviews, checkRuns } = await fetchPrEvidence(
+      repo,
+      pr
+    );
     const failingChecks = checkRuns.filter((check) =>
       ["failure", "timed_out", "cancelled", "action_required"].includes(check.conclusion ?? "")
     );
     const role = pr.user.login === me ? "authored_by_me" : "review_requested";
+    const reviewSummary = summarizePrReviewState({
+      reviews,
+      me,
+      prAuthor: pr.user.login,
+      requestedReviewers: (pr.requested_reviewers ?? []).map((reviewer) => reviewer.login),
+      commitDates: commits.map((commit) => commit.commit?.author?.date ?? null),
+      failingCheckCount: failingChecks.length,
+    });
     candidates.push({
       sourceType: "github",
       sourceExternalId: `${repo}#${pr.number}`,
@@ -296,6 +340,8 @@ export async function fetchGitHubPrSignalsForRepo(input: {
         `Branch: ${pr.head.ref} -> ${pr.base.ref}`,
         `Head SHA: ${pr.head.sha}`,
         `URL: ${pr.html_url}`,
+        "",
+        ...formatPrReviewSection(reviewSummary),
         "",
         "Description:",
         pr.body ?? "(empty)",
@@ -328,6 +374,14 @@ export async function fetchGitHubPrSignalsForRepo(input: {
         repository: repo,
         prNumber: pr.number,
         role,
+        reviewState: reviewSummary.actionState,
+        reviewNeedsMyAction: reviewSummary.needsMyAction,
+        changesRequestedBy: reviewSummary.changesRequestedBy,
+        approvedBy: reviewSummary.approvedBy,
+        changesRequestedOutstanding: reviewSummary.changesRequestedOutstanding,
+        reviewRequestedFromMe: reviewSummary.myReviewPending,
+        latestReviewAt: reviewSummary.latestReviewAt,
+        commitsAfterLatestReview: reviewSummary.commitsAfterLatestReview,
         requestedReviewers: (pr.requested_reviewers ?? []).map((reviewer) => reviewer.login),
         recentCommits: commits.slice(-5).map((commit) => ({
           sha: commit.sha,

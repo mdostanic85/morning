@@ -17,6 +17,16 @@ import {
 } from "@/lib/tasks/claimAwareRanking";
 import { isJiraDoneMetadata, isJiraDoneStatus } from "@/lib/tasks/canonicalKey";
 import { clearsPromotionFloor } from "@/lib/tasks/promotionFloor";
+import {
+  meetingPressureBoost,
+  type MeetingForRanking,
+} from "@/lib/tasks/meetingPressure";
+
+/** Extra deterministic ranking inputs that not every caller can supply. */
+export interface RankingContext {
+  /** Today's timed calendar entries, for prep-before-the-meeting pressure. */
+  meetings?: readonly MeetingForRanking[];
+}
 
 export interface RankedWorkTask {
   taskId: number;
@@ -211,7 +221,8 @@ export function rankWorkTask(
   sourceById: Map<number, SourceItem>,
   jiraByKey: Map<string, JiraPendingSnapshot>,
   attendance?: AttendanceContext,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  context?: RankingContext
 ): RankedWorkTask {
   let score = 0;
   const explanation: string[] = [];
@@ -408,6 +419,19 @@ export function rankWorkTask(
   forceInclude = claimAdjust.forceInclude;
   explanation.push(...claimAdjust.notes);
 
+  // Calendar pressure: work that an upcoming meeting actually names still needs
+  // its prep done before that meeting starts. Never a promotion signal on its
+  // own — the promotion floor below still requires real evidence.
+  if (context?.meetings && context.meetings.length > 0) {
+    const meetingPressure = meetingPressureBoost({
+      task: { jiraKey, text: taskText },
+      meetings: context.meetings,
+      nowMs,
+    });
+    score += meetingPressure.score;
+    explanation.push(...meetingPressure.notes);
+  }
+
   if (sources.length >= 2) {
     score += 25;
     const labels = sources.slice(0, 3).map((source) => `${source.sourceType}: ${source.title}`);
@@ -464,11 +488,12 @@ export function rankWorkTasks(
   sourceById: Map<number, SourceItem>,
   jiraPending: JiraPendingSnapshot[],
   attendance?: AttendanceContext,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  context?: RankingContext
 ): RankedWorkTask[] {
   const jiraByKey = new Map(jiraPending.map((issue) => [issue.key, issue]));
   const ranked = tasks
-    .map((task) => rankWorkTask(task, today, sourceById, jiraByKey, attendance, nowMs))
+    .map((task) => rankWorkTask(task, today, sourceById, jiraByKey, attendance, nowMs, context))
     .sort((a, b) => b.score - a.score);
 
   const maxScore = ranked[0]?.score ?? 1;
@@ -540,6 +565,8 @@ export function buildDeterministicFocusItems(input: {
   attendance?: AttendanceContext;
   /** Injectable clock for stable scenario fixtures; defaults to Date.now(). */
   nowMs?: number;
+  /** Today's timed meetings, when the caller has them. */
+  meetings?: readonly MeetingForRanking[];
 }): BriefingFocusItemDraft[] {
   const maxItems = input.maxItems ?? DAILY_FOCUS_TASK_LIMIT;
   const nowMs = input.nowMs ?? Date.now();
@@ -549,7 +576,8 @@ export function buildDeterministicFocusItems(input: {
     input.sourceById,
     input.jiraPending,
     input.attendance,
-    nowMs
+    nowMs,
+    { meetings: input.meetings }
   );
   const rankedJira = rankJiraIssues(input.jiraPending, input.today, nowMs);
   const taskById = new Map(input.tasks.map((task) => [task.id, task]));

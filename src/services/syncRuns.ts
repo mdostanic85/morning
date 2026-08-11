@@ -84,22 +84,80 @@ export async function createSyncRun(input: {
   return toSyncRun(row);
 }
 
+/**
+ * Claims the single provider-run row for this (syncRunId, provider).
+ *
+ * Inngest re-executes a durable step from the start when an earlier attempt
+ * threw, so this runs more than once per provider whenever `sync-provider-*`
+ * retries. A plain insert left one orphan row per attempt: the abandoned row
+ * stayed `running` until finalization mopped it up as
+ * `incomplete_attempt`/`workflow_failure`, so a run that actually succeeded on
+ * retry still reported a failed provider on Today's sync-health strip and in
+ * the sync overlay, and `progress.total` counted the same provider twice.
+ *
+ * Re-running the step is a fresh attempt at the same unit of work, so the
+ * existing row is reset rather than duplicated: metrics go back to zero and the
+ * previous attempt's error is cleared, exactly as a first attempt would start.
+ */
 export async function startSyncProviderRun(input: {
   syncRunId: number;
   provider: string;
 }): Promise<SyncProviderRun> {
-  const [row] = await fetchReturning(
-    db
-      .insert(syncProviderRuns)
-      .values({
-        syncRunId: input.syncRunId,
-        provider: input.provider,
-        status: "running",
-        startedAt: nowIso(),
-      })
-      .returning()
-  );
-  return toSyncProviderRun(row);
+  const startedAt = nowIso();
+
+  return withTransaction(async (tx) => {
+    const existing = await fetchOne(
+      tx
+        .select()
+        .from(syncProviderRuns)
+        .where(
+          and(
+            eq(syncProviderRuns.syncRunId, input.syncRunId),
+            eq(syncProviderRuns.provider, input.provider)
+          )
+        )
+        // Rows written before this claim became idempotent may still be
+        // duplicated; always reclaim the newest so the pick is deterministic.
+        .orderBy(desc(syncProviderRuns.id))
+        .limit(1)
+    );
+
+    if (existing) {
+      const [reclaimed] = await fetchReturning(
+        tx
+          .update(syncProviderRuns)
+          .set({
+            status: "running",
+            startedAt,
+            completedAt: null,
+            itemsFetched: 0,
+            itemsCreated: 0,
+            itemsUpdated: 0,
+            itemsUnchanged: 0,
+            itemsFailed: 0,
+            itemsExtractionFailed: 0,
+            errorCode: null,
+            errorMessage: null,
+          })
+          .where(eq(syncProviderRuns.id, existing.id))
+          .returning()
+      );
+      return toSyncProviderRun(reclaimed ?? existing);
+    }
+
+    const [row] = await fetchReturning(
+      tx
+        .insert(syncProviderRuns)
+        .values({
+          syncRunId: input.syncRunId,
+          provider: input.provider,
+          status: "running",
+          startedAt,
+        })
+        .returning()
+    );
+    return toSyncProviderRun(row);
+  });
 }
 
 async function preserveCancelledProviderMetrics(

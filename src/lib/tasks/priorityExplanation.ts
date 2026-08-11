@@ -36,6 +36,7 @@ export function priorityExplanationForDisplay(value: string): string {
   const blocksOthers = /blocks other people|blocking/i.test(trimmed);
   const directRequest = /direct stakeholder request/i.test(trimmed);
   const dueNow = /due today|overdue/i.test(trimmed);
+  const meetingPrep = /covers this — prepare before it/i.test(trimmed);
   const reviewFeedback = /review feedback needs action|review comment|changes requested/i.test(
     trimmed
   );
@@ -50,6 +51,9 @@ export function priorityExplanationForDisplay(value: string): string {
     trigger = "This is first because other people or delivery are blocked until it moves forward.";
   } else if (dueNow) {
     trigger = "This is first because its evidenced deadline is today or already overdue.";
+  } else if (meetingPrep) {
+    trigger =
+      "This is first because a meeting later today covers it, so the prep has to happen before then.";
   } else if (directRequest) {
     trigger = "This is first because it is the clearest current stakeholder request.";
   } else if (reviewFeedback) {
