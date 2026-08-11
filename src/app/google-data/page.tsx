@@ -40,6 +40,13 @@ export default function GoogleDataPage() {
           </li>
           <li>Morning does not sell Google user data or use it for advertising.</li>
         </ul>
+        <p>
+          Morning&apos;s use and transfer of information received from Google APIs adheres to the{" "}
+          <a href="https://developers.google.com/terms/api-services-user-data-policy">
+            Google API Services User Data Policy
+          </a>
+          , including its Limited Use requirements.
+        </p>
       </section>
       <section>
         <h2>Your controls</h2>
