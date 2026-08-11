@@ -115,11 +115,17 @@ function env(name: string): string {
 }
 
 function googleClientId(): string {
-  return env("GOOGLE_INTEGRATIONS_CLIENT_ID") || env("GOOGLE_CLIENT_ID");
+  return (
+    env("GOOGLE_INTEGRATIONS_CLIENT_ID") ||
+    (process.env.NODE_ENV === "production" ? "" : env("GOOGLE_CLIENT_ID"))
+  );
 }
 
 function googleClientSecret(): string {
-  return env("GOOGLE_INTEGRATIONS_CLIENT_SECRET") || env("GOOGLE_CLIENT_SECRET");
+  return (
+    env("GOOGLE_INTEGRATIONS_CLIENT_SECRET") ||
+    (process.env.NODE_ENV === "production" ? "" : env("GOOGLE_CLIENT_SECRET"))
+  );
 }
 
 export function getOAuthConfig(provider: OAuthProvider): OAuthConfig | null {
