@@ -124,7 +124,12 @@ export function KnowledgeItemCard({
  <span className="text-metadata text-muted-soft">{item.projectName}</span>
  ) : null}
  </div>
- {item.sourceType ? <SourceBadge sourceType={item.sourceType} /> : null}
+ {/* Keeps its intrinsic width; the metadata group on the left wraps instead. */}
+ {item.sourceType ? (
+ <div className="shrink-0">
+ <SourceBadge sourceType={item.sourceType} />
+ </div>
+ ) : null}
  </div>
 
  <div className="px-5 py-4">

@@ -499,7 +499,7 @@ export function TaskChatPanel({
                   type="button"
                   variant="ghost"
                   onPress={() => void askQuestion(question)}
-                  className="h-auto w-full justify-start rounded-2xl border border-border/70 bg-surface-soft/40 px-3.5 py-3 text-left text-[14px] text-foreground transition-colors hover:border-accent/40 hover:bg-accent/[0.04]"
+                  className="h-auto w-full min-w-0 justify-start whitespace-normal rounded-2xl border border-border/70 bg-surface-soft/40 px-3.5 py-3 text-left text-[14px] text-foreground transition-colors hover:border-accent/40 hover:bg-accent/[0.04]"
                 >
                   {question}
                 </Button>

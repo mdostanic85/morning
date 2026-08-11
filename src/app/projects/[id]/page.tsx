@@ -72,8 +72,13 @@ function renderSourceList(items: SourceItem[], emptyTitle: string) {
       {items.map((source) => (
         <article key={source.id} className="card p-5">
           <div className="flex items-start justify-between gap-3">
-            <Heading level={3} visualLevel={6}>{source.title}</Heading>
-            <SourceBadge sourceType={source.sourceType} />
+            <Heading level={3} visualLevel={6} className="min-w-0 [overflow-wrap:anywhere]">
+              {source.title}
+            </Heading>
+            {/* The badge keeps its intrinsic width; the title takes the rest. */}
+            <div className="shrink-0">
+              <SourceBadge sourceType={source.sourceType} />
+            </div>
           </div>
           <p className="mt-2 text-sm leading-relaxed text-muted [overflow-wrap:anywhere]">{sourcePreview(source)}</p>
           <p className="mt-3 text-metadata text-muted-soft">{formatDate(source.sourceDate)}</p>

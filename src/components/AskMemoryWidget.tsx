@@ -85,7 +85,14 @@ function AskMemoryWidgetPanel({
         !open && "pointer-events-none translate-y-3 scale-[0.98] opacity-0",
         expanded
           ? "inset-3 sm:inset-auto sm:right-5 sm:top-24 sm:bottom-5 sm:w-[min(760px,calc(100vw-2.5rem))]"
-          : "right-3 bottom-3 h-[min(600px,calc(100vh-5rem))] w-[min(420px,calc(100vw-1.5rem))] sm:right-5 sm:bottom-5"
+          : [
+              // Docked size. Below md it clears the bottom nav the same way the
+              // launcher does, and dvh keeps it inside the visible viewport
+              // while mobile browser chrome slides in and out.
+              "right-3 w-[min(420px,calc(100vw-1.5rem))]",
+              "bottom-[calc(5.25rem+env(safe-area-inset-bottom))] h-[min(600px,calc(100dvh-12rem))]",
+              "md:bottom-5 md:right-5 md:h-[min(600px,calc(100dvh-5rem))]",
+            ]
       )}
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border/70 px-4 py-3 sm:px-5">
@@ -147,9 +154,10 @@ function AskMemoryWidgetFab({ onClick, isOpen }: { onClick: () => void; isOpen: 
       className={cn(
         "group fixed z-40 flex h-14 items-center gap-2.5 rounded-full bg-action-primary pl-2 pr-2 text-action-primary-foreground shadow-[0_16px_38px_-14px_color-mix(in_srgb,var(--action-primary)_65%,transparent)] transition-all duration-300 ease-out hover:-translate-y-0.5 sm:pr-5",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]",
-        isOpen
-          ? "pointer-events-none bottom-3 right-3 scale-0 opacity-0 sm:bottom-5 sm:right-5"
-          : "bottom-5 right-5 scale-100 opacity-100"
+        // Below md the bottom dock owns the bottom edge, so the button rides
+        // above it instead of covering the last nav item.
+        "bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 md:bottom-5 md:right-5",
+        isOpen ? "pointer-events-none scale-0 opacity-0" : "scale-100 opacity-100"
       )}
     >
       <span className="grid size-10 place-items-center rounded-full bg-white/15">
