@@ -41,8 +41,15 @@ export function priorityExplanationForDisplay(value: string): string {
     trimmed
   );
 
+  // A critical override outranks every other "why first" reason: continuing on
+  // the old instructions is the concrete risk the user needs told about.
+  const overridden = /overridden by /i.test(trimmed);
+
   let trigger: string;
-  if (meetingCommitment && jira) {
+  if (overridden) {
+    trigger =
+      "This is first because a newer meeting overrode what this task said, so check what changed before continuing.";
+  } else if (meetingCommitment && jira) {
     trigger = `This is first because it was explicitly committed in a recent meeting you attended and ${jira}.`;
   } else if (meetingCommitment) {
     trigger =

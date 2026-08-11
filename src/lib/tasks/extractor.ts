@@ -47,6 +47,14 @@ import {
   NON_PERSON_ACTORS,
   type TaskOwnershipClass,
 } from "@/lib/filters/ownerFilter";
+import {
+  parseJiraLabelsFromText,
+  parseJiraMentionsFromText,
+} from "@/lib/connectors/jiraText";
+import {
+  detectTaskFieldOverrides,
+  mergeTaskOverrides,
+} from "@/lib/tasks/taskOverride";
 import { quoteAppearsInSource } from "@/lib/tasks/evidenceVerification";
 import { normalizePersonName } from "@/lib/tasks/personIdentity";
 import { isQuoteRelevantToTask, taskDomainText } from "@/lib/tasks/evidenceRelevance";
@@ -188,8 +196,13 @@ function resolveOwnershipFromSource(input: {
     return { ownership: "unclear", owner: extracted.owner, verifiedQuotes };
   }
 
-  const jiraAssignee =
-    sourceItem.sourceType === "jira" ? parseJiraAssigneeFromText(sourceItem.body) : null;
+  const isJiraSource = sourceItem.sourceType === "jira";
+  const jiraAssignee = isJiraSource ? parseJiraAssigneeFromText(sourceItem.body) : null;
+  // An issue assigned to someone else can still be pointed at the user by an
+  // @mention or a label naming them — that keeps ownership open instead of
+  // discarding the task as another person's work.
+  const jiraMentions = isJiraSource ? parseJiraMentionsFromText(sourceItem.body) : [];
+  const jiraLabels = isJiraSource ? parseJiraLabelsFromText(sourceItem.body) : [];
 
   const ownership = classifyTaskOwnership(
     {
@@ -198,6 +211,8 @@ function resolveOwnershipFromSource(input: {
       reason: extracted.reason,
       nextAction: extracted.nextAction,
       jiraAssignee,
+      jiraMentions,
+      jiraLabels,
       evidenceQuotes: verifiedQuotes,
     },
     currentUserName
@@ -588,6 +603,45 @@ export async function extractTasksFromSourceItem(
           })
         : null;
 
+      // Figma comments may add new scope requests on top of existing
+      // outcomes; union rather than replace so nothing is lost.
+      const mergedDoneCriteria =
+        sourceItem.metadata?.importedFrom === "figma_comment"
+          ? uniqueCriteria([existing.doneCriteria, doneCriteria.length > 0 ? doneCriteria : primary.doneCriteria])
+          : doneCriteria.length > 0
+            ? doneCriteria
+            : primary.doneCriteria;
+      const mergedDueDate = primary.dueDate ?? existing.dueDate;
+
+      // A winning meeting rewrites what the task says. Record what it replaced
+      // and the line that replaced it, so the change is visible instead of the
+      // user silently continuing from instructions that no longer hold.
+      const detectedOverrides = incomingIsLatest
+        ? detectTaskFieldOverrides({
+            existing: {
+              reason: existing.reason,
+              nextAction: existing.nextAction,
+              doneCriteria: existing.doneCriteria,
+              dueDate: existing.dueDate,
+            },
+            incoming: {
+              reason,
+              nextAction: primary.nextAction,
+              doneCriteria: mergedDoneCriteria,
+              dueDate: mergedDueDate,
+            },
+            source: {
+              id: sourceItem.id,
+              title: sourceItem.title,
+              sourceType: sourceItem.sourceType,
+              sourceDate: sourceItem.sourceDate,
+              isTranscript: isTranscriptSource(sourceItem),
+            },
+            quotes: targetEvidenceInput.map((item) => item.quote),
+            detectedAt: new Date().toISOString(),
+          })
+        : [];
+
       const updated = incomingIsLatest
         ? await updateWorkTask(existing.id, {
             projectId: existing.projectId ?? sourceItem.projectId,
@@ -601,21 +655,17 @@ export async function extractTasksFromSourceItem(
                 : existing.status,
             reason,
             nextAction: primary.nextAction,
-            // Figma comments may add new scope requests on top of existing
-            // outcomes; union rather than replace so nothing is lost.
-            doneCriteria:
-              sourceItem.metadata?.importedFrom === "figma_comment"
-                ? uniqueCriteria([existing.doneCriteria, doneCriteria.length > 0 ? doneCriteria : primary.doneCriteria])
-                : doneCriteria.length > 0
-                  ? doneCriteria
-                  : primary.doneCriteria,
+            doneCriteria: mergedDoneCriteria,
             meetingContext: upsertMeetingContext(
               existing.meetingContext,
               meetingContextEntry
             ),
+            ...(detectedOverrides.length > 0
+              ? { overrides: mergeTaskOverrides(existing.overrides, detectedOverrides) }
+              : {}),
             confidence: mergedConfidence?.finalConfidence ?? primary.confidence,
             confidenceComponents: mergedConfidence?.components ?? null,
-            dueDate: primary.dueDate ?? existing.dueDate,
+            dueDate: mergedDueDate,
             owner: mergedOwner,
             waitingOn: primary.status === "waiting" ? primary.waitingOn : null,
           })

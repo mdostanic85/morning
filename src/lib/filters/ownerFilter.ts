@@ -143,6 +143,13 @@ export type TaskOwnershipSignals = {
   nextAction?: string | null;
   /** Jira assignee when the task is backed by a Jira issue. */
   jiraAssignee?: string | null;
+  /**
+   * People @mentioned in the Jira issue or its comments. A mention says the
+   * issue is pointed at someone without saying they own the work.
+   */
+  jiraMentions?: readonly (string | null | undefined)[] | null;
+  /** Jira labels on the issue — a label naming a person tags it for them. */
+  jiraLabels?: readonly (string | null | undefined)[] | null;
   ownershipDecision?: OwnershipDecision | null;
   /**
    * Verbatim quotes taken from the source itself. This is the only free text
@@ -343,6 +350,39 @@ export function evidenceProvesMine(
   );
 }
 
+/** True when one of the Jira @mentions is the user. */
+export function jiraMentionsMe(
+  mentions: TaskOwnershipSignals["jiraMentions"],
+  myName: string | null
+): boolean {
+  if (!mentions?.length || !myName?.trim()) return false;
+  const selected = myOwnerFilter(myName);
+  if (!selected) return false;
+  return mentions.some((mention) => {
+    const value = typeof mention === "string" ? mention.trim() : "";
+    if (!value) return false;
+    return personMatchesFilter(value, selected, myName);
+  });
+}
+
+/**
+ * True when a Jira label names the user. Labels carry no spaces, so
+ * "milos-dostanic" / "milos_dostanic" are unpacked before matching.
+ */
+export function jiraLabelNamesMe(
+  labels: TaskOwnershipSignals["jiraLabels"],
+  myName: string | null
+): boolean {
+  if (!labels?.length || !myName?.trim()) return false;
+  const selected = myOwnerFilter(myName);
+  if (!selected) return false;
+  return labels.some((label) => {
+    const value = typeof label === "string" ? label.trim() : "";
+    if (!value) return false;
+    return personMatchesFilter(value.replace(/[-_.]+/g, " "), selected, myName);
+  });
+}
+
 /**
  * Classify whether a task belongs on the user's brief.
  *
@@ -352,6 +392,17 @@ export function evidenceProvesMine(
  *   3. the user's own speaker turn committing to the work;
  *   4. a Matt Pettit / Lucas Saeed instruction or handover directed at the user;
  *   5. explicit assignment wording inside a source quote.
+ *
+ * Precedence: a resolved `owner` settles it outright. With no owner, source
+ * proof (2–5) is checked *before* the "someone else is the assignee" verdict —
+ * an issue assigned to another person can still carry an explicit "@Milos, you
+ * own the contract part" instruction, and that instruction is the user's work
+ * even though the assignee differs.
+ *
+ * A bare Jira @mention or a label naming the user is weaker — it says the issue
+ * is pointed at them, not that the work is theirs. That lands as "unclear": it
+ * stays visible and one click away from being claimed, instead of being hidden
+ * as someone else's like it used to be.
  *
  * `title` / `reason` / `nextAction` are LLM-authored, so they can only ever
  * disown a task (naming a different actor) — never claim it. Everything
@@ -371,32 +422,45 @@ export function classifyTaskOwnership(
   const selected = myOwnerFilter(myName);
   if (!selected) return "unclear";
 
-  if (task.owner?.trim()) {
-    return ownerParts(task.owner).some((part) => personMatchesFilter(part, selected, myName))
-      ? "mine"
-      : "other";
-  }
-
-  if (task.jiraAssignee?.trim()) {
-    return personMatchesFilter(task.jiraAssignee, selected, myName) ? "mine" : "other";
-  }
-
   const quotes = usableQuotes(task.evidenceQuotes);
   const llmProse = [task.title, task.reason, task.nextAction].filter(Boolean).join("\n");
 
-  // Positive source proof wins: a quote may name a third party and still be
-  // addressed to the user ("Milos, can you chase Sofija for the credentials").
+  // Mentioned or tagged, but nothing directed at the user: related to them,
+  // ownership still open. Never "other" — that would hide it entirely.
+  const taggedForMe =
+    jiraMentionsMe(task.jiraMentions, myName) || jiraLabelNamesMe(task.jiraLabels, myName);
+  const unprovenClass: TaskOwnershipClass = taggedForMe ? "unclear" : "other";
+
+  // The resolved `owner` decides on its own, before anything else. It is only
+  // written when the source itself named who owns the work, so it outranks both
+  // the mechanical Jira assignee and quote-level proof — the same reason a merge
+  // may never overwrite an owner with a different person (`resolveMergedOwner`).
+  if (task.owner?.trim()) {
+    return ownerParts(task.owner).some((part) => personMatchesFilter(part, selected, myName))
+      ? "mine"
+      : unprovenClass;
+  }
+
+  if (task.jiraAssignee?.trim() && personMatchesFilter(task.jiraAssignee, selected, myName)) {
+    return "mine";
+  }
+
+  // With no resolved owner, source proof outranks a *mechanical* Jira assignee:
+  // an issue assigned to another person can still carry an explicit "@Milos, you
+  // own the contract part" instruction, and that instruction is the user's work.
   if (evidenceProvesMine(quotes, myName)) return "mine";
 
+  if (task.jiraAssignee?.trim()) return unprovenClass;
+
   // Attribution to a named third party disowns the task, from either text.
-  if (namedForeignActor(llmProse, myName)) return "other";
+  if (namedForeignActor(llmProse, myName)) return unprovenClass;
   if (
     quotes.some(
       (quote) =>
         namedForeignActor(quote, myName) || foreignCommitmentTurn(quote, myName)
     )
   ) {
-    return "other";
+    return unprovenClass;
   }
 
   // No owner, no assignee, no source quote proving this is the user's work.

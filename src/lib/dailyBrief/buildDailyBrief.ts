@@ -140,6 +140,7 @@ export async function buildDailyBriefV2(options?: {
       statusManuallySet: task.statusManuallySet,
       owner: task.owner,
       confidence: task.confidence,
+      overrides: task.overrides,
       ownershipDecision: task.ownershipDecision ?? null,
       canonicalKey:
         task.canonicalKey ??

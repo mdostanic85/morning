@@ -343,6 +343,104 @@ describe("LLM prose never proves ownership (tasks 552 / 535)", () => {
   });
 });
 
+describe("Jira mentions and labels", () => {
+  it("claims work a comment directed at the user, even when someone else is the assignee", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "UATL-410: Part search API contract",
+          jiraAssignee: "Lucas Saeed",
+          jiraMentions: ["Milos Dostanic"],
+          evidenceQuotes: [
+            "@Milos Dostanic can you confirm the contract shape before Thursday?",
+          ],
+        },
+        "Milos Dostanic"
+      ),
+      "mine"
+    );
+  });
+
+  it("keeps a bare mention open as unclear instead of hiding it as someone else's", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "UATL-410: Part search API contract",
+          reason: "The contract shape is still being decided.",
+          jiraAssignee: "Lucas Saeed",
+          jiraMentions: ["Milos Dostanic"],
+        },
+        "Milos Dostanic"
+      ),
+      "unclear"
+    );
+  });
+
+  it("treats a label naming the user the same way", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "UATL-410: Part search API contract",
+          jiraAssignee: "Lucas Saeed",
+          jiraLabels: ["design", "milos-dostanic"],
+        },
+        "Milos Dostanic"
+      ),
+      "unclear"
+    );
+  });
+
+  it("still disowns an issue that mentions or tags nobody relevant", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "UATL-999: Someone else's ticket",
+          jiraAssignee: "Lucas Saeed",
+          jiraMentions: ["Sofija Petrovic"],
+          jiraLabels: ["backend"],
+        },
+        "Milos Dostanic"
+      ),
+      "other"
+    );
+  });
+
+  it("does not let a mention override an explicit 'not mine' decision", () => {
+    assert.equal(
+      classifyTaskOwnership(
+        {
+          owner: null,
+          title: "UATL-410: Part search API contract",
+          jiraAssignee: "Lucas Saeed",
+          jiraMentions: ["Milos Dostanic"],
+          ownershipDecision: "rejected_not_mine",
+        },
+        "Milos Dostanic"
+      ),
+      "other"
+    );
+  });
+
+  it("a mention keeps ownership open but never earns a brief slot on its own", () => {
+    assert.equal(
+      taskEligibleForBriefPriority(
+        {
+          owner: null,
+          title: "UATL-410: Part search API contract",
+          jiraAssignee: "Lucas Saeed",
+          jiraMentions: ["Milos Dostanic"],
+        },
+        "Milos Dostanic"
+      ),
+      false
+    );
+  });
+});
+
 describe("diacritic folding — the defect fix", () => {
   it("Miloš Dostanić (diacritics) matches Milos Dostanic (ASCII) in taskMatchesOwner", () => {
     const selected = myOwnerFilter("Milos Dostanic");

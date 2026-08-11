@@ -49,8 +49,19 @@ export interface JiraInlineMetadata {
   dueDate: string | null;
 }
 
-const JIRA_METADATA_LABELS = ["Status", "Priority", "Assignee", "Reporter", "Due date"] as const;
-const JIRA_METADATA_FIELD_PATTERN = /\b(Status|Priority|Assignee|Reporter|Due date):\s*/gi;
+// "Labels"/"Mentions" are recognised so a copied Jira header block cannot leak
+// into the value of the field before it (e.g. a Due date of "none Labels: ux").
+const JIRA_METADATA_LABELS = [
+  "Status",
+  "Priority",
+  "Assignee",
+  "Reporter",
+  "Due date",
+  "Labels",
+  "Mentions",
+] as const;
+const JIRA_METADATA_FIELD_PATTERN =
+  /\b(Status|Priority|Assignee|Reporter|Due date|Labels|Mentions):\s*/gi;
 
 function normalizeMetadataValue(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -94,7 +105,7 @@ export function splitJiraMetadataFromText(text: string): {
     dueDate: null,
   };
 
-  const firstField = /\b(Status|Priority|Assignee|Reporter|Due date):\s*/i.exec(text);
+  const firstField = /\b(Status|Priority|Assignee|Reporter|Due date|Labels|Mentions):\s*/i.exec(text);
   if (firstField?.index == null) {
     return { prose: text, metadata: empty };
   }
@@ -122,6 +133,31 @@ export function parseJiraBodyFields(body: string): JiraInlineMetadata {
     assignee: readHeaderField(body, "Assignee"),
     reporter: readHeaderField(body, "Reporter"),
   };
+}
+
+function readHeaderList(body: string, label: string): string[] {
+  const value = readHeaderField(body, label);
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Labels on the issue, from the `Labels:` header written at ingest.
+ * Issues imported before labels were captured simply have no header.
+ */
+export function parseJiraLabelsFromText(body: string): string[] {
+  return readHeaderList(body, "Labels");
+}
+
+/**
+ * People @mentioned in the issue description or its comments, from the
+ * `Mentions:` header written at ingest.
+ */
+export function parseJiraMentionsFromText(body: string): string[] {
+  return readHeaderList(body, "Mentions");
 }
 
 export function jiraStatusFocusWeight(status: string | null | undefined): {

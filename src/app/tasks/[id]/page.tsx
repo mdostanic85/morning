@@ -16,6 +16,7 @@ import { humanizeReason } from "@/lib/tasks/humanizeReason";
 import { ReasonText } from "@/components/ReasonText";
 import { Heading } from "@/components/Heading";
 import { TaskOutcomesPanel } from "@/components/TaskOutcomesPanel";
+import { TaskOverrideBanner } from "@/components/TaskOverrideBanner";
 import {
   matchCriteriaToDeliveryChecks,
   type CriterionCheckResult,
@@ -203,6 +204,8 @@ export default async function TaskDetailPage({
  />
  </div>
  </header>
+
+      <TaskOverrideBanner overrides={task.overrides} />
 
  <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1.45fr)_minmax(22rem,.75fr)] lg:items-start">
  <div className="grid min-w-0 gap-6 [overflow-wrap:anywhere]">

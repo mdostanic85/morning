@@ -115,6 +115,11 @@ export const workTasks = pgTable("work_tasks", {
     .$type<import("@/domain/workTask").TaskMeetingContextEntry[]>()
     .notNull()
     .default([]),
+  /** Critical overrides: newer meeting information that replaced task fields. */
+  overrides: jsonb("overrides")
+    .$type<import("@/lib/tasks/taskOverride").TaskOverrideRecord[]>()
+    .notNull()
+    .default([]),
   dueDate: text("due_date"),
   owner: text("owner"),
   waitingOn: text("waiting_on"),
