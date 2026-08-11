@@ -47,7 +47,8 @@ export default async function SettingsPage({
 
   const googleConfigured =
     hasEnv("GOOGLE_INTEGRATIONS_CLIENT_ID", "GOOGLE_INTEGRATIONS_CLIENT_SECRET") ||
-    hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET");
+    (process.env.NODE_ENV !== "production" &&
+      hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"));
   const googleProviders = [
     {
       provider: "gmail",
