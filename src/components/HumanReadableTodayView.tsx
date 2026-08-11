@@ -20,6 +20,8 @@ import { NeedsInputRail } from "@/components/NeedsInputRail";
 import { DismissibleDayChange } from "@/components/DismissibleDayChange";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { WhyThisButton } from "@/components/WhyThisButton";
+import { TaskOverrideBanner } from "@/components/TaskOverrideBanner";
+import type { TaskOverrideRecord } from "@/lib/tasks/taskOverride";
 import { dedupeBlockedWaiting } from "@/lib/dailyBrief/blockedWaitingDedupe";
 import { addressUserInCopy } from "@/lib/tasks/addressUserInCopy";
 import { humanizeReason } from "@/lib/tasks/humanizeReason";
@@ -49,6 +51,8 @@ export interface HumanReadableTask {
   updatedAt: string;
   /** WL-12: 0..1, decomposed per WL-05. Null for tasks with no scored confidence yet. */
   confidence: number | null;
+  /** Critical overrides: what a newer meeting replaced on this task, newest first. */
+  overrides?: readonly TaskOverrideRecord[] | null;
   evidence: {
     summary: string;
     quote: string | null;
@@ -581,6 +585,10 @@ function FocusCard({
           {addressUserInCopy(signal.label, profileName)}
         </p>
       ) : null}
+
+      {/* Instructions this task was built on that a newer meeting contradicted —
+          shown before the actions, so nobody continues from stale scope. */}
+      <TaskOverrideBanner overrides={entry.task?.overrides} className="mt-4" />
 
       <div className={css("brief-focus-actions")}>
         {entry.task ? (

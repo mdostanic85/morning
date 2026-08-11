@@ -7,6 +7,7 @@ import {
   NEW_ASSIGNMENT_BOOST,
   FRESH_OPEN_UPDATE_BOOST,
 } from "./claimAwareRanking.ts";
+import { CRITICAL_OVERRIDE_BOOST } from "./priorityRank.ts";
 
 const MY_NAME = "Milos Dostanic";
 
@@ -302,5 +303,65 @@ describe("rankWorkTask — manual pin and Jira Done", () => {
       false,
       "Jira Done must suppress the meeting force-include"
     );
+  });
+});
+
+describe("critical override pressure", () => {
+  function override(hoursAgo: number) {
+    const at = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString();
+    return {
+      field: "nextAction" as const,
+      previousValue: "Ship the header at 64px.",
+      newValue: "Ship the header at 48px.",
+      quote: "Lucas Saeed: the header goes to 48px, ignore the old spec.",
+      sourceItemId: 40,
+      sourceTitle: "Notes: Canvas design sync",
+      sourceType: "granola",
+      sourceDate: at,
+      severity: "critical" as const,
+      detectedAt: at,
+    };
+  }
+
+  it("ranks recently overridden work above the same work with no override", () => {
+    const today = todayString();
+    const plain = task({ id: 900, title: "Header spacing" });
+    const overridden = task({
+      id: 901,
+      title: "Header spacing",
+      overrides: [override(6)],
+    });
+
+    const ranked = rankWorkTasks([plain, overridden], today, toMap([]), []);
+    assert.equal(ranked[0].taskId, 901, "the overridden task must come first");
+    assert.equal(
+      ranked[0].score - ranked[1].score,
+      CRITICAL_OVERRIDE_BOOST,
+      "exactly one override boost is applied"
+    );
+    assert.ok(
+      ranked[0].explanation.some((line) =>
+        line.startsWith("Critical — Next action overridden by")
+      ),
+      `explanation must name the override: ${ranked[0].explanation.join(" | ")}`
+    );
+  });
+
+  it("stops boosting once the override leaves the pressure window", () => {
+    const today = todayString();
+    const stale = task({ id: 902, overrides: [override(24 * 7)] });
+    const ranked = rankWorkTasks([stale], today, toMap([]), []);
+    assert.ok(
+      !ranked[0].explanation.some((line) => line.startsWith("Critical —")),
+      "a stale override must not keep pushing the task up"
+    );
+  });
+
+  it("never promotes an override on its own — the floor still applies", () => {
+    const today = todayString();
+    // No due date, no fresh evidence, no open Jira: nothing that clears WLA-01.
+    const overriddenOnly = task({ id: 903, overrides: [override(2)] });
+    const ranked = rankWorkTasks([overriddenOnly], today, toMap([]), []);
+    assert.equal(ranked[0].clearsPromotionFloor, false);
   });
 });

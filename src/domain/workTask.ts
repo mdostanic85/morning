@@ -1,5 +1,6 @@
 import type { TaskWorkContextSnapshot } from "./taskWorkContext";
 import type { ConfidenceComponents } from "@/lib/tasks/confidenceModel";
+import type { TaskOverrideRecord } from "@/lib/tasks/taskOverride";
 
 export interface TaskMeetingContextEntry {
   sourceItemId: number;
@@ -63,6 +64,11 @@ export interface WorkTask {
   doneCriteria: string[];
   /** Detailed, source-grounded meeting context, newest source first. */
   meetingContext: TaskMeetingContextEntry[];
+  /**
+   * Critical overrides: task information a newer meeting contradicted, newest
+   * first, each carrying the transcript quote that caused the change.
+   */
+  overrides: TaskOverrideRecord[];
   dueDate: string | null;
   owner: string | null;
   waitingOn: string | null;
@@ -93,6 +99,7 @@ export type NewWorkTask = Pick<
       | "owner"
       | "waitingOn"
       | "meetingContext"
+      | "overrides"
       | "figmaFrameUrl"
       | "localRepoPath"
       | "githubRepo"

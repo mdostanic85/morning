@@ -21,6 +21,11 @@ import {
   meetingPressureBoost,
   type MeetingForRanking,
 } from "@/lib/tasks/meetingPressure";
+import {
+  freshCriticalOverride,
+  overrideHeadline,
+  type TaskOverrideRecord,
+} from "@/lib/tasks/taskOverride";
 
 /** Extra deterministic ranking inputs that not every caller can supply. */
 export interface RankingContext {
@@ -80,6 +85,15 @@ const STATUS_WEIGHT: Record<Exclude<WorkTaskStatus, "done">, number> = {
 };
 
 const FOCUS_EXCLUDED_STATUSES = new Set<WorkTaskStatus>(["waiting", "tomorrow", "unclear", "done"]);
+
+/**
+ * Work whose stated instructions were contradicted by a recent meeting. Sized
+ * below an explicit Jira Blocker (260) and the attended-meeting commitment
+ * (600): acting on information that no longer holds is urgent, but it does not
+ * outrank the things importance already puts first. Decays out of the ranking
+ * once the override leaves its pressure window — see `taskOverride.ts`.
+ */
+export const CRITICAL_OVERRIDE_BOOST = 150;
 
 function parseDateOnly(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -213,6 +227,8 @@ export interface WorkTaskForRanking {
   waitingOn: string | null;
   statusManuallySet: boolean;
   evidence: { sourceItemId: number; quote: string | null; summary: string }[];
+  /** Critical overrides recorded on the task, newest first. */
+  overrides?: readonly TaskOverrideRecord[] | null;
 }
 
 export function rankWorkTask(
@@ -430,6 +446,13 @@ export function rankWorkTask(
     });
     score += meetingPressure.score;
     explanation.push(...meetingPressure.notes);
+  }
+
+  // Recently overridden work: the task no longer says what the user last read.
+  const override = freshCriticalOverride(task.overrides, nowMs);
+  if (override) {
+    score += CRITICAL_OVERRIDE_BOOST;
+    explanation.push(`Critical — ${overrideHeadline(override)}`);
   }
 
   if (sources.length >= 2) {

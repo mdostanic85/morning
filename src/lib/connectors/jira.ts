@@ -58,6 +58,7 @@ interface JiraIssue {
     duedate?: string | null;
     created?: string;
     updated?: string;
+    labels?: string[];
     comment?: { comments?: { author?: { displayName?: string }; body?: unknown; created?: string }[] };
   };
   changelog?: {
@@ -80,17 +81,75 @@ interface JiraSearchResponse {
   errorMessages?: string[];
 }
 
+/**
+ * ADF node types that live inside a line of prose. Their text must stay on that
+ * line: "@Milos can you check the contract?" only reads as an address to Milos
+ * while the mention and the question share a sentence.
+ */
+const ADF_INLINE_TYPES = new Set([
+  "text",
+  "mention",
+  "emoji",
+  "inlineCard",
+  "status",
+  "date",
+  "hardBreak",
+]);
+
+function adfNodeType(value: unknown): string {
+  if (typeof value !== "object" || value == null) return "";
+  const type = (value as { type?: unknown }).type;
+  return typeof type === "string" ? type : "";
+}
+
+/** The display name carried by an ADF mention node, e.g. "@Milos Dostanic". */
+function adfMentionText(value: unknown): string | null {
+  if (adfNodeType(value) !== "mention") return null;
+  const attrs = (value as { attrs?: { text?: unknown } }).attrs;
+  const text = typeof attrs?.text === "string" ? attrs.text.trim() : "";
+  return text || null;
+}
+
 function stringifyAdf(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.map(stringifyAdf).filter(Boolean).join("\n");
+  if (Array.isArray(value)) {
+    // Inline runs are concatenated; block nodes stay on separate lines.
+    const separator = value.every((entry) => ADF_INLINE_TYPES.has(adfNodeType(entry))) ? "" : "\n";
+    return value.map(stringifyAdf).filter(Boolean).join(separator);
+  }
   if (typeof value === "object") {
+    // Mentions keep their name in `attrs.text` and have no `text` of their own,
+    // so without this branch every @mention silently vanished from the body —
+    // and with it the only proof that an issue was pointed at the user.
+    const mention = adfMentionText(value);
+    if (mention) return mention;
+
     const node = value as { text?: unknown; content?: unknown };
     return [typeof node.text === "string" ? node.text : "", stringifyAdf(node.content)]
       .filter(Boolean)
       .join("\n");
   }
   return String(value);
+}
+
+/** Every @mention in an ADF tree, in document order, without the "@" prefix. */
+function collectAdfMentions(value: unknown): string[] {
+  const found: string[] = [];
+
+  const walk = (node: unknown): void => {
+    if (node == null || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const entry of node) walk(entry);
+      return;
+    }
+    const mention = adfMentionText(node);
+    if (mention) found.push(mention.replace(/^@/, "").trim());
+    walk((node as { content?: unknown }).content);
+  };
+
+  walk(value);
+  return Array.from(new Set(found.filter(Boolean)));
 }
 
 const RECENTLY_DONE_JQL =
@@ -195,6 +254,7 @@ export async function fetchAssignedJiraIssues(input?: {
           "duedate",
           "created",
           "updated",
+          "labels",
           "comment",
         ],
       }),
@@ -221,6 +281,18 @@ export async function fetchAssignedJiraIssues(input?: {
       issue.changelog,
       issue.fields.assignee?.displayName
     );
+    const labels = (issue.fields.labels ?? []).filter(
+      (label): label is string => typeof label === "string" && label.trim().length > 0
+    );
+    // Mentions are collected structurally rather than regexed out of the body,
+    // so an issue that names the user in a comment can be recognised as pointed
+    // at them even when someone else is the assignee.
+    const mentions = Array.from(
+      new Set([
+        ...collectAdfMentions(issue.fields.description),
+        ...comments.flatMap((comment) => collectAdfMentions(comment.body)),
+      ])
+    );
     return {
       sourceType: "jira",
       sourceExternalId: issue.key,
@@ -236,6 +308,8 @@ export async function fetchAssignedJiraIssues(input?: {
         `Assignee: ${issue.fields.assignee?.displayName ?? "unknown"}`,
         `Reporter: ${issue.fields.reporter?.displayName ?? "unknown"}`,
         `Due date: ${issue.fields.duedate ?? "none"}`,
+        `Labels: ${labels.length > 0 ? labels.join(", ") : "none"}`,
+        `Mentions: ${mentions.length > 0 ? mentions.join(", ") : "none"}`,
         "",
         "Description:",
         cleanJiraText(stringifyAdf(issue.fields.description)) || "(empty)",
@@ -264,6 +338,8 @@ export async function fetchAssignedJiraIssues(input?: {
         updated: issue.fields.updated ?? null,
         ...(assignmentEvidence ?? {}),
         commentUpdatedAts,
+        labels,
+        mentions,
         involvement: "assignee",
       },
     };

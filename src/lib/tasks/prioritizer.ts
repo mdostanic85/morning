@@ -178,6 +178,7 @@ function toWorkTaskForRanking(task: WorkTaskWithEvidence): WorkTaskForRanking {
     owner: task.owner,
     waitingOn: task.waitingOn,
     statusManuallySet: task.statusManuallySet,
+    overrides: task.overrides,
     evidence: task.evidence.map((item) => ({
       sourceItemId: item.sourceItemId,
       quote: item.quote,

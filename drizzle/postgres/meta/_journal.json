@@ -127,6 +127,13 @@
       "when": 1786428000000,
       "tag": "0017_user_scoped_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786470021134,
+      "tag": "0018_work_task_overrides",
+      "breakpoints": true
     }
   ]
 }

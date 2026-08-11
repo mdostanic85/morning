@@ -189,6 +189,7 @@ export default async function TodayPage() {
           }
         : null,
       confidence: task.confidence,
+      overrides: task.overrides,
       waitingOn: task.waitingOn,
       owner: task.owner,
       updatedAt: task.updatedAt,
