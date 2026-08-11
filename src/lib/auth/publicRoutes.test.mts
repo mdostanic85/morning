@@ -8,11 +8,24 @@ import {
 describe("public auth routes", () => {
   it("lists the routes that must stay public for OAuth and workers", () => {
     assert.deepEqual([...PUBLIC_ROUTE_PATTERNS], [
+      "/about(.*)",
+      "/privacy(.*)",
+      "/terms(.*)",
+      "/google-data(.*)",
+      "/data-deletion(.*)",
       "/sign-in(.*)",
       "/sso-callback(.*)",
       "/api/cron/(.*)",
       "/api/inngest(.*)",
     ]);
+  });
+
+  it("keeps product and policy pages public", () => {
+    assert.equal(isPublicPath("/about"), true);
+    assert.equal(isPublicPath("/privacy"), true);
+    assert.equal(isPublicPath("/terms"), true);
+    assert.equal(isPublicPath("/google-data"), true);
+    assert.equal(isPublicPath("/data-deletion"), true);
   });
 
   it("treats sign-in and SSO callback as public", () => {

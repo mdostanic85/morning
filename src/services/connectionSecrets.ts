@@ -1,9 +1,10 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { connectionSecrets as connectionSecretsTable } from "@/db/tables";
 import { execute, fetchOne } from "@/db/query";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secretBox";
+import { requireAppUserId } from "@/lib/auth/appUser";
 
 // Connector credentials live in PostgreSQL, encrypted with
 // SECRETS_ENCRYPTION_KEY. They used to sit in data/connection-secrets.json,
@@ -21,37 +22,59 @@ export interface ConnectionSecret {
   botToken?: string;
 }
 
-export async function getConnectionSecret(provider: string): Promise<ConnectionSecret | null> {
+export async function getConnectionSecret(
+  provider: string,
+  explicitUserId?: number
+): Promise<ConnectionSecret | null> {
+  const userId = await requireAppUserId(explicitUserId);
   const row = await fetchOne(
     db
       .select()
       .from(connectionSecretsTable)
-      .where(eq(connectionSecretsTable.provider, provider))
+      .where(
+        and(
+          eq(connectionSecretsTable.userId, userId),
+          eq(connectionSecretsTable.provider, provider)
+        )
+      )
   );
   if (!row) return null;
 
   return JSON.parse(decryptSecret(row.ciphertext)) as ConnectionSecret;
 }
 
-export async function saveConnectionSecret(provider: string, secret: ConnectionSecret) {
+export async function saveConnectionSecret(
+  provider: string,
+  secret: ConnectionSecret,
+  explicitUserId?: number
+) {
+  const userId = await requireAppUserId(explicitUserId);
   // Callers patch individual fields — a token refresh sends only the new access
   // token and expiry, and must not drop the refresh token stored alongside it.
-  const merged = { ...((await getConnectionSecret(provider)) ?? {}), ...secret };
+  const merged = { ...((await getConnectionSecret(provider, userId)) ?? {}), ...secret };
   const ciphertext = encryptSecret(JSON.stringify(merged));
 
   await execute(
     db
       .insert(connectionSecretsTable)
-      .values({ provider, ciphertext })
+      .values({ userId, provider, ciphertext })
       .onConflictDoUpdate({
-        target: connectionSecretsTable.provider,
+        target: [connectionSecretsTable.userId, connectionSecretsTable.provider],
         set: { ciphertext, updatedAt: new Date().toISOString() },
       })
   );
 }
 
-export async function clearConnectionSecret(provider: string) {
+export async function clearConnectionSecret(provider: string, explicitUserId?: number) {
+  const userId = await requireAppUserId(explicitUserId);
   await execute(
-    db.delete(connectionSecretsTable).where(eq(connectionSecretsTable.provider, provider))
+    db
+      .delete(connectionSecretsTable)
+      .where(
+        and(
+          eq(connectionSecretsTable.userId, userId),
+          eq(connectionSecretsTable.provider, provider)
+        )
+      )
   );
 }

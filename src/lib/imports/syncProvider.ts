@@ -28,6 +28,7 @@ import {
 } from "@/lib/imports/syncIncrementalProviders";
 import type { SyncProviderRunMetrics } from "@/domain/syncRun";
 import { isProviderSyncFullyOk } from "./providerSyncStatus";
+import { requireAppUserId, runAsAppUser } from "@/lib/auth/appUser";
 
 export { isProviderSyncFullyOk };
 
@@ -73,6 +74,12 @@ export type ProviderSyncOutcome =
       itemsFetched?: number;
     };
 
+type SyncProviderOptions = {
+  syncRunId?: number;
+  requestOptions?: Record<string, unknown>;
+  userId?: number;
+};
+
 /**
  * Read-only sync for one provider: fetch new external signals through the
  * connector registry, run them through the import pipeline (dedupe → project
@@ -80,10 +87,15 @@ export type ProviderSyncOutcome =
  */
 export async function syncProvider(
   provider: ConnectionProvider,
-  options: {
-    syncRunId?: number;
-    requestOptions?: Record<string, unknown>;
-  } = {}
+  options: SyncProviderOptions = {}
+): Promise<ProviderSyncOutcome> {
+  const userId = await requireAppUserId(options.userId);
+  return runAsAppUser(userId, () => syncProviderForUser(provider, options));
+}
+
+async function syncProviderForUser(
+  provider: ConnectionProvider,
+  options: SyncProviderOptions
 ): Promise<ProviderSyncOutcome> {
   const shouldCancel: ShouldCancelSync | undefined = options.syncRunId
     ? shouldCancelFromSyncRunId(options.syncRunId)

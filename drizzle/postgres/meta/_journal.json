@@ -120,6 +120,13 @@
       "when": 1784800200000,
       "tag": "0016_connection_secrets",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786428000000,
+      "tag": "0017_user_scoped_oauth",
+      "breakpoints": true
     }
   ]
 }

@@ -11,9 +11,9 @@ import { Heading } from "@/components/Heading";
 export interface GoogleSourceStatus {
   provider: string;
   label: string;
+  description: string;
   status: "connected" | "disconnected" | "error";
   lastSync: string | null;
-  hidden?: boolean;
 }
 
 interface GoogleConnectionPanelProps {
@@ -30,23 +30,16 @@ export function GoogleConnectionPanel({
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
-  const visibleSources = sources.filter((source) => !source.hidden);
   const allConnected =
-    visibleSources.length > 0 && visibleSources.every((source) => source.status === "connected");
-  const anyConnected = visibleSources.some((source) => source.status === "connected");
+    sources.length > 0 && sources.every((source) => source.status === "connected");
+  const anyConnected = sources.some((source) => source.status === "connected");
 
-  async function disconnectAll() {
+  async function disconnect(provider: string) {
     setPending(true);
-    await Promise.all(
-      sources
-        .filter((s) => s.status !== "disconnected")
-        .map((s) => fetch(`/api/connections/${s.provider}`, { method: "DELETE" }))
-    );
+    await fetch(`/api/connections/${provider}`, { method: "DELETE" });
     setPending(false);
     router.refresh();
   }
-
-  const connectHref = "/api/connections/gmail/connect?link=google";
 
   return (
     <section className="app-card px-4 py-3">
@@ -67,48 +60,18 @@ export function GoogleConnectionPanel({
             </AppBadge>
           </div>
           <p className="mt-1 text-sm leading-snug text-muted">
-            One sign-in authorizes read-only Gemini meeting notes and Google Calendar.
+            Signing in creates your Morning account. These connections are separate and only grant the read access you choose.
           </p>
-        </div>
-
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:shrink-0">
-          {configured ? (
-            <a
-              href={connectHref}
-              className={
-                anyConnected ? "link-btn-outline motion-btn" : "link-btn-primary motion-btn"
-              }
-            >
-              {anyConnected ? "Reconnect Google" : "Connect Google"}
-            </a>
-          ) : (
-            <AppTooltip
-              content="Google OAuth credentials are missing. See details below."
-              isInteractive
-            >
-              <span className="link-btn-primary disabled" aria-disabled="true" tabIndex={0}>
-                Connect Google
-              </span>
-            </AppTooltip>
-          )}
-          {anyConnected ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="min-h-11"
-              onPress={disconnectAll}
-              isDisabled={pending}
-            >
-              {pending ? "Disconnecting..." : "Disconnect"}
-            </Button>
-          ) : null}
         </div>
       </div>
 
       <div className="mt-3 space-y-1.5 border-t border-border pt-3">
-        {visibleSources.map((source) => (
+        {sources.map((source) => (
           <div key={source.provider} className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-            <span className="text-sm text-foreground">{source.label}</span>
+            <div>
+              <div className="text-sm text-foreground">{source.label}</div>
+              <p className="mt-0.5 text-metadata text-muted">{source.description}</p>
+            </div>
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
               {source.status === "connected" && source.lastSync ? (
                 <span className="text-metadata text-muted-soft">
@@ -130,6 +93,34 @@ export function GoogleConnectionPanel({
                     ? "Needs attention"
                     : "Not connected"}
               </AppBadge>
+              {configured ? (
+                <a
+                  href={`/api/connections/${source.provider}/connect`}
+                  className="link-btn-outline motion-btn"
+                >
+                  {source.status === "connected" ? "Reconnect" : "Connect"}
+                </a>
+              ) : (
+                <AppTooltip
+                  content="Google OAuth credentials are missing. See details below."
+                  isInteractive
+                >
+                  <span className="link-btn-outline disabled" aria-disabled="true" tabIndex={0}>
+                    Connect
+                  </span>
+                </AppTooltip>
+              )}
+              {source.status === "connected" ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="min-h-11"
+                  onPress={() => disconnect(source.provider)}
+                  isDisabled={pending}
+                >
+                  {pending ? "Working..." : "Disconnect"}
+                </Button>
+              ) : null}
             </div>
           </div>
         ))}

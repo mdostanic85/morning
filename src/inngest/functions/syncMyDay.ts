@@ -33,6 +33,7 @@ import {
   finalizeSyncRun,
   partialSyncProviderRun,
   startSyncProviderRun,
+  getSyncRunById,
 } from "@/services/syncRuns";
 import type { SyncProviderRunMetrics } from "@/domain/syncRun";
 import {
@@ -40,6 +41,7 @@ import {
   SYNC_PROVIDER_WAVES,
 } from "@/lib/tasks/sourceAuthority";
 import { runTodayFigmaTaskAudits } from "@/lib/tasks/figmaTaskAudit";
+import { runAsAppUser } from "@/lib/auth/appUser";
 
 async function finalizeIfCancelled(
   syncRunId: number,
@@ -74,9 +76,16 @@ export const syncMyDay = inngest.createFunction(
     if (!Number.isFinite(syncRunId)) {
       throw new Error("worklight/sync.requested requires syncRunId.");
     }
+    const syncRun = await getSyncRunById(syncRunId);
+    if (!syncRun?.userId) {
+      throw new Error("Sync run has no app user owner.");
+    }
+    const appUserId = syncRun.userId;
     const runStep = <T>(id: string, operation: () => T | Promise<T>) =>
       step.run(id, () =>
-        runSyncPhase(failurePhaseFromStepId(id), operation)
+        runAsAppUser(appUserId, () =>
+          runSyncPhase(failurePhaseFromStepId(id), operation)
+        )
       );
 
     if (
@@ -178,7 +187,7 @@ export const syncMyDay = inngest.createFunction(
             }
 
             const providerRun = await startSyncProviderRun({ syncRunId, provider });
-            const outcome = await syncProvider(provider, { syncRunId });
+            const outcome = await syncProvider(provider, { syncRunId, userId: appUserId });
 
             if (outcome.cancelled) {
               // WL-01: a cancellation must never record "completed", even

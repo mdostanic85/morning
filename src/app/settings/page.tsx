@@ -45,11 +45,25 @@ export default async function SettingsPage({
  ? null
  : `To enable direct API access, add ${vars} to .env.local, create the OAuth app at ${url}, then restart the app. Connected app access works without these keys.`;
 
-  const googleConfigured = hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET");
+  const googleConfigured =
+    hasEnv("GOOGLE_INTEGRATIONS_CLIENT_ID", "GOOGLE_INTEGRATIONS_CLIENT_SECRET") ||
+    hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET");
   const googleProviders = [
-    { provider: "gmail", label: "Gemini notes" },
-    { provider: "calendar", label: "Google Calendar" },
-    { provider: "drive", label: "Google Drive", hidden: true },
+    {
+      provider: "gmail",
+      label: "Gmail",
+      description: "Read matching email and Gemini meeting-note messages.",
+    },
+    {
+      provider: "calendar",
+      label: "Google Calendar",
+      description: "Read calendar events used in your daily brief.",
+    },
+    {
+      provider: "drive",
+      label: "Google Drive",
+      description: "Read matching Drive files and export supported documents.",
+    },
   ] as const;
   const googleSources = googleProviders.map(({ provider, label, ...presentation }) => {
     const connection = connectionByProvider.get(provider);
@@ -62,12 +76,10 @@ export default async function SettingsPage({
         typeof connection?.metadata?.lastSync === "string" ? connection.metadata.lastSync : null,
     };
   });
-  const googleAllConnected = googleSources
-    .filter((source) => !source.hidden)
-    .every((source) => source.status === "connected");
+  const googleAllConnected = googleSources.every((source) => source.status === "connected");
   const googleRedirectUri = `${(process.env.WORKLIGHT_APP_URL?.trim() || "https://worklight.vercel.app").replace(/\/+$/, "")}/api/connections/gmail/callback`;
   const googleSetupHint = !googleConfigured
-    ? oauthSetupHint(false, "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET", "console.cloud.google.com")
+    ? oauthSetupHint(false, "GOOGLE_INTEGRATIONS_CLIENT_ID and GOOGLE_INTEGRATIONS_CLIENT_SECRET", "console.cloud.google.com")
     : googleAllConnected
       ? null
       : `In Google Cloud → Credentials → your Web client, Authorized redirect URIs must include exactly: ${googleRedirectUri}`;
@@ -241,7 +253,7 @@ export default async function SettingsPage({
             </p>
             <GoogleConnectionPanel
               sources={googleSources}
-              configured={hasEnv("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET")}
+              configured={googleConfigured}
               setupHint={googleSetupHint}
             />
             <div className="flex flex-col gap-4">

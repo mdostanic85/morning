@@ -35,11 +35,16 @@ async function main() {
 
   const { encryptSecret } = await import("../src/lib/crypto/secretBox");
   const { db } = await import("../src/db/connection");
-  const { connectionSecrets } = await import("../src/db/schema");
+  const { connectionSecrets, userProfiles } = await import("../src/db/schema");
+  const [owner] = await db.select().from(userProfiles).orderBy(userProfiles.id).limit(1);
+  if (!owner) {
+    throw new Error("Create or sign in to an app user before migrating connector secrets.");
+  }
 
   // Encrypt everything before the first write so a missing or malformed
   // SECRETS_ENCRYPTION_KEY fails the run instead of half-migrating it.
   const rows = providers.map((provider) => ({
+    userId: owner.id,
     provider,
     ciphertext: encryptSecret(JSON.stringify(legacy[provider])),
   }));
@@ -49,7 +54,7 @@ async function main() {
       .insert(connectionSecrets)
       .values(row)
       .onConflictDoUpdate({
-        target: connectionSecrets.provider,
+        target: [connectionSecrets.userId, connectionSecrets.provider],
         set: { ciphertext: row.ciphertext, updatedAt: new Date().toISOString() },
       });
     console.log(`migrated: ${row.provider}`);
