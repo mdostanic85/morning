@@ -80,7 +80,7 @@ export async function DELETE(
         return sibling?.status === "connected" && isMcpTransport(sibling);
       });
       if (!siblingStillConnected) {
-        clearMcpOAuthState(mcpProvider);
+        await clearMcpOAuthState(mcpProvider);
       }
     }
   }

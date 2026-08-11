@@ -11,6 +11,7 @@ import { loadGranolaExtractionContext } from "@/lib/granola/extractionContext";
 import { granolaSourceBodyMatchesMe } from "@/lib/granola/personalKnowledge";
 import { filterActiveProjects, getProjects, isSourceFromInactiveProject } from "@/services/projects";
 import { getSourceItems } from "@/services/sourceItems";
+import { deleteKnowledgeItemsForSource } from "@/services/knowledgeItems";
 import type { SourceItem } from "@/domain/sourceItem";
 import {
   getSourceProcessingMetadata,
@@ -28,6 +29,7 @@ import {
 export interface BackfillExtractionsResult {
   sourcesProcessed: number;
   sourcesRemaining: number;
+  attemptedSourceIds: number[];
   tasksExtracted: number;
   knowledgeExtracted: number;
   errors: string[];
@@ -83,10 +85,12 @@ async function sourceIdsWithKnowledge(): Promise<Set<number>> {
  */
 export async function backfillUnextractedSources(input?: {
   syncRunId?: number;
+  excludeSourceIds?: number[];
 }): Promise<BackfillExtractionsResult | { cancelled: true }> {
   const result: BackfillExtractionsResult = {
     sourcesProcessed: 0,
     sourcesRemaining: 0,
+    attemptedSourceIds: [],
     tasksExtracted: 0,
     knowledgeExtracted: 0,
     errors: [],
@@ -100,8 +104,10 @@ export async function backfillUnextractedSources(input?: {
     loadGranolaExtractionContext(),
   ]);
 
+  const excluded = new Set(input?.excludeSourceIds ?? []);
   const pending = sources.filter(
     (source) => {
+      if (excluded.has(source.id)) return false;
       if (isSourceFromInactiveProject(source, projects)) return false;
       if (sourceProcessingIsCurrent(source)) return false;
 
@@ -117,6 +123,7 @@ export async function backfillUnextractedSources(input?: {
   if (pending.length === 0) return result;
 
   const batch = pending.slice(0, BACKFILL_BATCH_SIZE);
+  result.attemptedSourceIds = batch.map((source) => source.id);
   result.sourcesRemaining = Math.max(0, pending.length - batch.length);
 
   const outcomes = await mapWithConcurrency(batch, BACKFILL_CONCURRENCY, async (source) => {
@@ -244,6 +251,7 @@ async function extractFromSource(
     ? { ok: true as const, items: [] }
     : await (async () => {
         if (syncRunId) await assertSyncRunNotCancelled(syncRunId);
+        await deleteKnowledgeItemsForSource(item.id);
         return extractKnowledgeFromSourceItem({
         sourceItem: item,
         project: projectContext,

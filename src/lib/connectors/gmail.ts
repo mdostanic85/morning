@@ -125,8 +125,9 @@ export async function fetchLinkedGoogleDocumentText(
 
 async function fetchMessageCandidate(
   item: { id: string; threadId: string },
-  query: string
-): Promise<ConnectorSourceCandidate> {
+  query: string,
+  skipLinkedDocuments: boolean
+): Promise<ConnectorSourceCandidate | null> {
   const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${item.id}`);
   messageUrl.searchParams.set("format", "full");
   const response = await bearerFetch("gmail", messageUrl.toString());
@@ -148,6 +149,12 @@ async function fetchMessageCandidate(
   const linkedDocument =
     extractGoogleDocumentReference(rawBody) ??
     extractGoogleDocumentReference(body);
+  if (linkedDocument && skipLinkedDocuments) {
+    // The dedicated Drive connector imports the document itself. Keeping the
+    // Gmail share-notification as a second source would duplicate the same
+    // transcript and could create duplicate tasks.
+    return null;
+  }
   const linkedDocumentText = linkedDocument
     ? await fetchLinkedGoogleDocumentText(linkedDocument)
     : null;
@@ -194,6 +201,7 @@ export async function fetchGeminiMeetNotes(input?: {
   query?: string;
   maxResults?: number;
   shouldCancel?: ShouldCancelSync;
+  skipLinkedDocuments?: boolean;
 }): Promise<ConnectorSourceCandidate[]> {
   const query = input?.query?.trim() || DEFAULT_GMAIL_MEET_QUERY;
   const messages: { id: string; threadId: string }[] = [];
@@ -225,8 +233,16 @@ export async function fetchGeminiMeetNotes(input?: {
   const candidates: ConnectorSourceCandidate[] = [];
 
   for (let offset = 0; offset < selectedMessages.length; offset += 10) {
+    if (input?.shouldCancel && (await input.shouldCancel())) break;
     const batch = selectedMessages.slice(offset, offset + 10);
-    candidates.push(...(await Promise.all(batch.map((item) => fetchMessageCandidate(item, query)))));
+    const fetched = await Promise.all(
+      batch.map((item) =>
+        fetchMessageCandidate(item, query, input?.skipLinkedDocuments === true)
+      )
+    );
+    candidates.push(
+      ...fetched.filter((candidate): candidate is ConnectorSourceCandidate => candidate != null)
+    );
   }
 
   return candidates;

@@ -342,7 +342,7 @@ All route groups below are executable and lack application-user authentication a
 - **Hardcoded** — `src/services/settings.ts`, `data/secrets.json` stores one API key per LLM provider; `data/llm-settings.json` stores global enabled/disabled state.
 - **Implemented** — environment variables take precedence for LLM keys in `getRawApiKey()`.
 - **Hardcoded** — `src/lib/connectors/oauth.ts`, `data/oauth-states.json` stores OAuth state globally.
-- **Hardcoded** — `src/lib/connectors/mcp/oauthProvider.ts`, `data/mcp-oauth/<provider>.json` stores one MCP client registration, token set, PKCE verifier, and discovery state per provider.
+- **Resolved after audit** — `src/lib/connectors/mcp/oauthProvider.ts` stores MCP registration, tokens, PKCE verifier, and discovery state in the encrypted, user-scoped `connection_secrets` table.
 - **Partially implemented** — `src/db/schema.ts`, `connections` stores provider/status/scopes/metadata but no secret material.
 - **Not found** — `connections` has no user ID, organization ID, or unique ownership boundary.
 - **Not found** — `connections.provider` has no database unique constraint. `src/services/connections.ts`, `upsertConnection()` performs read-then-write and can create duplicate provider rows under concurrent requests.

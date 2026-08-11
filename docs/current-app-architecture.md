@@ -663,7 +663,7 @@ erDiagram
 | Kategorija | Primeri | Trajnost |
 |---|---|---|
 | SQLite persistent data | Projects, source body, tasks, evidence, knowledge, profile, connections metadata, memories, kompletan Hydra model | Trajno dok postoji data/worklight.db |
-| Lokalni JSON | secrets, llm-settings, oauth-states, mcp-oauth, today briefing, queue summary | Trajno na datom filesystemu |
+| Lokalni JSON | llm-settings, today briefing, queue summary | Trajno samo na datom filesystemu; connector credentiali nisu ovde |
 | Browser session | Welcome modal seen | Do kraja browser session-a |
 | React in-memory | Chat, tabovi, dialog, progress, toast state | Do refresh-a/unmount-a |
 | Hardcoded data | Source katalog, Hydra defaults, score weights, limiti | U source kodu |
@@ -675,7 +675,7 @@ Sirovi email, note, ticket, page, PR, message i Figma tekst može biti sačuvan 
 
 ## 10. External integrations
 
-Connector registry je u [src/lib/connectors/registry.ts](../src/lib/connectors/registry.ts). Direct OAuth tokeni i secret-i se čuvaju u connection_secrets tabeli, šifrovani AES-256-GCM ključem iz SECRETS_ENCRYPTION_KEY; MCP tokeni i PKCE/discovery podaci i dalje u data/mcp-oauth/*.json. connections tabela sadrži status, auth type, scopes i metadata, ne sirove tokene.
+Connector registry je u [src/lib/connectors/registry.ts](../src/lib/connectors/registry.ts). Direct OAuth tokeni, MCP tokeni, PKCE verifikatori i discovery state čuvaju se po korisniku u `connection_secrets`, šifrovani AES-256-GCM ključem iz `SECRETS_ENCRYPTION_KEY`. `connections` tabela sadrži status, auth type, scopes i metadata, ne sirove tokene.
 
 ### Integracije
 
@@ -689,7 +689,7 @@ Connector registry je u [src/lib/connectors/registry.ts](../src/lib/connectors/r
 | GitHub | OAuth ili PAT; OAuth scopes read:user, read:org, repo | Globalni ili project repo scope; reads open relevant PRs, comments/reviews, commits/checks, max 50 po repo-u; source_items i verification context | Potrebno je izabrati repo/branch; connector error ulazi u sync result | **Implemented**, read-only u aplikaciji |
 | Discord | UI koristi bot token; OAuth kod postoji sa DISCORD_CLIENT_ID/SECRET | Čita poslednjih 50 poruka po project channel-u i zadržava keyword ili myUserId mention match. Day sync ne prosleđuje myUserId, pa praktično radi keyword match | Channel/API greška ruši provider; OAuth accessToken nije format koji connector čita | **Partially implemented** |
 | Figma | PAT ili Figma MCP; MCP može tražiti FIGMA_MCP_CLIENT_ID/SECRET | Čita konfigurisane file keys. REST čuva file metadata i depth-2 tekstualno stablo; MCP pokušava design context/screenshot pozive. Source i verification context su tekst | REST tiho preskače nečitljiv fajl. MCP parser odbacuje image blockove, pa screenshot nije prosleđen LLM-u kao slika | **Partially implemented**, nema stvarnu image analizu |
-| Google Drive | Nema provider, OAuth scope, connector ili source type | Sources UI kartica Google Drive mapira se na Gmail; Hydra Gmail ponekad označava kao drive | Nije primenljivo | **Not found / mislabeled UI** |
+| Google Drive | Google OAuth; isti client; drive.readonly | Traži odgovarajuće Google dokumente, izvozi tekst i uvozi ih kao Drive sources. Gmail preskače share-notification poruke kada je Drive povezan da ne duplira transkripte | API/export greška ruši provider sync; import i AI obrada su odvojeni u retryable korake | **Implemented**, read-only |
 | Local Git | Lokalni git executable i sačuvana repo putanja | Read-only status/diff/log evidence za verification, sync review i End day; nije deo standardnog connector registry sync-a | Command/path greške ulaze u evidence warning ili nedostajući context | **Implemented**, read-only |
 | Resend | RESEND_API_KEY i REPORT_EMAIL_FROM; profile.email | Hydra email delivery; report body se šalje posle report persistence | Do pet neposrednih pokušaja; nema eksplicitni timeout/backoff | **Implemented, optional** |
 | Browser Notification API | Browser permission | Manual Hydra run može prikazati local completion notification | Permission se traži nezavisno od push config-a; nema server push subscription | **Partially implemented** |

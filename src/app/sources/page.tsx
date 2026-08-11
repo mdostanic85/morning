@@ -12,6 +12,7 @@ const SOURCES = [
   { key: "granola", connection: "granola", label: "Granola", description: "Meeting notes and transcripts." },
   { key: "calendar", connection: "calendar", label: "Google Calendar", description: "Work events, participants, times, and links." },
   { key: "gmail", connection: "gmail", label: "Gemini notes", description: "Google Meet notes from your Google account." },
+  { key: "drive", connection: "drive", label: "Google Drive", description: "Matching meeting notes and supported documents." },
   { key: "jira", connection: "jira", label: "Jira", description: "Assigned issues, comments, status, and blockers." },
   { key: "confluence", connection: "confluence", label: "Confluence", description: "Requirements and linked project pages." },
   { key: "figma", connection: "figma", label: "Figma", description: "Design evidence used to check completed work." },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { startMcpOAuthConnect } from "@/lib/connectors/mcp/client";
 import { isMcpOAuthProvider } from "@/lib/connectors/mcp/capabilities";
+import { resolveAppOrigin } from "@/lib/connectors/oauth";
 
 export async function GET(
   request: Request,
@@ -12,7 +13,7 @@ export async function GET(
   }
 
   const url = new URL(request.url);
-  const origin = url.origin;
+  const origin = resolveAppOrigin(request.url);
   const force = url.searchParams.get("force") === "1";
   try {
     const redirectUrl = await startMcpOAuthConnect(provider, origin, { force });

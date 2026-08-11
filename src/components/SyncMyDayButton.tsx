@@ -24,7 +24,7 @@ const Lottie = dynamic(() => import("lottie-react").then((module) => module.defa
 const PROVIDER_LABEL: Record<ConnectionProvider, string> = {
  gmail: "Gemini notes",
  calendar: "Google Calendar",
- drive: "Gemini notes",
+ drive: "Google Drive",
  jira: "Jira",
  confluence: "Confluence",
  granola: "Granola",
@@ -36,7 +36,7 @@ const PROVIDER_LABEL: Record<ConnectionProvider, string> = {
 const PROVIDER_SYNC_DESCRIPTION: Record<ConnectionProvider, string> = {
  gmail: "New Gemini meeting notes and transcripts",
  calendar: "Recent and upcoming calendar events",
- drive: "Legacy Google Drive Gemini-note import",
+ drive: "Matching Google Drive documents",
  jira: "Issues assigned to you (any status) plus recent mentions",
  confluence: "Pages from configured spaces and page links",
  granola: "New meeting notes and transcripts",
@@ -181,10 +181,7 @@ function buildProviderItems(
  providerRuns: SyncProviderRunSnapshot[],
  syncRunStatus: string
 ): ProviderProgressItem[] {
- // Drive used to duplicate the Gmail-backed Gemini Notes provider. Hide old
- // in-flight/history rows so Gemini Notes always has one operational status.
- const visibleRuns = providerRuns.filter((run) => run.provider !== "drive");
- const runsByProvider = new Map(visibleRuns.map((run) => [run.provider, run]));
+ const runsByProvider = new Map(providerRuns.map((run) => [run.provider, run]));
  const expected = expectedProviderKeys(sourceLabels);
  const seen = new Set<string>();
 
@@ -200,7 +197,7 @@ function buildProviderItems(
  };
  });
 
- for (const run of visibleRuns) {
+ for (const run of providerRuns) {
  if (seen.has(run.provider)) continue;
  const status = providerUiStatus(run.provider, run, syncRunStatus);
  items.push({
@@ -385,11 +382,7 @@ function humanizeSyncIssue(raw: string): SyncIssueInput {
 function buildCompletionIssues(status: SyncStatusResponse): SyncIssueInput[] {
  const syncIssues: SyncIssueInput[] = [];
 
- // Drive is a retired duplicate Gemini path; it must not surface as a second
- // Gemini failure while an older persisted run is still being displayed.
- const failed = status.providerRuns.filter(
- (entry) => entry.status === "failed" && entry.provider !== "drive"
- );
+ const failed = status.providerRuns.filter((entry) => entry.status === "failed");
  for (const entry of failed) {
  syncIssues.push(
  humanizeSyncIssue(`${entry.provider}: ${entry.errorMessage ?? "Connection failed."}`)

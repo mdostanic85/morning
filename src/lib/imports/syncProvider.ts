@@ -145,7 +145,10 @@ async function syncProviderForUser(
     }
 
     const candidates = await connector.listItems(context);
-    const importResult = await importConnectorSources(candidates, { shouldCancel });
+    const importResult = await importConnectorSources(candidates, {
+      shouldCancel,
+      deferProcessing: provider === "gmail" || provider === "drive",
+    });
 
     if (shouldCancel && (await shouldCancel())) {
       const partialMetrics: SyncProviderRunMetrics = {

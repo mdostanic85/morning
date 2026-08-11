@@ -101,6 +101,10 @@ describe("terminal sync failure lifecycle (P1-3)", () => {
       "backfill-sources"
     );
     assert.equal(
+      failurePhaseFromError({ stepId: "backfill-sources-3" }),
+      "backfill-sources"
+    );
+    assert.equal(
       failurePhaseFromError({ stepId: "rebuild-queue" }),
       "rebuild-queue"
     );

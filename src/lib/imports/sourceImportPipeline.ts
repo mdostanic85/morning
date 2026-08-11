@@ -41,7 +41,11 @@ function connectorMetadataMatches(
 
 export async function importConnectorSources(
   candidates: ConnectorSourceCandidate[],
-  options: { shouldCancel?: ShouldCancelSync } = {}
+  options: {
+    shouldCancel?: ShouldCancelSync;
+    /** Persist now and let bounded Inngest backfill steps do AI processing. */
+    deferProcessing?: boolean;
+  } = {}
 ): Promise<ConnectorSyncResult> {
   const result: ConnectorSyncResult = {
     ok: true,
@@ -61,10 +65,12 @@ export async function importConnectorSources(
   };
 
   const projects = await getActiveProjects();
-  const [granolaWorkContext, profile] = await Promise.all([
-    loadGranolaExtractionContext(),
-    getUserProfile(),
-  ]);
+  const [granolaWorkContext, profile] = options.deferProcessing
+    ? [null, null]
+    : await Promise.all([
+        loadGranolaExtractionContext(),
+        getUserProfile(),
+      ]);
 
   for (const candidate of candidates) {
     try {
@@ -165,6 +171,32 @@ export async function importConnectorSources(
             contentHash: newContentHash,
           });
       if (!created) throw new Error(`Could not persist source ${candidate.title}.`);
+
+      if (options.deferProcessing) {
+        // Gmail/Drive can return dozens of long documents on first sync. Saving
+        // them is deterministic and quick; embeddings and LLM extraction run
+        // later in small, retryable Inngest steps so one Vercel invocation does
+        // not hit the five-minute ceiling and block every provider behind it.
+        const project = created.projectId
+          ? projects.find((candidateProject) => candidateProject.id === created.projectId)
+          : null;
+        result.importedItems.push({
+          sourceItemId: created.id,
+          title: candidate.title,
+          url: candidate.url ?? null,
+          sourceType: candidate.sourceType,
+          metadata: candidate.metadata ?? {},
+          projectId: created.projectId,
+          projectName: project?.name ?? null,
+        });
+        result.imported += 1;
+        if (existing) {
+          result.itemsUpdated += 1;
+        } else {
+          result.itemsCreated += 1;
+        }
+        continue;
+      }
 
       // A Figma comment inherits its thread's project deterministically before
       // the LLM matcher is allowed to guess, so one conversation cannot end up
