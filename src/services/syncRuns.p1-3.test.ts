@@ -292,6 +292,65 @@ describe("syncRuns exhausted-failure integration (P1-3)", () => {
     assert.equal(lingering?.errorCode, "incomplete_attempt");
   });
 
+  it("reuses one provider row when a retried step re-claims the same provider", async () => {
+    const run = await createTestRun();
+    const firstAttempt = await startSyncProviderRun({
+      syncRunId: run.id,
+      provider: "github",
+    });
+    // Attempt 1 died after persisting partial metrics — Inngest re-executes the
+    // whole step, so the provider is claimed again.
+    await partialSyncProviderRun(firstAttempt.id, {
+      metrics: partialMetrics,
+      errorMessage: "First attempt failed mid-import.",
+    });
+    const retryAttempt = await startSyncProviderRun({
+      syncRunId: run.id,
+      provider: "github",
+    });
+    await completeSyncProviderRun(retryAttempt.id, completedMetrics);
+
+    const finalized = await finalizeSyncRun({ id: run.id, status: "completed" });
+    const providers = await listSyncProviderRuns(run.id);
+
+    // One row per provider: a retried attempt must not leave an orphan row that
+    // finalization then reports as a failed provider on a successful sync.
+    assert.equal(retryAttempt.id, firstAttempt.id);
+    assert.equal(providers.length, 1);
+    assert.equal(finalized?.status, "completed");
+    assert.equal(providers[0]?.status, "completed");
+    assert.equal(providers[0]?.errorCode, null);
+    assert.equal(providers[0]?.errorMessage, null);
+    assert.equal(providers[0]?.itemsFetched, completedMetrics.itemsFetched);
+    assert.equal(providers[0]?.itemsFailed, 0);
+  });
+
+  it("restarts a re-claimed provider row from zero rather than keeping stale metrics", async () => {
+    const run = await createTestRun();
+    const firstAttempt = await startSyncProviderRun({
+      syncRunId: run.id,
+      provider: "jira",
+    });
+    await failSyncProviderRun(firstAttempt.id, {
+      errorCode: "sync_error",
+      errorMessage: "Jira timed out.",
+      metrics: failedMetrics,
+    });
+
+    const retryAttempt = await startSyncProviderRun({
+      syncRunId: run.id,
+      provider: "jira",
+    });
+
+    assert.equal(retryAttempt.status, "running");
+    assert.equal(retryAttempt.completedAt, null);
+    assert.equal(retryAttempt.errorCode, null);
+    assert.equal(retryAttempt.errorMessage, null);
+    assert.equal(retryAttempt.itemsFetched, 0);
+    assert.equal(retryAttempt.itemsFailed, 0);
+    assert.equal(retryAttempt.itemsExtractionFailed, 0);
+  });
+
   it("closes a lingering provider attempt when a run partially completes", async () => {
     const run = await createTestRun();
     await startSyncProviderRun({
