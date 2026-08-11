@@ -22,6 +22,13 @@ export interface ConnectionSecret {
   botToken?: string;
   /** Serialized OAuth state used by hosted MCP connectors. */
   mcpOAuth?: Record<string, unknown>;
+  // Atlassian API token (Basic auth). The Rovo MCP domain allowlist and OAuth
+  // 3LO app registration both need an org admin; a personal API token does not,
+  // so this is the only Atlassian path a plain member can set up alone.
+  atlassianEmail?: string;
+  atlassianApiToken?: string;
+  /** Site origin, e.g. https://your-team.atlassian.net. */
+  atlassianSiteUrl?: string;
 }
 
 export async function getConnectionSecret(

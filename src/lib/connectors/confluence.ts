@@ -1,6 +1,5 @@
 import "server-only";
-import { bearerFetch } from "./auth";
-import { getDefaultAtlassianResource } from "./atlassian";
+import { getAtlassianContext } from "./atlassian";
 import type { ConnectorSourceCandidate } from "./types";
 
 interface ConfluenceContentResponse {
@@ -30,7 +29,11 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-function pageToCandidate(page: ConfluencePage, siteUrl: string, cloudId: string): ConnectorSourceCandidate {
+function pageToCandidate(
+  page: ConfluencePage,
+  siteUrl: string,
+  cloudId: string | null
+): ConnectorSourceCandidate {
   const url = page._links?.webui ? `${siteUrl}/wiki${page._links.webui}` : siteUrl;
   return {
     sourceType: "confluence",
@@ -55,15 +58,13 @@ function pageToCandidate(page: ConfluencePage, siteUrl: string, cloudId: string)
 }
 
 async function fetchPageById(pageId: string): Promise<ConnectorSourceCandidate> {
-  const resource = await getDefaultAtlassianResource("confluence");
-  const url = new URL(
-    `https://api.atlassian.com/ex/confluence/${resource.id}/wiki/rest/api/content/${pageId}`
-  );
+  const context = await getAtlassianContext("confluence");
+  const url = new URL(`${context.baseUrl}/wiki/rest/api/content/${pageId}`);
   url.searchParams.set("expand", "body.storage,version,space");
-  const response = await bearerFetch("confluence", url.toString());
+  const response = await context.fetch(url.toString());
   const page = (await response.json()) as ConfluencePage & { message?: string };
   if (!response.ok) throw new Error(page.message ?? `Could not import Confluence page ${pageId}.`);
-  return pageToCandidate(page, resource.url, resource.id);
+  return pageToCandidate(page, context.siteUrl, context.cloudId);
 }
 
 function pageIdFromUrl(url: string): string | null {
@@ -94,16 +95,14 @@ export async function fetchConfluenceSpacePages(input: {
   updatedSinceIso?: string;
   maxResults?: number;
 }): Promise<ConnectorSourceCandidate[]> {
-  const resource = await getDefaultAtlassianResource("confluence");
+  const context = await getAtlassianContext("confluence");
   const candidates: ConnectorSourceCandidate[] = [];
   let start = 0;
   const limit = 25;
   const maxResults = input.maxResults ?? 50;
 
   while (candidates.length < maxResults) {
-    const url = new URL(
-      `https://api.atlassian.com/ex/confluence/${resource.id}/wiki/rest/api/content/search`
-    );
+    const url = new URL(`${context.baseUrl}/wiki/rest/api/content/search`);
     const cql = input.updatedSinceIso
       ? `space = "${input.spaceKey}" AND type = page AND lastModified >= "${confluenceDateFromIso(input.updatedSinceIso)}"`
       : `space = "${input.spaceKey}" AND type = page`;
@@ -112,11 +111,13 @@ export async function fetchConfluenceSpacePages(input: {
     url.searchParams.set("start", String(start));
     url.searchParams.set("expand", "body.storage,version,space");
 
-    const response = await bearerFetch("confluence", url.toString());
+    const response = await context.fetch(url.toString());
     const body = (await response.json()) as ConfluenceContentResponse & { size?: number };
     if (!response.ok) throw new Error(body.message ?? `Could not import space ${input.spaceKey}.`);
     const batch = body.results ?? [];
-    candidates.push(...batch.map((page) => pageToCandidate(page, resource.url, resource.id)));
+    candidates.push(
+      ...batch.map((page) => pageToCandidate(page, context.siteUrl, context.cloudId))
+    );
     if (batch.length < limit) break;
     start += batch.length;
   }
@@ -137,22 +138,20 @@ export async function fetchConfluencePages(input: {
 
   if (!input.spaceKeys || input.spaceKeys.length === 0) return candidates;
 
-  const resource = await getDefaultAtlassianResource("confluence");
+  const context = await getAtlassianContext("confluence");
   for (const spaceKey of input.spaceKeys) {
-    const url = new URL(
-      `https://api.atlassian.com/ex/confluence/${resource.id}/wiki/rest/api/content`
-    );
+    const url = new URL(`${context.baseUrl}/wiki/rest/api/content`);
     url.searchParams.set("type", "page");
     url.searchParams.set("status", "current");
     url.searchParams.set("spaceKey", spaceKey);
     url.searchParams.set("limit", String(input.maxResults ?? 20));
     url.searchParams.set("expand", "body.storage,version,space");
 
-    const response = await bearerFetch("confluence", url.toString());
+    const response = await context.fetch(url.toString());
     const body = (await response.json()) as ConfluenceContentResponse;
     if (!response.ok) throw new Error(body.message ?? `Could not import space ${spaceKey}.`);
     candidates.push(
-      ...(body.results ?? []).map((page) => pageToCandidate(page, resource.url, resource.id))
+      ...(body.results ?? []).map((page) => pageToCandidate(page, context.siteUrl, context.cloudId))
     );
   }
 
