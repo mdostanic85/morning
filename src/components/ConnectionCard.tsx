@@ -27,6 +27,9 @@ interface ConnectionCardProps {
   mcpConnectLabel?: string | null;
   patFallback?: boolean;
   connectedExtra?: ReactNode;
+  /** Extra credential setup shown under Manage, for providers the single-secret form cannot express. */
+  extraSetup?: ReactNode;
+  extraSetupLabel?: string | null;
   initialExpanded?: boolean;
 }
 
@@ -47,6 +50,8 @@ export function ConnectionCard({
   mcpConnectLabel = null,
   patFallback = false,
   connectedExtra = null,
+  extraSetup = null,
+  extraSetupLabel = null,
   initialExpanded = false,
 }: ConnectionCardProps) {
   const router = useRouter();
@@ -120,7 +125,10 @@ export function ConnectionCard({
   const hasTokenForm = (authType !== "oauth" && authType !== "mcp") || patFallback;
   const showPatFallback = patFallback && authType === "oauth";
   const showToggle =
-    hasTokenForm || (supportsMcp && !usingMcp) || Boolean(setupHint && !supportsMcp);
+    hasTokenForm ||
+    (supportsMcp && !usingMcp) ||
+    Boolean(extraSetup) ||
+    Boolean(setupHint && !supportsMcp);
   const errorText = typeof metadata?.error === "string" ? metadata.error : null;
 
   return (
@@ -216,6 +224,15 @@ export function ConnectionCard({
             <p className="rounded-[var(--radius-md)] border border-warm/25 bg-warm/8 px-3 py-2.5 text-metadata leading-relaxed text-warm">
               {setupHint}
             </p>
+          ) : null}
+
+          {extraSetup ? (
+            <div className="space-y-2">
+              {extraSetupLabel ? (
+                <p className="text-metadata font-medium text-muted-soft">{extraSetupLabel}</p>
+              ) : null}
+              {extraSetup}
+            </div>
           ) : null}
 
           {supportsMcp && !usingMcp && showApiConnect ? (

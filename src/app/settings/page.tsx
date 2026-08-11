@@ -10,6 +10,7 @@ import { getProjects } from "@/services/projects";
 import { listIngestionRules } from "@/services/ingestionRules";
 import { ConnectionCard } from "@/components/ConnectionCard";
 import { GoogleConnectionPanel } from "@/components/GoogleConnectionPanel";
+import { AtlassianTokenForm } from "@/components/AtlassianTokenForm";
 import { GitHubConnectionSettings } from "@/components/GitHubConnectionSettings";
 import type { ConnectionTransport } from "@/domain/connection";
 import { Tabs } from "@heroui/react/tabs";
@@ -293,10 +294,24 @@ export default async function SettingsPage({
  transport={transport}
  hideMcpConnect={isConfluenceMcpSibling}
  sharedMcpNote={
- isConfluenceMcpSibling ? "Shares the Atlassian MCP connection from Jira." : null
+ isConfluenceMcpSibling ? "Shares the Atlassian connection from Jira." : null
  }
  mcpConnectLabel={
  card.provider === "jira" ? "Atlassian (Jira + Confluence)" : null
+ }
+ extraSetup={
+ card.provider === "jira" ? (
+ <AtlassianTokenForm
+ siteUrl={
+ typeof connection?.metadata?.siteUrl === "string"
+ ? connection.metadata.siteUrl
+ : ""
+ }
+ />
+ ) : null
+ }
+ extraSetupLabel={
+ card.provider === "jira" ? "API token (no admin approval needed)" : null
  }
  patFallback={card.patFallback ?? false}
  initialExpanded={connectedProvider === card.provider}

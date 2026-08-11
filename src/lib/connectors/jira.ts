@@ -1,6 +1,5 @@
 import "server-only";
-import { bearerFetch } from "./auth";
-import { getDefaultAtlassianResource } from "./atlassian";
+import { getAtlassianContext } from "./atlassian";
 import { cleanJiraText } from "@/lib/connectors/jiraText";
 import type { ConnectorSourceCandidate } from "./types";
 import type { ShouldCancelSync } from "@/lib/imports/syncCancellation";
@@ -101,32 +100,28 @@ export async function fetchRecentlyDoneJiraIssues(input?: {
   projectJiraKeys?: string[];
   maxResults?: number;
 }): Promise<ConnectorSourceCandidate[]> {
-  const resource = await getDefaultAtlassianResource("jira");
+  const context = await getAtlassianContext("jira");
   const keyClause =
     input?.projectJiraKeys && input.projectJiraKeys.length > 0
       ? `project in (${input.projectJiraKeys.map((key) => `"${key}"`).join(", ")}) AND `
       : "";
   const jql = `${keyClause}${RECENTLY_DONE_JQL}`;
-  const response = await bearerFetch(
-    "jira",
-    `https://api.atlassian.com/ex/jira/${resource.id}/rest/api/3/search`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jql,
-        maxResults: input?.maxResults ?? 25,
-        fields: ["summary", "status", "assignee", "reporter", "updated"],
-      }),
-    }
-  );
+  const response = await context.fetch(`${context.baseUrl}/rest/api/3/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jql,
+      maxResults: input?.maxResults ?? 25,
+      fields: ["summary", "status", "assignee", "reporter", "updated"],
+    }),
+  });
   const body = (await response.json()) as JiraSearchResponse;
   if (!response.ok) {
     throw new Error(body.errorMessages?.join("; ") || "Jira done-issue search failed.");
   }
 
   return (body.issues ?? []).map((issue) => {
-    const url = `${resource.url}/browse/${issue.key}`;
+    const url = `${context.siteUrl}/browse/${issue.key}`;
     const status = issue.fields.status?.name ?? "Done";
     return {
       sourceType: "jira",
@@ -143,8 +138,8 @@ export async function fetchRecentlyDoneJiraIssues(input?: {
         `Reporter: ${issue.fields.reporter?.displayName ?? "unknown"}`,
       ].join("\n"),
       metadata: {
-        cloudId: resource.id,
-        siteName: resource.name,
+        cloudId: context.cloudId,
+        siteName: context.siteName,
         key: issue.key,
         status,
         assignee: issue.fields.assignee?.displayName ?? null,
@@ -162,7 +157,7 @@ export async function fetchAssignedJiraIssues(input?: {
   updatedSinceIso?: string;
   shouldCancel?: ShouldCancelSync;
 }): Promise<ConnectorSourceCandidate[]> {
-  const resource = await getDefaultAtlassianResource("jira");
+  const context = await getAtlassianContext("jira");
   const baseJql = input?.jql?.trim() || DEFAULT_JIRA_JQL;
   const keyClause =
     input?.projectJiraKeys && input.projectJiraKeys.length > 0
@@ -182,32 +177,28 @@ export async function fetchAssignedJiraIssues(input?: {
   while (issues.length < maxResults) {
     if (input?.shouldCancel && (await input.shouldCancel())) break;
 
-    const response = await bearerFetch(
-      "jira",
-      `https://api.atlassian.com/ex/jira/${resource.id}/rest/api/3/search`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jql,
-          startAt,
-          maxResults: Math.min(JIRA_PAGE_SIZE, maxResults - issues.length),
-          expand: ["changelog"],
-          fields: [
-            "summary",
-            "description",
-            "status",
-            "priority",
-            "assignee",
-            "reporter",
-            "duedate",
-            "created",
-            "updated",
-            "comment",
-          ],
-        }),
-      }
-    );
+    const response = await context.fetch(`${context.baseUrl}/rest/api/3/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jql,
+        startAt,
+        maxResults: Math.min(JIRA_PAGE_SIZE, maxResults - issues.length),
+        expand: ["changelog"],
+        fields: [
+          "summary",
+          "description",
+          "status",
+          "priority",
+          "assignee",
+          "reporter",
+          "duedate",
+          "created",
+          "updated",
+          "comment",
+        ],
+      }),
+    });
     const body = (await response.json()) as JiraSearchResponse;
     if (!response.ok) {
       throw new Error(body.errorMessages?.join("; ") || "Jira issue search failed.");
@@ -222,7 +213,7 @@ export async function fetchAssignedJiraIssues(input?: {
 
   return issues.map((issue) => {
     const comments = issue.fields.comment?.comments ?? [];
-    const url = `${resource.url}/browse/${issue.key}`;
+    const url = `${context.siteUrl}/browse/${issue.key}`;
     const commentUpdatedAts = comments
       .map((comment) => comment.created)
       .filter((value): value is string => Boolean(value));
@@ -258,8 +249,8 @@ export async function fetchAssignedJiraIssues(input?: {
           .join("\n") || "(none)",
       ].join("\n"),
       metadata: {
-        cloudId: resource.id,
-        siteName: resource.name,
+        cloudId: context.cloudId,
+        siteName: context.siteName,
         key: issue.key,
         status: issue.fields.status?.name ?? null,
         statusCategoryKey: issue.fields.status?.statusCategory?.key ?? null,
