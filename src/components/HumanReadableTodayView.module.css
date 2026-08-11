@@ -1,13 +1,17 @@
 /* ── Human-readable daily brief ────────────────────────────────────────────
    Quiet bento: primary focus (+ next-up under it) beside today's meetings.
    Cards size to their content — they do not stretch to fill the grid.
+
+   Written mobile-first and stepped up at the same breakpoints Tailwind uses
+   elsewhere in the app (640 / 1024), so one screen width never picks up
+   phone spacing from one rule and desktop spacing from another.
 ─────────────────────────────────────────────────────────────────────────── */
 .brief-page {
-  padding: 2.5rem 0 5rem;
+  padding: 1rem 0 4rem;
 }
 
 .brief-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .brief-header-copy {
@@ -15,11 +19,12 @@
   width: 100%;
 }
 
+/* Phone: the sync action sits under the title so neither gets squeezed. */
 .brief-header-title-row {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 2rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.9rem;
 }
 
 .brief-header h1 {
@@ -41,7 +46,7 @@
   color: var(--muted-soft);
   font-size: 0.9375rem;
   line-height: 1.55;
-  white-space: nowrap;
+  text-wrap: pretty;
 }
 
 .brief-header-actions {
@@ -49,7 +54,7 @@
   flex-shrink: 0;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 0.75rem;
 }
 
@@ -138,16 +143,19 @@
   height: 1rem;
 }
 
+/* Single column until there is room for a side rail that does not starve the
+   focus card. Below 1024 the rail would leave the focus column around 400px,
+   which wraps its headline to five lines — so focus takes the full width and
+   meetings follow underneath. */
 .brief-bento {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 1.25rem;
 }
 
 .brief-bento-primary {
   display: flex;
-  grid-column: span 8;
   flex-direction: column;
   gap: 1.25rem;
   /* Keep focus visually first even when the side rail is dense. */
@@ -156,7 +164,6 @@
 
 .brief-bento-side {
   display: grid;
-  grid-column: span 4;
   align-content: start;
   gap: 1.25rem;
 }
@@ -233,7 +240,7 @@
 
 /* Dominant focus surface: soft mesh wash + spectrum top edge. */
 .brief-focus-primary {
-  padding: 2.5rem 2.75rem;
+  padding: 1.5rem 1.35rem;
   background: var(--surface-raised);
   box-shadow: var(--focus-hero-shadow);
   transition:
@@ -370,7 +377,7 @@
   max-width: none;
   margin: 0.85rem 0 0;
   color: var(--muted);
-  font-size: 1.05rem;
+  font-size: 1rem;
   line-height: 1.55;
   text-wrap: pretty;
 }
@@ -399,12 +406,14 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
-  margin-top: 1.75rem;
+  margin-top: 1.35rem;
 }
 
-/* Shared size for Why now + primary CTA */
+/* Shared size for Why now + primary CTA. On a phone they share the row and
+   grow to fill it rather than huddling against the left edge. */
 .brief-focus-action-btn {
   display: inline-flex;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
@@ -562,7 +571,7 @@
   display: grid;
   align-content: start;
   min-height: 0;
-  padding: 2.5rem 2.75rem;
+  padding: 1.5rem 1.35rem;
   background: color-mix(in srgb, var(--surface-raised) 92%, var(--surface-soft));
   box-shadow: var(--elevation-section);
   animation: brief-focus-enter 480ms var(--ease-out) both;
@@ -662,7 +671,9 @@
   position: relative;
   display: flex;
   flex: 1 1 calc(50% - 4.5rem);
-  min-width: min(100%, 12rem);
+  /* Below ~17rem the two-line titles start breaking mid-word, so a card that
+     cannot reach that width takes the whole row instead. */
+  min-width: min(100%, 17rem);
   max-width: 100%;
   flex-direction: column;
   gap: 0.45rem;
@@ -728,8 +739,9 @@
 
 .brief-nextup-more {
   flex: 0 0 auto;
-  align-self: center;
-  margin-left: auto;
+  align-self: flex-start;
+  margin-left: 0;
+  width: 100%;
 }
 
 .brief-nextup-more[open] {
@@ -778,7 +790,7 @@
 
 .brief-nextup-extra {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
 }
 
@@ -792,74 +804,82 @@
 }
 
 /* ──────────────────────────────────────────────────────────────
-   Wide bento — no side rail: focus spans the full width with a
-   comfortable reading max-width.
+   Small tablet and up — room for a little more air and for the
+   next-up overflow to sit two across.
    ────────────────────────────────────────────────────────────── */
-.brief-bento--wide .brief-bento-primary {
-  grid-column: 1 / -1;
-  max-width: 48rem;
-}
-
-@media (max-width: 960px) {
-  /* 7/12 focus + 5/12 side for focus dominance on tablet */
-  .brief-bento-primary {
-    grid-column: span 7;
-  }
-
-  .brief-bento-side {
-    grid-column: span 5;
-  }
-}
-
-@media (max-width: 720px) {
+@media (min-width: 640px) {
   .brief-page {
-    padding-top: 1rem;
+    padding-top: 2rem;
   }
 
   .brief-header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .brief-header-title-row {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 2rem;
   }
 
   .brief-header-actions {
-    justify-content: flex-start;
-  }
-
-  .brief-bento-primary,
-  .brief-bento-side {
-    grid-column: 1 / -1;
-  }
-
-  .brief-focus-card,
-  .brief-focus-primary,
-  .brief-empty {
-    padding: 1.5rem 1.35rem;
-  }
-
-  .brief-focus-support {
-    font-size: 1rem;
-  }
-
-  .brief-focus-actions {
-    margin-top: 1.35rem;
+    justify-content: flex-end;
   }
 
   .brief-focus-action-btn {
-    flex: 1 1 auto;
-    justify-content: center;
-  }
-
-  .brief-nextup-card {
-    flex: 1 1 100%;
+    flex: 0 0 auto;
   }
 
   .brief-nextup-more {
-    margin-left: 0;
-    width: 100%;
+    width: auto;
+    align-self: center;
+    margin-left: auto;
   }
 
   .brief-nextup-extra {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Desktop — the 12-column bento and its full-size focus surface.
+   ────────────────────────────────────────────────────────────── */
+@media (min-width: 1024px) {
+  .brief-page {
+    padding-top: 2.5rem;
+    padding-bottom: 5rem;
+  }
+
+  .brief-bento {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .brief-bento-primary {
+    grid-column: span 8;
+  }
+
+  .brief-bento-side {
+    grid-column: span 4;
+  }
+
+  /* Wide bento — no side rail: focus spans the full width with a
+     comfortable reading max-width. */
+  .brief-bento--wide .brief-bento-primary {
+    grid-column: 1 / -1;
+    max-width: 48rem;
+  }
+
+  .brief-focus-primary,
+  .brief-empty {
+    padding: 2.5rem 2.75rem;
+  }
+
+  .brief-focus-support {
+    font-size: 1.05rem;
+  }
+
+  .brief-focus-actions {
+    margin-top: 1.75rem;
   }
 }

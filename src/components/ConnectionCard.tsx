@@ -221,7 +221,7 @@ export function ConnectionCard({
           ) : null}
 
           {setupHint ? (
-            <p className="rounded-[var(--radius-md)] border border-warm/25 bg-warm/8 px-3 py-2.5 text-metadata leading-relaxed text-warm">
+            <p className="rounded-[var(--radius-md)] border border-warm/25 bg-warm/8 px-3 py-2.5 text-metadata leading-relaxed text-warm [overflow-wrap:anywhere]">
               {setupHint}
             </p>
           ) : null}

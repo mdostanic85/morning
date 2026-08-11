@@ -131,7 +131,7 @@ export function GoogleConnectionPanel({
       </div>
 
       {setupHint ? (
-        <p className="mt-3 rounded-[var(--radius-md)] border border-warm/25 bg-warm/8 px-3 py-2.5 text-metadata leading-relaxed text-warm">
+        <p className="mt-3 rounded-[var(--radius-md)] border border-warm/25 bg-warm/8 px-3 py-2.5 text-metadata leading-relaxed text-warm [overflow-wrap:anywhere]">
           {setupHint}
         </p>
       ) : null}
