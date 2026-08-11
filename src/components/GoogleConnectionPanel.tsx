@@ -62,6 +62,10 @@ export function GoogleConnectionPanel({
           <p className="mt-1 text-sm leading-snug text-muted">
             Signing in creates your Morning account. These connections are separate and only grant the read access you choose.
           </p>
+          <p className="mt-1 text-metadata leading-relaxed text-muted-soft">
+            Connecting authorizes Morning to read, store, and process matching Google data for your
+            daily view. Review <a className="underline" href="/google-data">how Google data is used</a>.
+          </p>
         </div>
       </div>
 

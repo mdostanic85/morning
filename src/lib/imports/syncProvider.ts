@@ -147,7 +147,12 @@ async function syncProviderForUser(
     const candidates = await connector.listItems(context);
     const importResult = await importConnectorSources(candidates, {
       shouldCancel,
-      deferProcessing: provider === "gmail" || provider === "drive",
+      deferProcessing:
+        provider === "gmail" ||
+        provider === "drive" ||
+        provider === "granola" ||
+        provider === "jira" ||
+        provider === "confluence",
     });
 
     if (shouldCancel && (await shouldCancel())) {
