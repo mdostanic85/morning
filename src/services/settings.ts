@@ -1,11 +1,12 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { connectionSecrets as connectionSecretsTable } from "@/db/tables";
 import { execute, fetchOne } from "@/db/query";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secretBox";
+import { requireAppUserId } from "@/lib/auth/appUser";
 
 // API keys stay out of any endpoint that returns raw values to the browser.
 // Resolution order: environment variable first, then the encrypted DB blob
@@ -62,24 +63,31 @@ export interface LocalLlmStatus {
 }
 
 async function readEncryptedBlob<T>(provider: string): Promise<T | null> {
+  const userId = await requireAppUserId();
   const row = await fetchOne(
     db
       .select()
       .from(connectionSecretsTable)
-      .where(eq(connectionSecretsTable.provider, provider))
+      .where(
+        and(
+          eq(connectionSecretsTable.userId, userId),
+          eq(connectionSecretsTable.provider, provider)
+        )
+      )
   );
   if (!row) return null;
   return JSON.parse(decryptSecret(row.ciphertext)) as T;
 }
 
 async function writeEncryptedBlob(provider: string, value: unknown): Promise<void> {
+  const userId = await requireAppUserId();
   const ciphertext = encryptSecret(JSON.stringify(value));
   await execute(
     db
       .insert(connectionSecretsTable)
-      .values({ provider, ciphertext })
+      .values({ userId, provider, ciphertext })
       .onConflictDoUpdate({
-        target: connectionSecretsTable.provider,
+        target: [connectionSecretsTable.userId, connectionSecretsTable.provider],
         set: { ciphertext, updatedAt: new Date().toISOString() },
       })
   );

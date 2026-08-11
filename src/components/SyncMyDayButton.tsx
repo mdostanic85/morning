@@ -318,8 +318,8 @@ function humanizeSyncIssue(raw: string): SyncIssueInput {
  label: "Calendar needs to reconnect",
  detail:
  "Google rejected the saved Calendar session. Reconnect Google, then run Sync my day again.",
- href: "/api/connections/gmail/connect?link=google",
- hrefLabel: "Reconnect Google",
+ href: "/api/connections/calendar/connect",
+ hrefLabel: "Reconnect Calendar",
  };
  }
 

@@ -1,11 +1,10 @@
 import "server-only";
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { connectionSecrets as connectionSecretsTable } from "@/db/tables";
-import { execute, fetchOne } from "@/db/query";
-import { decryptSecret, encryptSecret } from "@/lib/crypto/secretBox";
-import { saveConnectionSecret, type ConnectionSecret } from "@/services/connectionSecrets";
+import { oauthStates } from "@/db/tables";
+import { execute, fetchOne, fetchReturning } from "@/db/query";
+import type { ConnectionSecret } from "@/services/connectionSecrets";
 import { fetchWithTimeout } from "@/lib/http";
 
 export const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"] as const;
@@ -48,12 +47,12 @@ export type OAuthProvider =
 
 /** Google APIs share one OAuth client; keep their redirect URI identical. */
 export function isGoogleOAuthProvider(
-  provider: OAuthProvider
+  provider: string
 ): provider is "gmail" | "calendar" | "drive" {
   return provider === "gmail" || provider === "calendar" || provider === "drive";
 }
 
-interface OAuthConfig {
+export interface OAuthConfig {
   clientId: string;
   clientSecret: string;
   authUrl: string;
@@ -63,55 +62,51 @@ interface OAuthConfig {
 }
 
 /**
- * CSRF/state tokens for OAuth live in Postgres (one encrypted row per state),
- * not on the local filesystem — hosted deploys have no writable persistent disk.
+ * OAuth state is hashed at rest, scoped to the signed-in app user, and consumed
+ * once. It is not a credential and therefore never shares the token table.
  */
-const OAUTH_STATE_PREFIX = "oauth.state.";
-
 interface OAuthStateEntry {
   provider: OAuthProvider;
+  userId: number;
   createdAt: string;
   /** When the grant should connect several providers (e.g. combined Google consent). */
   linkedProviders?: OAuthProvider[];
 }
 
-function stateProviderKey(state: string): string {
-  return `${OAUTH_STATE_PREFIX}${state}`;
+function hashState(state: string): string {
+  return crypto.createHash("sha256").update(state).digest("hex");
 }
 
 async function readStateEntry(state: string): Promise<OAuthStateEntry | null> {
   const row = await fetchOne(
-    db
-      .select()
-      .from(connectionSecretsTable)
-      .where(eq(connectionSecretsTable.provider, stateProviderKey(state)))
+    db.select().from(oauthStates).where(eq(oauthStates.stateHash, hashState(state)))
   );
   if (!row) return null;
-  try {
-    return JSON.parse(decryptSecret(row.ciphertext)) as OAuthStateEntry;
-  } catch {
-    return null;
-  }
+  return {
+    provider: row.provider as OAuthProvider,
+    userId: row.userId,
+    createdAt: row.createdAt,
+    linkedProviders: (row.linkedProviders ?? []) as OAuthProvider[],
+  };
 }
 
 async function writeStateEntry(state: string, entry: OAuthStateEntry): Promise<void> {
-  const ciphertext = encryptSecret(JSON.stringify(entry));
   await execute(
     db
-      .insert(connectionSecretsTable)
-      .values({ provider: stateProviderKey(state), ciphertext })
-      .onConflictDoUpdate({
-        target: connectionSecretsTable.provider,
-        set: { ciphertext, updatedAt: new Date().toISOString() },
+      .insert(oauthStates)
+      .values({
+        stateHash: hashState(state),
+        userId: entry.userId,
+        provider: entry.provider,
+        linkedProviders: entry.linkedProviders ?? [],
+        createdAt: entry.createdAt,
       })
   );
 }
 
 async function deleteStateEntry(state: string): Promise<void> {
   await execute(
-    db
-      .delete(connectionSecretsTable)
-      .where(eq(connectionSecretsTable.provider, stateProviderKey(state)))
+    db.delete(oauthStates).where(eq(oauthStates.stateHash, hashState(state)))
   );
 }
 
@@ -119,34 +114,57 @@ function env(name: string): string {
   return process.env[name]?.trim() ?? "";
 }
 
+function googleClientId(): string {
+  return env("GOOGLE_INTEGRATIONS_CLIENT_ID") || env("GOOGLE_CLIENT_ID");
+}
+
+function googleClientSecret(): string {
+  return env("GOOGLE_INTEGRATIONS_CLIENT_SECRET") || env("GOOGLE_CLIENT_SECRET");
+}
+
 export function getOAuthConfig(provider: OAuthProvider): OAuthConfig | null {
   switch (provider) {
     case "gmail":
       return {
-        clientId: env("GOOGLE_CLIENT_ID"),
-        clientSecret: env("GOOGLE_CLIENT_SECRET"),
+        clientId: googleClientId(),
+        clientSecret: googleClientSecret(),
         authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
         tokenUrl: "https://oauth2.googleapis.com/token",
         scopes: GMAIL_SCOPES,
-        extraAuthParams: { access_type: "offline", prompt: "consent" },
+        extraAuthParams: {
+          access_type: "offline",
+          prompt: "consent",
+          include_granted_scopes: "true",
+          enable_granular_consent: "true",
+        },
       };
     case "calendar":
       return {
-        clientId: env("GOOGLE_CLIENT_ID"),
-        clientSecret: env("GOOGLE_CLIENT_SECRET"),
+        clientId: googleClientId(),
+        clientSecret: googleClientSecret(),
         authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
         tokenUrl: "https://oauth2.googleapis.com/token",
         scopes: CALENDAR_SCOPES,
-        extraAuthParams: { access_type: "offline", prompt: "consent" },
+        extraAuthParams: {
+          access_type: "offline",
+          prompt: "consent",
+          include_granted_scopes: "true",
+          enable_granular_consent: "true",
+        },
       };
     case "drive":
       return {
-        clientId: env("GOOGLE_CLIENT_ID"),
-        clientSecret: env("GOOGLE_CLIENT_SECRET"),
+        clientId: googleClientId(),
+        clientSecret: googleClientSecret(),
         authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
         tokenUrl: "https://oauth2.googleapis.com/token",
         scopes: DRIVE_SCOPES,
-        extraAuthParams: { access_type: "offline", prompt: "consent" },
+        extraAuthParams: {
+          access_type: "offline",
+          prompt: "consent",
+          include_granted_scopes: "true",
+          enable_granular_consent: "true",
+        },
       };
     case "jira":
       return {
@@ -193,38 +211,66 @@ function isStateFresh(entry: OAuthStateEntry): boolean {
 
 export async function createOAuthState(
   provider: OAuthProvider,
+  userId: number,
   linkedProviders?: OAuthProvider[]
 ): Promise<string> {
   const state = crypto.randomBytes(24).toString("hex");
   await writeStateEntry(state, {
     provider,
+    userId,
     createdAt: new Date().toISOString(),
     ...(linkedProviders && linkedProviders.length > 0 ? { linkedProviders } : {}),
   });
   return state;
 }
 
-export async function getOAuthStateProvider(state: string): Promise<OAuthProvider | null> {
+export async function getOAuthStateProvider(
+  state: string,
+  userId: number
+): Promise<OAuthProvider | null> {
   const entry = await readStateEntry(state);
-  if (!entry || !isStateFresh(entry)) {
-    if (entry) await deleteStateEntry(state);
+  if (!entry || entry.userId !== userId) return null;
+  if (!isStateFresh(entry)) {
+    await deleteStateEntry(state);
     return null;
   }
   return entry.provider;
 }
 
 /** Providers a still-valid OAuth state should connect together (empty when none). */
-export async function getOAuthStateLinkedProviders(state: string): Promise<OAuthProvider[]> {
+export async function getOAuthStateLinkedProviders(
+  state: string,
+  userId: number
+): Promise<OAuthProvider[]> {
   const entry = await readStateEntry(state);
-  if (!entry || !isStateFresh(entry)) return [];
+  if (!entry || entry.userId !== userId || !isStateFresh(entry)) return [];
   return entry.linkedProviders ?? [];
 }
 
-export async function consumeOAuthState(state: string, provider: OAuthProvider): Promise<boolean> {
-  const entry = await readStateEntry(state);
-  await deleteStateEntry(state);
-  if (!entry || entry.provider !== provider) return false;
-  return isStateFresh(entry);
+export async function consumeOAuthState(
+  state: string,
+  provider: OAuthProvider,
+  userId: number
+): Promise<boolean> {
+  const [row] = await fetchReturning(
+    db
+      .delete(oauthStates)
+      .where(
+        and(
+          eq(oauthStates.stateHash, hashState(state)),
+          eq(oauthStates.userId, userId),
+          eq(oauthStates.provider, provider)
+        )
+      )
+      .returning()
+  );
+  if (!row) return false;
+  return isStateFresh({
+    provider: row.provider as OAuthProvider,
+    userId: row.userId,
+    createdAt: row.createdAt,
+    linkedProviders: (row.linkedProviders ?? []) as OAuthProvider[],
+  });
 }
 
 export function buildRedirectUri(origin: string, provider: OAuthProvider): string {
@@ -246,10 +292,17 @@ export function resolveAppOrigin(requestUrl: string): string {
   const configured = process.env.WORKLIGHT_APP_URL?.trim().replace(/\/+$/, "");
   if (configured) {
     try {
-      return new URL(configured).origin;
+      const origin = new URL(configured).origin;
+      if (process.env.NODE_ENV === "production" && !origin.startsWith("https://")) {
+        throw new Error("WORKLIGHT_APP_URL must use HTTPS in production.");
+      }
+      return origin;
     } catch {
-      // Fall through to the request origin when the env value is malformed.
+      throw new Error("WORKLIGHT_APP_URL must be a valid public URL.");
     }
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("WORKLIGHT_APP_URL is required in production.");
   }
   return new URL(requestUrl).origin;
 }
@@ -261,10 +314,11 @@ export function resolveAppOrigin(requestUrl: string): string {
  */
 export async function resolveOAuthCallbackProvider(
   urlProvider: OAuthProvider,
-  state: string | null
+  state: string | null,
+  userId: number
 ): Promise<OAuthProvider> {
   if (!state) return urlProvider;
-  const stateProvider = await getOAuthStateProvider(state);
+  const stateProvider = await getOAuthStateProvider(state, userId);
   if (!stateProvider) return urlProvider;
   if (stateProvider === urlProvider) return stateProvider;
   if (isGoogleOAuthProvider(urlProvider) && isGoogleOAuthProvider(stateProvider)) {
@@ -278,6 +332,7 @@ export async function buildAuthorizationUrl(input: {
   origin: string;
   /** Google only: request Gmail + Calendar + Drive scopes in a single consent. */
   linkGoogle?: boolean;
+  userId: number;
 }): Promise<string> {
   const config = getOAuthConfig(input.provider);
   if (!config || !config.clientId) {
@@ -293,18 +348,22 @@ export async function buildAuthorizationUrl(input: {
     redirect_uri: buildRedirectUri(input.origin, input.provider),
     response_type: "code",
     scope: scopes.join(" "),
-    state: await createOAuthState(input.provider, linkedProviders),
+    state: await createOAuthState(input.provider, input.userId, linkedProviders),
     ...(config.extraAuthParams ?? {}),
   });
 
   return `${config.authUrl}?${params.toString()}`;
 }
 
+export interface OAuthTokenGrant extends ConnectionSecret {
+  grantedScopes: string[];
+}
+
 export async function exchangeCodeForToken(input: {
   provider: OAuthProvider;
   code: string;
   origin: string;
-}): Promise<ConnectionSecret> {
+}): Promise<OAuthTokenGrant> {
   const config = getOAuthConfig(input.provider);
   if (!config || !config.clientId || !config.clientSecret) {
     throw new Error(`Missing OAuth client config for ${input.provider}.`);
@@ -329,6 +388,7 @@ export async function exchangeCodeForToken(input: {
     access_token?: string;
     refresh_token?: string;
     expires_in?: number;
+    scope?: string;
     error_description?: string;
     error?: string;
   };
@@ -337,13 +397,46 @@ export async function exchangeCodeForToken(input: {
     throw new Error(body.error_description ?? body.error ?? "OAuth token exchange failed.");
   }
 
-  const secret: ConnectionSecret = {
+  let grantedScopes = body.scope?.split(/\s+/).filter(Boolean) ?? [];
+  if (isGoogleOAuthProvider(input.provider) && grantedScopes.length === 0) {
+    const tokenInfoUrl = new URL("https://oauth2.googleapis.com/tokeninfo");
+    tokenInfoUrl.searchParams.set("access_token", body.access_token);
+    const tokenInfoResponse = await fetchWithTimeout(tokenInfoUrl.toString(), {
+      headers: { Accept: "application/json" },
+    });
+    if (tokenInfoResponse.ok) {
+      const tokenInfo = (await tokenInfoResponse.json()) as { scope?: string };
+      grantedScopes = tokenInfo.scope?.split(/\s+/).filter(Boolean) ?? [];
+    }
+  }
+
+  return {
     accessToken: body.access_token,
     refreshToken: body.refresh_token,
     expiresAt: body.expires_in
       ? new Date(Date.now() + body.expires_in * 1000).toISOString()
       : undefined,
+    grantedScopes,
   };
-  await saveConnectionSecret(input.provider, secret);
-  return secret;
+}
+
+export function scopesGrantedForProvider(
+  provider: OAuthProvider,
+  grantedScopes: readonly string[]
+): string[] {
+  const expected = getOAuthConfig(provider)?.scopes ?? [];
+  const granted = new Set(grantedScopes);
+  return expected.filter((scope) => granted.has(scope));
+}
+
+export async function revokeGoogleToken(token: string): Promise<void> {
+  const response = await fetchWithTimeout("https://oauth2.googleapis.com/revoke", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token }),
+  });
+  // Google treats an already-invalid token as a successful local disconnect.
+  if (!response.ok && response.status !== 400) {
+    throw new Error("Google access could not be revoked. Please try again.");
+  }
 }

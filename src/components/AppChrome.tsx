@@ -8,18 +8,21 @@ import { AskMemoryProvider } from "@/components/AskMemoryWidget";
 import { AppFooter } from "@/components/AppFooter";
 import { Toast } from "@heroui/react/toast";
 
-function isAuthShellPath(pathname: string): boolean {
+function isPublicShellPath(pathname: string): boolean {
   return (
     pathname === "/sign-in" ||
     pathname.startsWith("/sign-in/") ||
     pathname === "/sso-callback" ||
-    pathname.startsWith("/sso-callback/")
+    pathname.startsWith("/sso-callback/") ||
+    ["/about", "/privacy", "/terms", "/google-data", "/data-deletion"].some(
+      (path) => pathname === path || pathname.startsWith(`${path}/`)
+    )
   );
 }
 
 export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const authShell = isAuthShellPath(pathname);
+  const authShell = isPublicShellPath(pathname);
 
   if (authShell) {
     return <>{children}</>;

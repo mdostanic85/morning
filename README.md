@@ -47,6 +47,12 @@ Then open [http://localhost:3000](http://localhost:3000). See
 [docs/local-inngest-setup.md](docs/local-inngest-setup.md) for the longer setup
 notes.
 
+Google account sign-in and Google Workspace data access are separate. Clerk
+handles sign-in. Gmail, Calendar, and Drive use a different Google Cloud OAuth
+client and ask for one read-only permission at a time from Settings. See
+[Google OAuth production setup](docs/google-oauth-production.md) before enabling
+those connections outside local development.
+
 ## Project structure
 
 ```
@@ -189,8 +195,8 @@ Schema lives in `src/db/schema.ts`; each table has a matching CRUD module in
   `SECRETS_ENCRYPTION_KEY` (AES-256-GCM). LLM API keys are still saved to
   `data/secrets.json` (gitignored). Neither is ever returned to the browser
   except as a masked preview.
-- Google Calendar needs its own read-only connection so its OAuth grant stays
-  scoped separately from Gmail.
+- Gmail, Google Calendar, and Google Drive each have their own read-only
+  connection. Google sign-in alone grants access to none of them.
 - The AI-facing rules the app is built against live in `.cursor/rules/`, and a
   code-derived description of the current implementation is in
   [docs/current-app-architecture.md](docs/current-app-architecture.md).

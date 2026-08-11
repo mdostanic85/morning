@@ -263,6 +263,7 @@ export const syncReviewReports = pgTable("sync_review_reports", {
 
 export const userProfiles = pgTable("user_profiles", {
   id: serial("id").primaryKey(),
+  clerkUserId: text("clerk_user_id").unique(),
   email: text("email").notNull(),
   name: text("name"),
   ...createdAndUpdatedAt,
@@ -271,23 +272,52 @@ export const userProfiles = pgTable("user_profiles", {
 export const CONNECTION_STATUSES = ["connected", "disconnected", "error"] as const;
 export const CONNECTION_AUTH_TYPES = ["oauth", "api_key", "pat", "mcp", "none"] as const;
 
-export const connections = pgTable("connections", {
-  id: serial("id").primaryKey(),
-  provider: text("provider").notNull(),
-  status: text("status", { enum: CONNECTION_STATUSES }).notNull().default("disconnected"),
-  authType: text("auth_type", { enum: CONNECTION_AUTH_TYPES }).notNull(),
-  scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
-  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
-  ...createdAndUpdatedAt,
-});
+export const connections = pgTable(
+  "connections",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfiles.id),
+    provider: text("provider").notNull(),
+    status: text("status", { enum: CONNECTION_STATUSES }).notNull().default("disconnected"),
+    authType: text("auth_type", { enum: CONNECTION_AUTH_TYPES }).notNull(),
+    scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    ...createdAndUpdatedAt,
+  },
+  (table) => [unique("connections_user_provider_unique").on(table.userId, table.provider)]
+);
 
 // Connector tokens, one encrypted row per provider. Kept out of `connections`
 // so the table the UI reads can never accidentally carry a credential.
-export const connectionSecrets = pgTable("connection_secrets", {
-  id: serial("id").primaryKey(),
-  provider: text("provider").notNull().unique(),
-  ciphertext: text("ciphertext").notNull(),
-  ...createdAndUpdatedAt,
+export const connectionSecrets = pgTable(
+  "connection_secrets",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => userProfiles.id),
+    provider: text("provider").notNull(),
+    ciphertext: text("ciphertext").notNull(),
+    ...createdAndUpdatedAt,
+  },
+  (table) => [
+    unique("connection_secrets_user_provider_unique").on(table.userId, table.provider),
+  ]
+);
+
+/** One-time OAuth CSRF records. They are deliberately separate from credentials. */
+export const oauthStates = pgTable("oauth_states", {
+  stateHash: text("state_hash").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => userProfiles.id),
+  provider: text("provider").notNull(),
+  linkedProviders: jsonb("linked_providers").$type<string[]>().notNull().default([]),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const dailyMemories = pgTable("daily_memories", {
