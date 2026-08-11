@@ -8,7 +8,12 @@ import {
   type McpOAuthProvider,
 } from "./capabilities";
 import { hasMcpTokens, markMcpConnectionsConnected } from "./connections";
-import { clearMcpOAuthState, ConnectMcpOAuthProvider, FileMcpOAuthProvider } from "./oauthProvider";
+import {
+  clearMcpOAuthState,
+  ConnectMcpOAuthProvider,
+  createConnectMcpOAuthProvider,
+  createMcpOAuthProvider,
+} from "./oauthProvider";
 
 function humanizeMcpOAuthError(provider: McpOAuthProvider, err: unknown): Error {
   const message = err instanceof Error ? err.message : String(err);
@@ -38,13 +43,13 @@ export async function startMcpOAuthConnect(
   options?: { force?: boolean }
 ): Promise<string> {
   if (options?.force) {
-    clearMcpOAuthState(provider);
+    await clearMcpOAuthState(provider);
   } else if (await hasMcpTokens(provider)) {
     await markMcpConnectionsConnected(provider);
     return `${origin}/settings?connected=${provider}`;
   }
 
-  const oauthProvider = new ConnectMcpOAuthProvider(provider, origin);
+  const oauthProvider = await createConnectMcpOAuthProvider(provider, origin);
   const serverUrl = getMcpServerUrl(provider);
   try {
     if (provider === "figma") {
@@ -67,14 +72,17 @@ export async function startMcpOAuthConnect(
 export async function finishMcpOAuthCallback(
   provider: McpOAuthProvider,
   origin: string,
-  authorizationCode: string
+  authorizationCode: string,
+  oauthState: string | null
 ): Promise<void> {
-  const oauthProvider = new FileMcpOAuthProvider(provider, origin);
+  const oauthProvider = await createMcpOAuthProvider(provider, origin);
+  oauthProvider.assertOAuthState(oauthState);
   const serverUrl = getMcpServerUrl(provider);
   const result = await auth(oauthProvider, { serverUrl, authorizationCode });
   if (result !== "AUTHORIZED") {
     throw new Error("MCP OAuth callback did not complete authorization.");
   }
+  await oauthProvider.clearAuthorizationState();
 }
 
 export async function withMcpClient<T>(
@@ -82,7 +90,7 @@ export async function withMcpClient<T>(
   origin: string,
   fn: (client: Client) => Promise<T>
 ): Promise<T> {
-  const oauthProvider = new FileMcpOAuthProvider(provider, origin);
+  const oauthProvider = await createMcpOAuthProvider(provider, origin);
   const serverUrl = getMcpServerUrl(provider);
   const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
     authProvider: oauthProvider,

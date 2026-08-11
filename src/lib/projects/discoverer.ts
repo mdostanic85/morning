@@ -79,14 +79,11 @@ export async function discoverProjectsFromSignals(
     }
   }
 
-  // Jira boards come from MCP — never let the LLM invent projects from issue keys.
-  if (connectedProviders.includes("jira") && result.jiraSync) {
-    result.projects = await getProjects();
-    return result;
-  }
-
+  // Jira boards come from MCP — never let the LLM invent projects from Jira
+  // signals. Other strong signals (notably Confluence spaces) may still enrich
+  // those durable Jira-created projects with their integration hints.
   const llmSignals = signals.filter(
-    (signal) => !(signal.source === "jira" && (signal.kind === "project" || signal.kind === "issue" || signal.kind === "project_key"))
+    (signal) => signal.source !== "jira"
   );
 
   if (llmSignals.length === 0) {

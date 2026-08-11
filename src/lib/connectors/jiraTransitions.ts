@@ -2,7 +2,7 @@ import "server-only";
 import { bearerFetch, getAccessToken } from "@/lib/connectors/auth";
 import { getDefaultAtlassianResource, type AtlassianResource } from "@/lib/connectors/atlassian";
 import { isMcpTransport } from "@/lib/connectors/transport";
-import { readMcpOAuthFile } from "@/lib/connectors/mcp/oauthProvider";
+import { readMcpOAuthState } from "@/lib/connectors/mcp/oauthProvider";
 import { getConnectionByProvider } from "@/services/connections";
 import { fetchWithTimeout } from "@/lib/http";
 
@@ -24,7 +24,7 @@ async function getAtlassianBearerToken(): Promise<string> {
     return getAccessToken("jira");
   }
 
-  const mcpToken = readMcpOAuthFile("atlassian").tokens?.access_token;
+  const mcpToken = (await readMcpOAuthState("atlassian")).tokens?.access_token;
   if (mcpToken) return mcpToken;
 
   throw new Error("Jira is not connected. Connect Atlassian in Settings.");

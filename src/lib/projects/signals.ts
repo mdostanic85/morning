@@ -132,18 +132,38 @@ async function gatherConfluenceSignals(signals: ProjectDiscoverySignal[]): Promi
       const { withMcpClient, callMcpTool } = await import("@/lib/connectors/mcp/client");
       const APP_ORIGIN = process.env.WORKLIGHT_APP_URL?.trim() || "http://localhost:3000";
       await withMcpClient("atlassian", APP_ORIGIN, async (client) => {
-        const resourcesRaw = await callMcpTool(client, "getAccessibleAtlassianResources", {});
-        const resources = Array.isArray(resourcesRaw) ? resourcesRaw : [];
-        const cloud = resources[0] as { id?: string } | undefined;
-        if (!cloud?.id) return;
+        const resourcesRaw = parseMcpToolPayload(
+          await callMcpTool(client, "getAccessibleAtlassianResources", {})
+        );
+        const resourcesRecord =
+          resourcesRaw && typeof resourcesRaw === "object" && !Array.isArray(resourcesRaw)
+            ? (resourcesRaw as { resources?: unknown[]; sites?: unknown[] })
+            : null;
+        const resources = Array.isArray(resourcesRaw)
+          ? resourcesRaw
+          : Array.isArray(resourcesRecord?.resources)
+            ? resourcesRecord.resources
+            : Array.isArray(resourcesRecord?.sites)
+              ? resourcesRecord.sites
+              : [];
+        const cloud = resources[0] as { id?: string; cloudId?: string } | undefined;
+        const cloudId = cloud?.id ?? cloud?.cloudId;
+        if (!cloudId) return;
 
-        const spacesRaw = await callMcpTool(client, "getConfluenceSpaces", { cloudId: cloud.id });
-        const payload = spacesRaw as { results?: unknown[] } | unknown[];
-        const list = Array.isArray(payload)
-          ? payload
-          : Array.isArray((payload as { results?: unknown[] }).results)
-            ? (payload as { results: unknown[] }).results
-            : [];
+        const spacesRaw = parseMcpToolPayload(
+          await callMcpTool(client, "getConfluenceSpaces", { cloudId })
+        );
+        const spacesRecord =
+          spacesRaw && typeof spacesRaw === "object" && !Array.isArray(spacesRaw)
+            ? (spacesRaw as { results?: unknown[]; spaces?: unknown[] })
+            : null;
+        const list = Array.isArray(spacesRaw)
+          ? spacesRaw
+          : Array.isArray(spacesRecord?.results)
+            ? spacesRecord.results
+            : Array.isArray(spacesRecord?.spaces)
+              ? spacesRecord.spaces
+              : [];
         for (const entry of list) {
           const space = entry as { key?: string; name?: string };
           if (space.key) {

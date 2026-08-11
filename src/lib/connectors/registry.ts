@@ -65,7 +65,10 @@ const gmailConnector: Connector = {
   provider: "gmail",
   configError: () => null,
   listItems: async ({ options, shouldCancel }) => {
-    const connection = await getConnectionByProvider("gmail");
+    const [connection, driveConnection] = await Promise.all([
+      getConnectionByProvider("gmail"),
+      getConnectionByProvider("drive"),
+    ]);
     const baseQuery =
       typeof options.query === "string" && options.query.trim()
         ? options.query.trim()
@@ -79,6 +82,7 @@ const gmailConnector: Connector = {
       query: `${baseQuery} ${timeFilter}`,
       maxResults: 50,
       shouldCancel,
+      skipLinkedDocuments: driveConnection?.status === "connected",
     });
   },
 };

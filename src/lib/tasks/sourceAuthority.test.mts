@@ -21,9 +21,10 @@ describe("sourceAuthority", () => {
     assert.deepEqual([...SYNC_PROVIDER_WAVES[2]], ["granola", "gmail"]);
   });
 
-  it("uses Gmail as the single Gemini Notes sync provider", () => {
+  it("syncs both Gmail messages and Drive documents", () => {
     assert.equal(isSyncMyDayProvider("gmail"), true);
-    assert.equal(isSyncMyDayProvider("drive"), false);
+    assert.equal(isSyncMyDayProvider("drive"), true);
+    assert.deepEqual([...SYNC_PROVIDER_WAVES[3]], ["drive"]);
   });
 
   it("detects granola, drive, and gemini meet notes as transcripts", () => {

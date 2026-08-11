@@ -1,6 +1,5 @@
 import "server-only";
-import fs from "node:fs";
-import path from "node:path";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import type {
   OAuthClientInformationMixed,
   OAuthClientMetadata,
@@ -10,48 +9,60 @@ import type {
   OAuthClientProvider,
   OAuthDiscoveryState,
 } from "@modelcontextprotocol/sdk/client/auth.js";
+import {
+  clearConnectionSecret,
+  getConnectionSecret,
+  saveConnectionSecret,
+} from "@/services/connectionSecrets";
 
-interface McpOAuthFile {
+export interface McpOAuthState {
   clientInformation?: OAuthClientInformationMixed;
   tokens?: OAuthTokens;
   codeVerifier?: string;
   discoveryState?: OAuthDiscoveryState;
+  oauthState?: string;
 }
 
-const oauthDir = path.join(process.cwd(), "data", "mcp-oauth");
+type PersistMcpOAuthState = (state: McpOAuthState) => Promise<void>;
+type ClearMcpOAuthState = () => Promise<void>;
 
-function filePath(provider: string): string {
-  return path.join(oauthDir, `${provider}.json`);
+function secretProvider(provider: string): string {
+  return `mcp:${provider}`;
 }
 
-function readFile(provider: string): McpOAuthFile {
-  const file = filePath(provider);
-  if (!fs.existsSync(file)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf-8")) as McpOAuthFile;
-  } catch {
-    return {};
-  }
+function asMcpOAuthState(value: unknown): McpOAuthState {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as McpOAuthState)
+    : {};
 }
 
-export function readMcpOAuthFile(provider: string): McpOAuthFile {
-  return readFile(provider);
+export async function readMcpOAuthState(provider: string): Promise<McpOAuthState> {
+  const secret = await getConnectionSecret(secretProvider(provider));
+  return asMcpOAuthState(secret?.mcpOAuth);
 }
 
-function writeFile(provider: string, data: McpOAuthFile) {
-  if (!fs.existsSync(oauthDir)) fs.mkdirSync(oauthDir, { recursive: true });
-  fs.writeFileSync(filePath(provider), JSON.stringify(data, null, 2), { mode: 0o600 });
+async function writeMcpOAuthState(provider: string, state: McpOAuthState): Promise<void> {
+  await saveConnectionSecret(secretProvider(provider), {
+    mcpOAuth: state as Record<string, unknown>,
+  });
 }
 
-export function clearMcpOAuthState(provider: string) {
-  const file = filePath(provider);
-  if (fs.existsSync(file)) fs.unlinkSync(file);
+export async function clearMcpOAuthState(provider: string): Promise<void> {
+  await clearConnectionSecret(secretProvider(provider));
 }
 
-export class FileMcpOAuthProvider implements OAuthClientProvider {
+/**
+ * MCP's OAuth interface exposes synchronous credential getters, so each
+ * request loads the encrypted state once and keeps an in-memory snapshot.
+ * Every SDK mutation is immediately persisted back to the user-scoped DB row.
+ */
+export class DatabaseMcpOAuthProvider implements OAuthClientProvider {
   constructor(
     private readonly provider: string,
-    private readonly origin: string
+    private readonly origin: string,
+    private currentState: McpOAuthState,
+    private readonly persistState: PersistMcpOAuthState,
+    private readonly clearState: ClearMcpOAuthState
   ) {}
 
   get redirectUrl(): URL {
@@ -68,24 +79,47 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
     };
   }
 
+  state(): string {
+    if (!this.currentState.oauthState) {
+      throw new Error("Missing MCP OAuth state. Please reconnect this source.");
+    }
+    return this.currentState.oauthState;
+  }
+
+  assertOAuthState(receivedState: string | null): void {
+    const expectedState = this.currentState.oauthState;
+    if (!expectedState || !receivedState) {
+      throw new Error("Missing MCP OAuth state. Please try connecting again.");
+    }
+    const expected = Buffer.from(expectedState);
+    const received = Buffer.from(receivedState);
+    if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
+      throw new Error("Invalid MCP OAuth state. Please try connecting again.");
+    }
+  }
+
+  async clearAuthorizationState(): Promise<void> {
+    delete this.currentState.oauthState;
+    delete this.currentState.codeVerifier;
+    await this.persistState(this.currentState);
+  }
+
   clientInformation(): OAuthClientInformationMixed | undefined {
-    return readFile(this.provider).clientInformation;
+    return this.currentState.clientInformation;
   }
 
   async saveClientInformation(clientInformation: OAuthClientInformationMixed) {
-    const data = readFile(this.provider);
-    data.clientInformation = clientInformation;
-    writeFile(this.provider, data);
+    this.currentState.clientInformation = clientInformation;
+    await this.persistState(this.currentState);
   }
 
   tokens(): OAuthTokens | undefined {
-    return readFile(this.provider).tokens;
+    return this.currentState.tokens;
   }
 
   async saveTokens(tokens: OAuthTokens) {
-    const data = readFile(this.provider);
-    data.tokens = tokens;
-    writeFile(this.provider, data);
+    this.currentState.tokens = tokens;
+    await this.persistState(this.currentState);
   }
 
   async redirectToAuthorization(authorizationUrl: URL) {
@@ -94,48 +128,76 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
   }
 
   async saveCodeVerifier(codeVerifier: string) {
-    const data = readFile(this.provider);
-    data.codeVerifier = codeVerifier;
-    writeFile(this.provider, data);
+    this.currentState.codeVerifier = codeVerifier;
+    await this.persistState(this.currentState);
   }
 
   codeVerifier(): string {
-    const verifier = readFile(this.provider).codeVerifier;
+    const verifier = this.currentState.codeVerifier;
     if (!verifier) throw new Error("Missing OAuth code verifier. Please try connecting again.");
     return verifier;
   }
 
   discoveryState(): OAuthDiscoveryState | undefined {
-    return readFile(this.provider).discoveryState;
+    return this.currentState.discoveryState;
   }
 
   async saveDiscoveryState(state: OAuthDiscoveryState) {
-    const data = readFile(this.provider);
-    data.discoveryState = state;
-    writeFile(this.provider, data);
+    this.currentState.discoveryState = state;
+    await this.persistState(this.currentState);
   }
 
   async invalidateCredentials(scope: "all" | "client" | "tokens" | "verifier" | "discovery") {
-    const data = readFile(this.provider);
     if (scope === "all") {
-      clearMcpOAuthState(this.provider);
+      this.currentState = {};
+      await this.clearState();
       return;
     }
-    if (scope === "client") delete data.clientInformation;
-    if (scope === "tokens") delete data.tokens;
-    if (scope === "verifier") delete data.codeVerifier;
-    if (scope === "discovery") delete data.discoveryState;
-    writeFile(this.provider, data);
+    if (scope === "client") delete this.currentState.clientInformation;
+    if (scope === "tokens") delete this.currentState.tokens;
+    if (scope === "verifier") delete this.currentState.codeVerifier;
+    if (scope === "discovery") delete this.currentState.discoveryState;
+    await this.persistState(this.currentState);
   }
 }
 
 /**
  * Route-handler variant that captures the authorization URL instead of redirecting.
  */
-export class ConnectMcpOAuthProvider extends FileMcpOAuthProvider {
+export class ConnectMcpOAuthProvider extends DatabaseMcpOAuthProvider {
   authorizationUrl: URL | null = null;
 
   override async redirectToAuthorization(authorizationUrl: URL) {
     this.authorizationUrl = authorizationUrl;
   }
+}
+
+function persistence(provider: string): {
+  save: PersistMcpOAuthState;
+  clear: ClearMcpOAuthState;
+} {
+  return {
+    save: (state) => writeMcpOAuthState(provider, state),
+    clear: () => clearMcpOAuthState(provider),
+  };
+}
+
+export async function createMcpOAuthProvider(
+  provider: string,
+  origin: string
+): Promise<DatabaseMcpOAuthProvider> {
+  const state = await readMcpOAuthState(provider);
+  const store = persistence(provider);
+  return new DatabaseMcpOAuthProvider(provider, origin, state, store.save, store.clear);
+}
+
+export async function createConnectMcpOAuthProvider(
+  provider: string,
+  origin: string
+): Promise<ConnectMcpOAuthProvider> {
+  const state = await readMcpOAuthState(provider);
+  state.oauthState = randomBytes(32).toString("base64url");
+  await writeMcpOAuthState(provider, state);
+  const store = persistence(provider);
+  return new ConnectMcpOAuthProvider(provider, origin, state, store.save, store.clear);
 }

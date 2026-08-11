@@ -43,6 +43,8 @@ import {
 import { runTodayFigmaTaskAudits } from "@/lib/tasks/figmaTaskAudit";
 import { runAsAppUser } from "@/lib/auth/appUser";
 
+const MAX_BACKFILL_BATCHES_PER_SYNC = 25;
+
 async function finalizeIfCancelled(
   syncRunId: number,
   message: string
@@ -315,17 +317,39 @@ export const syncMyDay = inngest.createFunction(
 
     const totalImported = providerResults.reduce((sum, entry) => sum + entry.imported, 0);
 
-    const backfill = await runStep("backfill-sources", () =>
-      backfillUnextractedSources({ syncRunId })
-    );
-    if ("cancelled" in backfill && backfill.cancelled) {
-      await runStep("finalize-cancelled-after-backfill", async () => {
-        await finalizeCancelledSyncRun(
+    const backfill = {
+      sourcesProcessed: 0,
+      sourcesRemaining: 0,
+      attemptedSourceIds: [] as number[],
+      tasksExtracted: 0,
+      knowledgeExtracted: 0,
+      errors: [] as string[],
+    };
+    for (let batchIndex = 0; batchIndex < MAX_BACKFILL_BATCHES_PER_SYNC; batchIndex += 1) {
+      const stepId = batchIndex === 0 ? "backfill-sources" : `backfill-sources-${batchIndex + 1}`;
+      const batch = await runStep(stepId, () =>
+        backfillUnextractedSources({
           syncRunId,
-          "Sync cancelled before AI extraction finished. Source data already synced is preserved."
-        );
-      });
-      return { syncRunId, status: "cancelled" as const };
+          excludeSourceIds: backfill.attemptedSourceIds,
+        })
+      );
+      if ("cancelled" in batch) {
+        await runStep("finalize-cancelled-after-backfill", async () => {
+          await finalizeCancelledSyncRun(
+            syncRunId,
+            "Sync cancelled before AI extraction finished. Source data already synced is preserved."
+          );
+        });
+        return { syncRunId, status: "cancelled" as const };
+      }
+
+      backfill.sourcesProcessed += batch.sourcesProcessed;
+      backfill.sourcesRemaining = batch.sourcesRemaining;
+      backfill.attemptedSourceIds.push(...batch.attemptedSourceIds);
+      backfill.tasksExtracted += batch.tasksExtracted;
+      backfill.knowledgeExtracted += batch.knowledgeExtracted;
+      backfill.errors.push(...batch.errors);
+      if (batch.sourcesRemaining === 0) break;
     }
 
     if (
@@ -473,7 +497,7 @@ export const syncMyDay = inngest.createFunction(
       providerCount: connectedProviders.length,
       failedProviders: providerFailures.length,
       projectDiscoveryOk: projectDiscovery.ok,
-      backfillProcessed: "sourcesProcessed" in backfill ? backfill.sourcesProcessed : 0,
+      backfillProcessed: backfill.sourcesProcessed,
       rebuildOk: true,
       plannerSummaryCached: rebuildDiagnostics.length === 0,
       figmaAuditsCompleted: figmaAudits.completed,

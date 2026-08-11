@@ -1,10 +1,10 @@
 import "server-only";
 import { getMcpCovers, type McpOAuthProvider } from "./capabilities";
-import { readMcpOAuthFile } from "./oauthProvider";
+import { readMcpOAuthState } from "./oauthProvider";
 import { upsertConnection } from "@/services/connections";
 
 export async function hasMcpTokens(provider: McpOAuthProvider): Promise<boolean> {
-  const tokens = readMcpOAuthFile(provider).tokens;
+  const tokens = (await readMcpOAuthState(provider)).tokens;
   return Boolean(tokens?.access_token);
 }
 

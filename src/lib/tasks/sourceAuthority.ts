@@ -1,4 +1,7 @@
-import type { ConnectionProvider } from "@/lib/connectors/providers";
+import {
+  CONNECTION_PROVIDERS,
+  type ConnectionProvider,
+} from "@/lib/connectors/providers";
 import type { SourceItem } from "@/domain/sourceItem";
 import type { SourceType } from "@/domain/sourceItem";
 import { DEFAULT_HYDRA_CONFIG } from "@/domain/hydraReport";
@@ -36,18 +39,17 @@ export const SYNC_PROVIDER_WAVES: readonly (readonly ConnectionProvider[])[] = [
   ["confluence"],
   ["jira"],
   ["granola", "gmail"],
+  ["drive"],
   ["calendar", "github", "discord", "figma"],
 ] as const;
 
 /**
- * Gmail is the single visible Gemini Notes sync provider. When a Gemini share
- * email contains a Google Docs link, the Gmail connector follows that link and
- * imports the real transcript through Docs' authenticated text export endpoint.
- * The legacy standalone Drive provider remains hidden to avoid duplicate rows
- * and does not require Drive API v3 to be enabled.
+ * Every configured source participates in Sync My Day. Gmail skips Google Docs
+ * share notifications when Drive is connected, leaving the dedicated Drive
+ * connector to import those documents once without duplicate transcript rows.
  */
 export function isSyncMyDayProvider(provider: ConnectionProvider): boolean {
-  return provider !== "drive";
+  return CONNECTION_PROVIDERS.includes(provider);
 }
 
 export const HIGH_AUTHORITY_STAKEHOLDERS = DEFAULT_HYDRA_CONFIG.stakeholders;

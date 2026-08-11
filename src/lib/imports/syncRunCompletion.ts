@@ -81,6 +81,7 @@ export type SyncFailurePhase =
 
 export function failurePhaseFromStepId(stepId: string): SyncFailurePhase {
   if (stepId.startsWith("sync-provider-")) return "sync-provider";
+  if (stepId.startsWith("backfill-sources")) return "backfill-sources";
   return KNOWN_SYNC_FAILURE_PHASES.has(stepId)
     ? (stepId as KnownSyncFailurePhase)
     : "workflow";

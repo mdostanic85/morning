@@ -20,6 +20,8 @@ export interface ConnectionSecret {
   apiKey?: string;
   pat?: string;
   botToken?: string;
+  /** Serialized OAuth state used by hosted MCP connectors. */
+  mcpOAuth?: Record<string, unknown>;
 }
 
 export async function getConnectionSecret(
