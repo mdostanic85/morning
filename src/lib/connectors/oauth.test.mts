@@ -5,6 +5,7 @@ import {
   CALENDAR_SCOPES,
   DRIVE_SCOPES,
   GMAIL_SCOPES,
+  getOAuthConfig,
   scopesGrantedForProvider,
 } from "./oauth";
 
@@ -31,5 +32,14 @@ describe("Google OAuth scope handling", () => {
     assert.deepEqual(scopesGrantedForProvider("gmail", all), [...GMAIL_SCOPES]);
     assert.deepEqual(scopesGrantedForProvider("calendar", all), [...CALENDAR_SCOPES]);
     assert.deepEqual(scopesGrantedForProvider("drive", all), [...DRIVE_SCOPES]);
+  });
+
+  it("asks Google to show the account chooser before consent", () => {
+    for (const provider of ["gmail", "calendar", "drive"] as const) {
+      assert.equal(
+        getOAuthConfig(provider)?.extraAuthParams?.prompt,
+        "consent select_account"
+      );
+    }
   });
 });

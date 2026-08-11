@@ -133,7 +133,7 @@ export function getOAuthConfig(provider: OAuthProvider): OAuthConfig | null {
         scopes: GMAIL_SCOPES,
         extraAuthParams: {
           access_type: "offline",
-          prompt: "consent",
+          prompt: "consent select_account",
           include_granted_scopes: "true",
           enable_granular_consent: "true",
         },
@@ -147,7 +147,7 @@ export function getOAuthConfig(provider: OAuthProvider): OAuthConfig | null {
         scopes: CALENDAR_SCOPES,
         extraAuthParams: {
           access_type: "offline",
-          prompt: "consent",
+          prompt: "consent select_account",
           include_granted_scopes: "true",
           enable_granular_consent: "true",
         },
@@ -161,7 +161,7 @@ export function getOAuthConfig(provider: OAuthProvider): OAuthConfig | null {
         scopes: DRIVE_SCOPES,
         extraAuthParams: {
           access_type: "offline",
-          prompt: "consent",
+          prompt: "consent select_account",
           include_granted_scopes: "true",
           enable_granular_consent: "true",
         },
